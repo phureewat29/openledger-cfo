@@ -1,0 +1,38 @@
+{
+  "name": "openledger-examples",
+  "description": "Corgi CFO — a terminal-styled personal finance app built on OpenLedger's oled CLI",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "engines": {
+    "node": "^22.21.0 || >=24",
+    "pnpm": "^10.19.0"
+  },
+  "packageManager": "pnpm@10.19.0",
+  "scripts": {
+    "build": "turbo run build",
+    "clean": "git clean -xdf node_modules",
+    "clean:workspaces": "turbo run clean",
+    "bootstrap": "pnpm db:push && pnpm demo",
+    "db:push": "pnpm -F @openledger-fleet/db push",
+    "db:studio": "pnpm -F @openledger-fleet/db studio",
+    "demo": "turbo run demo -F @openledger-fleet/demo --",
+    "demo:generate": "turbo run demo:generate -F @openledger-fleet/demo --",
+    "dev": "turbo watch dev -F @openledger-fleet/cfo...",
+    "format": "turbo run format --continue -- --cache --cache-location .cache/.prettiercache",
+    "format:fix": "turbo run format --continue -- --write --cache --cache-location .cache/.prettiercache",
+    "lint": "turbo run lint --continue -- --cache --cache-location .cache/.eslintcache",
+    "lint:fix": "turbo run lint --continue -- --fix --cache --cache-location .cache/.eslintcache",
+    "lint:ws": "pnpm dlx sherif@latest",
+    "oled:init": "turbo run oled:init -F @openledger-fleet/demo",
+    "postinstall": "pnpm lint:ws",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "@openledger-fleet/prettier-config": "workspace:*",
+    "dotenv-cli": "^10.0.0",
+    "prettier": "catalog:",
+    "turbo": "^2.5.8",
+    "typescript": "catalog:"
+  },
+  "prettier": "@openledger-fleet/prettier-config"
+}

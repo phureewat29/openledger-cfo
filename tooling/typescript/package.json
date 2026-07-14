@@ -1,0 +1,7 @@
+{
+  "name": "@openledger-fleet/tsconfig",
+  "private": true,
+  "files": [
+    "*.json"
+  ]
+}

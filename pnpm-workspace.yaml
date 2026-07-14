@@ -1,0 +1,41 @@
+packages:
+  - apps/*
+  - packages/*
+  - tooling/*
+
+catalog:
+  "@eslint/js": ^9.38.0
+  "@tailwindcss/postcss": ^4.1.16
+  "@tanstack/react-query": ^5.90.8
+  "@trpc/client": ^11.7.1
+  "@trpc/server": ^11.7.1
+  "@trpc/tanstack-react-query": ^11.7.1
+  "@types/node": ^22.18.12
+  ai: ^5.0.0
+  es-toolkit: ^1.39.0
+  eslint: ^9.38.0
+  prettier: ^3.6.2
+  tailwindcss: ^4.1.16
+  tsx: ^4.20.0
+  typescript: ^5.9.3
+  zod: ^4.4.3
+
+catalogs:
+  react19:
+    "@types/react": ~19.1.0
+    "@types/react-dom": ~19.1.0
+    react: 19.1.4
+    react-dom: 19.1.4
+
+linkWorkspacePackages: true
+
+onlyBuiltDependencies:
+  - "@tailwindcss/oxide"
+  - esbuild
+
+overrides:
+  lightningcss: 1.30.1
+
+publicHoistPattern:
+  - "@ianvs/prettier-plugin-sort-imports"
+  - prettier-plugin-tailwindcss
