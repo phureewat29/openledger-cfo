@@ -1,0 +1,25 @@
+@theme {
+  --color-background: #0b0b0c;
+  --color-foreground: #f2f2f3;
+  --color-card: #131316;
+  --color-secondary: #1c1c20;
+  --color-muted-foreground: #9a9aa2;
+  --color-accent: #befc65;
+  --color-accent-foreground: #000000;
+  --color-destructive: #ff5c5c;
+  --color-border: #26262b;
+  --color-ring: #befc65;
+
+  --radius: 0.5rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+@theme inline {
+  /* One typeface: both token families resolve to the mono stack. */
+  --font-sans:
+    var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+}

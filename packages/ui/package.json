@@ -1,0 +1,48 @@
+{
+  "name": "@openledger-fleet/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme.css": "./src/theme.css",
+    "./web.css": "./src/web.css",
+    "./fonts": "./src/fonts.ts",
+    "./pane": "./src/pane.tsx",
+    "./input": "./src/input.tsx",
+    "./button": "./src/button.tsx"
+  },
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "format": "prettier --check . --ignore-path ../../.gitignore",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.2.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "geist": "^1.7.2",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@openledger-fleet/eslint-config": "workspace:*",
+    "@openledger-fleet/prettier-config": "workspace:*",
+    "@openledger-fleet/tsconfig": "workspace:*",
+    "@types/react": "catalog:react19",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:react19",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "next": "^16.0.9",
+    "react": "catalog:react19"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    }
+  },
+  "prettier": "@openledger-fleet/prettier-config"
+}
