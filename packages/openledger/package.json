@@ -1,0 +1,44 @@
+{
+  "name": "@openledger-fleet/openledger",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./ids": {
+      "types": "./dist/ids.d.ts",
+      "default": "./src/ids.ts"
+    },
+    "./calendar": {
+      "types": "./dist/calendar.d.ts",
+      "default": "./src/calendar.ts"
+    }
+  },
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "build": "tsc",
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "dev": "tsc",
+    "format": "prettier --check . --ignore-path ../../.gitignore",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config",
+    "smoke": "tsx scripts/smoke.ts",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+  },
+  "dependencies": {
+    "es-toolkit": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@openledger-fleet/eslint-config": "workspace:*",
+    "@openledger-fleet/prettier-config": "workspace:*",
+    "@openledger-fleet/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  },
+  "prettier": "@openledger-fleet/prettier-config"
+}
