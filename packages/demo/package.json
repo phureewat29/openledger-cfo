@@ -1,0 +1,33 @@
+{
+  "name": "@openledger-fleet/demo",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path .prettierignore",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config",
+    "oled:init": "pnpm with-env tsx src/init.ts",
+    "demo": "pnpm with-env tsx src/main.ts",
+    "demo:generate": "pnpm with-env tsx src/generate.ts",
+    "typecheck": "tsc --noEmit",
+    "with-env": "dotenv -e ../../.env --"
+  },
+  "dependencies": {
+    "@openledger-fleet/db": "workspace:*",
+    "@openledger-fleet/openledger": "workspace:*",
+    "es-toolkit": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@openledger-fleet/eslint-config": "workspace:*",
+    "@openledger-fleet/prettier-config": "workspace:*",
+    "@openledger-fleet/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  },
+  "prettier": "@openledger-fleet/prettier-config"
+}
