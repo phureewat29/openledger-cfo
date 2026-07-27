@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@import "@openledger-fleet/ui/theme.css";
+@import "@openledger-fleet/ui/web.css";
+
+@source "../../../../packages/ui/src/*.{ts,tsx}";
+/* Streamdown ships pre-classed markup; Tailwind does not scan node_modules by default. */
+@source "../../node_modules/streamdown/dist/*.js";
+
+/* A band of accent sweeping through muted text; the loading line wears it. */
+@keyframes shimmer-sweep {
+  from {
+    background-position: 200% center;
+  }
+  to {
+    background-position: -200% center;
+  }
+}
