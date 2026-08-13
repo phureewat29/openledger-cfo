@@ -1,5 +1,6 @@
 {
   "name": "@openledger-fleet/cfo",
+  "description": "The Corgi CFO terminal app",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",

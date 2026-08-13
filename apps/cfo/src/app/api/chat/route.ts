@@ -7,8 +7,7 @@ import {
   startIngestRunTool,
 } from "@openledger-fleet/agent";
 
-import { buildBriefing } from "~/ai/system";
-import { accountViewBlock } from "~/ai/view-context";
+import { accountViewBlock, buildBriefing } from "~/server/briefing";
 import { loadDashboard } from "~/server/dashboard";
 import { startRun } from "~/server/ingest-run";
 

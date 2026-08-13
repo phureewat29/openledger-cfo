@@ -14,7 +14,7 @@ import { cn } from "@openledger-fleet/ui";
 import { Button } from "@openledger-fleet/ui/button";
 import { Input } from "@openledger-fleet/ui/input";
 
-import type { IngestFile } from "~/server/ingest";
+import type { IngestFile } from "~/domain/ingest-files";
 import { useSelection } from "~/components/ingest/selection";
 import { isLocked, SETTLED, STATUS_LABEL } from "~/domain/ingest-files";
 import { useTRPC } from "~/trpc/react";
@@ -205,11 +205,8 @@ function Row({
 }
 
 /**
- * The queue is re-read every few seconds and arrives as fresh objects each
- * time, so the row compares what it was given rather than where it came from;
- * most polls change nothing and every row here carries open panels and inputs.
- * Picking a row still re-renders it: the selection arrives through context,
- * which memo does not block.
+ * Compares by value, not identity: the queue arrives as fresh objects each poll,
+ * and most change nothing worth losing. Picking still re-renders — selection arrives through context, which memo can't block.
  */
 export const FileRow = memo(
   Row,

@@ -5,15 +5,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@openledger-fleet/api";
 import { cn } from "@openledger-fleet/ui";
-import { Button } from "@openledger-fleet/ui/button";
 import { Input, Select } from "@openledger-fleet/ui/input";
 import { Pane } from "@openledger-fleet/ui/pane";
 
 import type { GoalProgress, PaceVerdict, PrefixFacts } from "~/domain/goals";
 import type { PrefixOption } from "~/server/dashboard";
 import { ChartTip } from "~/components/charts/tooltip";
-import { AddDisclosure } from "~/components/plan/add-disclosure";
 import { Field } from "~/components/plan/field";
+import { flipTipClassName, shouldFlipTip } from "~/components/plan/flip-tip";
+import { PlanForm } from "~/components/plan/form";
+import { RemoveButton } from "~/components/plan/remove-button";
 import { formatPercent, formatThb, formatThbCompact } from "~/domain/format";
 import { formatEta, goalProgress, movementVerb } from "~/domain/goals";
 import { useTRPC } from "~/trpc/react";
@@ -107,7 +108,6 @@ function Row({
   pending,
 }: {
   goal: GoalProgress;
-  /** Rows past the halfway mark open their tip upward, clear of the list's floor. */
   flip: boolean;
   onRemove: (id: string) => void;
   pending: boolean;
@@ -121,16 +121,11 @@ function Row({
           {goal.name}
         </span>
         <span className={cn(CHIP, verdict.className)}>{verdict.label}</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-5 shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          aria-label={`Remove ${goal.name}`}
+        <RemoveButton
+          label={`Remove ${goal.name}`}
           disabled={pending}
           onClick={() => onRemove(goal.id)}
-        >
-          ×
-        </Button>
+        />
       </div>
       {/* The money column is fixed so every percentage lands on one gridline. */}
       <div className="flex items-center gap-2">
@@ -154,10 +149,7 @@ function Row({
       <p className="text-muted-foreground truncate text-xs">{paceLine(goal)}</p>
 
       <ChartTip
-        className={cn(
-          "left-0 opacity-0 group-hover:opacity-100",
-          flip ? "bottom-full" : "top-full",
-        )}
+        className={flipTipClassName(flip)}
         header={goal.name}
         rows={paceRows(goal)}
       />
@@ -256,7 +248,7 @@ export function GoalsPane({
               <Row
                 key={goal.id}
                 goal={goal}
-                flip={index >= goals.length / 2}
+                flip={shouldFlipTip(index, goals.length)}
                 onRemove={(id) => remove.mutate({ id })}
                 pending={goal.id === removingId}
               />
@@ -266,81 +258,63 @@ export function GoalsPane({
       </div>
 
       {/* Collapsed to one quiet row until asked; the list keeps the height. */}
-      <AddDisclosure
+      <PlanForm
         label="Add goal"
         open={adding}
         onOpen={() => setAdding(true)}
         onClose={cancel}
+        onSubmit={submit}
+        onInput={() => setAdded(undefined)}
+        submitLabel="Add"
+        pending={create.isPending}
+        error={error}
+        added={added}
       >
-        <form
-          onSubmit={submit}
-          onInput={() => setAdded(undefined)}
-          aria-label="Add goal"
-          className="border-border shrink-0 border-t px-3 py-2"
-        >
-          <div className="flex max-w-md flex-col gap-2">
-            <div className="flex items-end gap-2">
-              <Field label="Goal" className="min-w-0 flex-1">
-                <Input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Emergency runway"
-                  autoFocus
-                  required
-                />
-              </Field>
-              <Field label="Measured by" className="min-w-0 flex-1">
-                <Select
-                  value={prefix}
-                  onChange={(event) => setPrefix(event.target.value)}
-                >
-                  {prefixOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
+        <div className="flex items-end gap-2">
+          <Field label="Goal" className="min-w-0 flex-1">
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Emergency runway"
+              autoFocus
+              required
+            />
+          </Field>
+          <Field label="Measured by" className="min-w-0 flex-1">
+            <Select
+              value={prefix}
+              onChange={(event) => setPrefix(event.target.value)}
+            >
+              {prefixOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
 
-            <div className="flex items-end gap-2">
-              <Field label="Target" className="w-28 shrink-0">
-                <Input
-                  value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
-                  inputMode="numeric"
-                  placeholder="250000"
-                  className="tabular-nums"
-                  required
-                />
-              </Field>
-              <Field label="By" className="max-w-36 min-w-0 flex-1">
-                <Input
-                  type="date"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  className="tabular-nums"
-                />
-              </Field>
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={cancel}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={create.isPending}>
-                Add
-              </Button>
-            </div>
-
-            {error ? (
-              <p className="text-destructive text-[10px]">{error.message}</p>
-            ) : added === undefined ? null : (
-              <p className="text-accent text-[10px]">{added}</p>
-            )}
-          </div>
-        </form>
-      </AddDisclosure>
+        <div className="flex items-end gap-2">
+          <Field label="Target" className="w-28 shrink-0">
+            <Input
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              inputMode="numeric"
+              placeholder="250000"
+              className="tabular-nums"
+              required
+            />
+          </Field>
+          <Field label="By" className="max-w-36 min-w-0 flex-1">
+            <Input
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className="tabular-nums"
+            />
+          </Field>
+        </div>
+      </PlanForm>
     </Pane>
   );
 }

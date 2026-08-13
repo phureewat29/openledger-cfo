@@ -130,8 +130,7 @@ export function IngestRunProvider({ children }: { children: React.ReactNode }) {
         setError(null);
         // A fresh object every poll would re-render the whole app on a timer.
         setRun((current) => (isEqual(current, page.run) ? current : page.run));
-        // A restarted server issues low seqs again, which leaves the cursor past
-        // the end of a ring that no longer holds what it counted.
+        // A restarted server's seqs start low again, so a carried-over cursor outruns the new ring.
         if (page.latest < (cursor.current ?? 0)) {
           const whole = await read(undefined);
           cursor.current = whole.latest;

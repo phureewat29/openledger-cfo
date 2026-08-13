@@ -10,8 +10,9 @@ import { Input } from "@openledger-fleet/ui/input";
 import { Pane } from "@openledger-fleet/ui/pane";
 
 import type { UpcomingItem } from "~/domain/upcoming";
-import { AddDisclosure } from "~/components/plan/add-disclosure";
 import { Field } from "~/components/plan/field";
+import { PlanForm } from "~/components/plan/form";
+import { RemoveButton } from "~/components/plan/remove-button";
 import { formatDayMonth, formatThb } from "~/domain/format";
 import { mergeUpcoming, SOURCE_LABEL } from "~/domain/upcoming";
 import { useTRPC } from "~/trpc/react";
@@ -62,16 +63,12 @@ function Row({
             >
               ✓
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-5"
-              aria-label={`Remove ${item.title}`}
+            <RemoveButton
+              label={`Remove ${item.title}`}
               disabled={pending}
+              className="size-5"
               onClick={() => onRemove(reminderId)}
-            >
-              ×
-            </Button>
+            />
           </span>
         )}
       </div>
@@ -189,67 +186,49 @@ export function RemindersPane({
 
       {/* A saved reminder past the horizon never lists, so the added note is
           its only proof — the form stays open to show it. */}
-      <AddDisclosure
+      <PlanForm
         label="Add reminder"
         open={adding}
         onOpen={() => setAdding(true)}
         onClose={cancel}
+        onSubmit={submit}
+        onInput={() => setAdded(undefined)}
+        submitLabel="Add"
+        pending={create.isPending}
+        error={error}
+        added={added}
       >
-        <form
-          onSubmit={submit}
-          onInput={() => setAdded(undefined)}
-          aria-label="Add reminder"
-          className="border-border shrink-0 border-t px-3 py-2"
-        >
-          <div className="flex max-w-md flex-col gap-2">
-            <Field label="Remind me to">
-              <Input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="Pay condo fee"
-                autoFocus
-                required
-              />
-            </Field>
+        <Field label="Remind me to">
+          <Input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Pay condo fee"
+            autoFocus
+            required
+          />
+        </Field>
 
-            <div className="flex items-end gap-2">
-              <Field label="Due" className="max-w-36 min-w-0 flex-1">
-                <Input
-                  type="date"
-                  value={dueDate}
-                  onChange={(event) => setDueDate(event.target.value)}
-                  className="tabular-nums"
-                  required
-                />
-              </Field>
-              <label className="text-muted-foreground flex h-8 shrink-0 cursor-pointer items-center gap-1.5 text-xs select-none">
-                <input
-                  type="checkbox"
-                  checked={monthly}
-                  onChange={(event) => setMonthly(event.target.checked)}
-                  className="accent-accent size-3.5"
-                />
-                Monthly
-              </label>
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={cancel}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={create.isPending}>
-                Add
-              </Button>
-            </div>
-
-            {error ? (
-              <p className="text-destructive text-[10px]">{error.message}</p>
-            ) : added === undefined ? null : (
-              <p className="text-accent text-[10px]">{added}</p>
-            )}
-          </div>
-        </form>
-      </AddDisclosure>
+        <div className="flex items-end gap-2">
+          <Field label="Due" className="max-w-36 min-w-0 flex-1">
+            <Input
+              type="date"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+              className="tabular-nums"
+              required
+            />
+          </Field>
+          <label className="text-muted-foreground flex h-8 shrink-0 cursor-pointer items-center gap-1.5 text-xs select-none">
+            <input
+              type="checkbox"
+              checked={monthly}
+              onChange={(event) => setMonthly(event.target.checked)}
+              className="accent-accent size-3.5"
+            />
+            Monthly
+          </label>
+        </div>
+      </PlanForm>
     </Pane>
   );
 }

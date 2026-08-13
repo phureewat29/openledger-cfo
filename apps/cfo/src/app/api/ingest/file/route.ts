@@ -5,7 +5,7 @@ import { z } from "zod/v4";
 import type { OledErrorKind } from "@openledger-fleet/openledger";
 import { FILE_ID_PATTERN, ledger } from "@openledger-fleet/api";
 
-import type { IngestFile } from "~/server/ingest";
+import type { IngestFile } from "~/domain/ingest-files";
 
 /**
  * How a row leaves the queue, by the status it was listed with. A file the
@@ -59,9 +59,8 @@ export async function DELETE(request: Request) {
     const dir = await ledger.config.dataDir();
     if (!dir.ok) return fail(503, dir.error.message);
 
-    // A rel_path names a walk result and can carry directories, so reducing it
-    // to a basename would unlink the wrong file. Only the resolved path proves
-    // the target is inside the directory the ledger walks.
+    // A rel_path can carry directories, so a basename reduction would unlink the
+    // wrong file — only the resolved path proves the target is inside the directory the ledger walks.
     const root = resolve(dir.value);
     const path = resolve(root, relPath);
     if (!path.startsWith(root + sep)) {

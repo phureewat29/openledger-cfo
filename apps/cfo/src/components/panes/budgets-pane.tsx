@@ -5,15 +5,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@openledger-fleet/api";
 import { cn } from "@openledger-fleet/ui";
-import { Button } from "@openledger-fleet/ui/button";
 import { Input, Select } from "@openledger-fleet/ui/input";
 import { Pane } from "@openledger-fleet/ui/pane";
 
 import type { BudgetRow } from "~/domain/budgets";
 import type { PrefixOption } from "~/server/dashboard";
 import { ChartTip } from "~/components/charts/tooltip";
-import { AddDisclosure } from "~/components/plan/add-disclosure";
 import { Field } from "~/components/plan/field";
+import { flipTipClassName, shouldFlipTip } from "~/components/plan/flip-tip";
+import { PlanForm } from "~/components/plan/form";
+import { RemoveButton } from "~/components/plan/remove-button";
 import { budgetRows } from "~/domain/budgets";
 import { formatMultiple, formatThb } from "~/domain/format";
 import { useTRPC } from "~/trpc/react";
@@ -31,7 +32,6 @@ function Row({
   row: BudgetRow;
   /** The share of the month already gone, which is where the tick sits. */
   elapsed: number;
-  /** Rows past the halfway mark open their tip upward, clear of the list's floor. */
   flip: boolean;
   onRemove: (category: string) => void;
   pending: boolean;
@@ -76,23 +76,15 @@ function Row({
         >
           {formatMultiple(row.pacing)}
         </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-5 shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          aria-label={`Remove ${row.label} budget`}
+        <RemoveButton
+          label={`Remove ${row.label} budget`}
           disabled={pending}
           onClick={() => onRemove(row.category)}
-        >
-          ×
-        </Button>
+        />
       </div>
 
       <ChartTip
-        className={cn(
-          "left-0 opacity-0 group-hover:opacity-100",
-          flip ? "bottom-full" : "top-full",
-        )}
+        className={flipTipClassName(flip)}
         header={row.label}
         rows={[
           { key: "spent", label: "spent", value: formatThb(row.spent) },
@@ -202,7 +194,7 @@ export function BudgetsPane({
                 key={row.category}
                 row={row}
                 elapsed={elapsed}
-                flip={index >= rows.length / 2}
+                flip={shouldFlipTip(index, rows.length)}
                 onRemove={(value) => remove.mutate({ category: value })}
                 pending={row.category === removingCategory}
               />
@@ -211,64 +203,48 @@ export function BudgetsPane({
         )}
       </div>
 
-      <AddDisclosure
+      <PlanForm
         label="Set budget"
         open={adding}
         onOpen={() => setAdding(true)}
         onClose={cancel}
+        onSubmit={submit}
+        onInput={() => setAdded(undefined)}
+        submitLabel="Set"
+        pending={upsert.isPending}
+        error={error}
+        added={added}
       >
-        <form
-          onSubmit={submit}
-          onInput={() => setAdded(undefined)}
-          aria-label="Set budget"
-          className="border-border shrink-0 border-t px-3 py-2"
-        >
-          <div className="flex max-w-md flex-col gap-2">
-            <div className="flex items-end gap-2">
-              <Field label="Category" className="min-w-0 flex-1">
-                <Select
-                  value={category}
-                  onChange={(event) => setCategory(event.target.value)}
-                  required
-                >
-                  <option value="" disabled>
-                    Category…
-                  </option>
-                  {options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Per month" className="w-28 shrink-0">
-                <Input
-                  value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
-                  inputMode="numeric"
-                  placeholder="20000"
-                  className="tabular-nums"
-                  autoFocus
-                  required
-                />
-              </Field>
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={cancel}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={upsert.isPending}>
-                Set
-              </Button>
-            </div>
-            {error ? (
-              <p className="text-destructive text-[10px]">{error.message}</p>
-            ) : added === undefined ? null : (
-              <p className="text-accent text-[10px]">{added}</p>
-            )}
-          </div>
-        </form>
-      </AddDisclosure>
+        <div className="flex items-end gap-2">
+          <Field label="Category" className="min-w-0 flex-1">
+            <Select
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              required
+            >
+              <option value="" disabled>
+                Category…
+              </option>
+              {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Per month" className="w-28 shrink-0">
+            <Input
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              inputMode="numeric"
+              placeholder="20000"
+              className="tabular-nums"
+              autoFocus
+              required
+            />
+          </Field>
+        </div>
+      </PlanForm>
     </Pane>
   );
 }

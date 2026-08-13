@@ -31,12 +31,8 @@ export function Conversation({
   const scripted = useRef(false);
 
   /**
-   * Instant, never animated: an animation is measured in hundreds of
-   * milliseconds against content that grows every frame, and one interrupted
-   * part-way stops wherever it had got to. The flag is what keeps the handler
-   * below from reading the event this raises as the reader scrolling away —
-   * by the time it arrives more tokens have landed, so the distance it would
-   * measure is already stale.
+   * Instant, never animated: an animation would race content that grows every frame.
+   * The flag keeps the scroll handler below from mistaking this for the reader scrolling away — more tokens land before the event fires.
    */
   const scrollTo = useCallback((view: HTMLDivElement, top: number) => {
     const limit = view.scrollHeight - view.clientHeight;

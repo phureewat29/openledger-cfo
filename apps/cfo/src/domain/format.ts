@@ -67,10 +67,7 @@ const CENTS = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 const THB_PRICE = thb(CENTS);
 const USD_PRICE = usd(CENTS);
 
-/**
- * A price wants decimals a balance does not: an average cost of $229.62 is a
- * different figure from $230.
- */
+/** A price wants decimals a balance does not: $229.62 is a different figure from $230. */
 const formatThbPrice = (price: number): string =>
   (price < PRICE_DECIMALS_BELOW ? THB_PRICE : THB_WHOLE).format(price);
 const formatUsdPrice = (price: number): string =>
@@ -123,7 +120,7 @@ export const formatPercentFine = (ratio: number): string =>
 export const formatMultiple = (times: number): string =>
   `${times < 10 ? times.toFixed(1) : Math.round(times)}×`;
 
-/** Runway and every other "how many months" figure, to one decimal. */
+/** Runway and every other "how many months" figure. */
 export const formatMonths = (months: number): string =>
   `${months.toFixed(1)} months`;
 
@@ -138,13 +135,7 @@ const MONTH_LABEL = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
   timeZone: "UTC",
 });
-/**
- * en-US, not en-GB, because en-GB abbreviates September to four letters
- * ("Sept") where every other month is three, which breaks a fixed-width
- * date column. en-US orders month before day by default, so DAY_LABEL,
- * DAY_STAMP and DAY_MONTH reassemble the formatted parts day-first instead
- * of taking the formatter's own order.
- */
+/** en-US, not en-GB: en-GB abbreviates September to 4 letters, breaking a fixed-width date column. */
 const DAY_LABEL = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   month: "short",
@@ -188,23 +179,21 @@ const dayFirst = (formatter: Intl.DateTimeFormat, date: Date): string => {
 export const formatMonth = (monthKey: string): string =>
   MONTH_LABEL.format(utcMonth(monthKey));
 
-/** `AUG` — a chart axis tick inside a single year of data. */
+/** A chart axis tick inside a single year of data. */
 export const formatMonthAbbr = (monthKey: string): string =>
   MONTH_ABBR.format(utcMonth(monthKey)).toUpperCase();
 
-/** `AUG 25` — the same tick where the window crosses a year. */
+/** The same tick where the window crosses a year. */
 export const formatMonthYear = (monthKey: string): string =>
   MONTH_ABBR_YEAR.format(utcMonth(monthKey)).toUpperCase();
 
-/** `18 Mar 2026` — a date inside a sentence, where caps would be a shout. */
+/** A date inside a sentence, where caps would be a shout. */
 export const formatDay = (isoDate: string): string =>
   dayFirst(DAY_LABEL, utc(isoDate));
 
-/** Fixed-width uppercase date for the chrome: `08 AUG 2026`. */
 export const formatStamp = (isoDate: string): string =>
   dayFirst(DAY_STAMP, utc(isoDate)).toUpperCase();
 
-/** Fixed-width uppercase day and month for a table column: `08 AUG`. */
 export const formatDayMonth = (isoDate: string): string =>
   dayFirst(DAY_MONTH, utc(isoDate)).toUpperCase();
 
@@ -258,7 +247,6 @@ export const accountLabel = (
   return SEGMENT_LABELS[segment] ?? titleCase(segment);
 };
 
-/** "3 rows", "1 file": the count and its noun, agreeing in number. */
 export const countNoun = (
   count: number,
   one: string,

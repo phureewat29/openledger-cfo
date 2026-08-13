@@ -59,12 +59,8 @@ const readJson = (text: string): unknown => {
 };
 
 /**
- * The CLI hands back the raw column, so reading it is a parse, not a cast.
- * An account either states something this app can act on or states nothing:
- * half of a metadata object is worse than none of it, because a scale that
- * failed to parse would fall back to 1 and misprice the position by orders of
- * magnitude. `z.object` refuses an array as well as a scalar, which a bare
- * `typeof === "object"` would let through.
+ * The CLI hands back the raw column, so reading it is a parse, not a cast — a
+ * silently defaulted scale (falling back to 1) would misprice a position by orders of magnitude.
  */
 export const parseAccountMetadata = (row: {
   readonly metadata_json: string | null;

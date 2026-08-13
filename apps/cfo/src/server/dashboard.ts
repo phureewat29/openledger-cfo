@@ -68,10 +68,8 @@ export interface Dashboard {
   readonly lifetime: { readonly income: number; readonly expenses: number };
   readonly prefixOptions: readonly PrefixOption[];
   /**
-   * What the ledger says about every prefix a goal can name — the ones on
-   * offer and the ones already claimed. Adding or dropping a goal moves none
-   * of it, which is what lets the goals themselves be re-derived without
-   * re-reading the ledger.
+   * What the ledger says about every prefix a goal can name, offered or already
+   * claimed. Adding or dropping a goal moves none of it, so goals re-derive from this without re-reading the ledger.
    */
   readonly prefixFacts: Readonly<Record<string, PrefixFacts>>;
   readonly goalRows: RouterOutputs["goals"]["list"];
@@ -113,11 +111,8 @@ const isAssetPrefix = (id: string, parentIds: ReadonlySet<string>) => {
 };
 
 /**
- * The ledger auto-names a group by title-casing its own id segment, which
- * collides with an only child that happens to carry the same name — that
- * pairing is a redundant dropdown entry, so drop the group and keep the
- * leaf. A group with several children is still worth keeping, but reads as
- * "All X" so it is not mistaken for one of them.
+ * A group whose auto-title-cased name collides with its only child is a redundant
+ * dropdown entry — drop the group, keep the leaf. Multiple children keep the group, labeled "All X" instead.
  */
 const groupLabel = (
   groupName: string,

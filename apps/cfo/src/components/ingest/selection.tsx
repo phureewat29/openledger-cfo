@@ -7,9 +7,8 @@ export type InfoMode = "document" | "questions";
 
 interface Selection {
   /**
-   * The rows the operator picked, keyed by rel_path: a file has one of those
-   * before the ledger registers it and keeps the same one afterwards, so a
-   * pick survives the prepare that would change its id.
+   * Keyed by rel_path, not file id: a file has one before the ledger registers it
+   * and keeps the same one after — a pick survives the prepare that would change its id.
    */
   readonly selected: ReadonlySet<string>;
   readonly toggle: (relPath: string) => void;
@@ -32,10 +31,8 @@ interface Viewer {
 const CLOSED: Viewer = { fileId: null, mode: "document" };
 
 /**
- * Two selections, kept apart on purpose: what the operator is acting on and
- * what they are reading. Both stay in memory instead of the URL — this page is
- * force-dynamic, so a navigation would re-run the `oled` reads behind it on
- * every click.
+ * Two selections, kept apart on purpose: what's acted on vs what's read. Both
+ * stay in memory, not the URL — this page is force-dynamic, so a navigation would re-run the `oled` reads behind it.
  */
 export function SelectionProvider({ children }: { children: React.ReactNode }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(NOTHING);

@@ -14,6 +14,7 @@ import {
 import { appRouter, createTRPCContext } from "@openledger-fleet/api";
 import { err, ok } from "@openledger-fleet/openledger";
 
+import type { IngestFile } from "~/domain/ingest-files";
 import type {
   RunMode,
   RunSnapshot,
@@ -21,7 +22,6 @@ import type {
   RunTarget,
   RunWaiting,
 } from "~/domain/ingest-run";
-import type { IngestFile } from "~/server/ingest";
 import { countNoun } from "~/domain/format";
 import { openQuestionsByFile, WORKABLE } from "~/domain/ingest-files";
 import {
@@ -33,10 +33,8 @@ import {
 import { appendEntry, updateEntry } from "~/server/ingest-journal";
 
 /**
- * The run outlives the request that asked for it, so it cannot borrow the
- * request-scoped caller: that one reads `headers()` and throws once detached.
- * This one shares the api package's connector, so its commands queue on the
- * same serial lanes as the page's and land in the same command log.
+ * The run outlives the request, so it can't borrow the request-scoped caller (it reads
+ * `headers()` and throws once detached) — this one shares the connector, so commands still land in the same lanes and log.
  */
 const caller = appRouter.createCaller(
   createTRPCContext({ headers: new Headers() }),
@@ -75,10 +73,8 @@ interface Run {
   /** File id → the name the operator dropped, so later lines can say it back. */
   readonly names: Map<string, string>;
   /**
-   * Every name this run's own files answer to: the paths it was handed, and the
-   * ids its own prepares gave those paths. The agent reads the whole queue and
-   * does wander into files nobody asked it for, so being worked is not the test
-   * — being asked for is.
+   * Every name this run's files answer to: the paths it was handed, plus the ids
+   * its own prepares gave them. The agent does wander into files nobody asked for — being worked is not the test, being asked for is.
    */
   readonly own: Set<string>;
   /** Consecutive closes the ledger turned down, per file. */
@@ -132,9 +128,8 @@ const inputOf = (event: LangGraphEvent): Record<string, unknown> => {
 };
 
 /**
- * The only two argument fields anything here reads: which statement a step is
- * about. No other field of a tool's input is looked at or kept, which is what
- * puts a document password out of the journal's reach by construction.
+ * The only two fields anything here reads: which statement a step is about. No
+ * other field of a tool's input is looked at or kept — a password stays out of the journal's reach by construction.
  */
 const targetOf = (input: Record<string, unknown>): string | undefined => {
   const target = asString(input.pathOrId) || asString(input.fileId);
@@ -166,8 +161,7 @@ const countOf = (
 
 /**
  * The only result fields a line may quote: what was read and what was posted.
- * A tool's arguments are never serialized here, so there is no path by which a
- * password could reach a journal entry.
+ * A tool's arguments are never serialized here, so there's no path by which a password could reach a journal entry.
  */
 const detailOf = (artifact: Record<string, unknown>): string | undefined => {
   const summary = asRecord(artifact.summary);
@@ -193,10 +187,8 @@ interface Refusal {
 }
 
 /**
- * Two steps can be turned down and still answer with an artifact: a close whose
- * balance does not tie, and a commit only some of whose rows posted. Neither did
- * what its finished tense claims, so neither may be written in it. Keyed by the
- * refusal's reason, one per tool.
+ * Two steps can be turned down and still answer with an artifact — a close whose
+ * balance doesn't tie, a commit where only some rows posted. Neither did what its finished tense claims, so neither is written in it.
  */
 const REFUSAL: Record<string, Refusal> = {
   mismatch: {
@@ -210,10 +202,8 @@ const refusalOf = (artifact: Record<string, unknown>): Refusal | undefined =>
   typeof artifact.reason === "string" ? REFUSAL[artifact.reason] : undefined;
 
 /**
- * A statement whose closing balance cannot tie is closed on its file id alone,
- * which the prompt says and some models will not do — they re-send the balance
- * until the run runs out of steps, leaving a fully posted file pending for
- * good. Twice is enough to know this one will not take the escape.
+ * Some models won't take the prompt's escape — closing on file id alone — when the
+ * balance can't tie, looping until steps run out and leaving a posted file stuck. Twice is enough to know this one won't take it.
  */
 const REFUSED_CLOSE_LIMIT = 2;
 
@@ -243,10 +233,8 @@ interface Target extends RunTarget {
 }
 
 /**
- * A prepare that never got its password registers the file anyway, and closing
- * one deletes its text, so a file id says only that the ledger knows the name.
- * No command reads an extraction back; this opens the artifact and spawns
- * nothing, which is what keeps it affordable once per file.
+ * A file id alone doesn't say whether a file is prepared — a locked prepare registers
+ * it anyway, and closing deletes its text. This opens the artifact rather than spawning a command, so it's affordable once per file.
  */
 const hasDocument = async (fileId: string): Promise<boolean> => {
   try {

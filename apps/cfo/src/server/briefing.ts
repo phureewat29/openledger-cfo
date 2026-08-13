@@ -1,3 +1,5 @@
+import { sumBy } from "es-toolkit";
+
 import type { GoalProgress } from "~/domain/goals";
 import type { Insight } from "~/domain/insights/types";
 import type { Dashboard } from "~/server/dashboard";
@@ -8,9 +10,11 @@ import {
   formatPercent,
   formatThb,
   formatUsd,
+  moneyOf,
 } from "~/domain/format";
 import { goalProgress, movementVerb } from "~/domain/goals";
 import { headlineOf } from "~/domain/insights/headline";
+import { loadAccount } from "~/server/account";
 
 const MAX_BRIEFED_INSIGHTS = 8;
 
@@ -76,13 +80,7 @@ const briefing = (dashboard: Dashboard) => {
 
 /**
  * The facts the page is showing, for the agent to answer from. Persona, tool
- * guidance and the untrusted-data note belong to the agent package, which owns
- * the prompt and appends this as context.
- *
- * Every number comes from the same pure domain functions that render the page,
- * so the model and the page can never quote different figures. Merchant and
- * description strings were sanitized at the select layer before reaching any
- * insight copy interpolated below.
+ * guidance and the untrusted-data note belong to the agent package, which appends this as context.
  */
 export const buildBriefing = (dashboard: Dashboard): string => {
   const { input, insights } = dashboard;
@@ -115,4 +113,30 @@ ${verdicts.length > 0 ? verdicts : "No rule fired this month."}
 
 ## Goals
 ${goalLines}`;
+};
+
+/**
+ * The client sends only the route; every fact in the block is re-derived here
+ * so the model can never be fed figures the server did not compute.
+ */
+export const accountViewBlock = async (
+  id: string,
+): Promise<string | undefined> => {
+  const view = await loadAccount(id).catch(() => null);
+  if (!view) return undefined;
+
+  const inflow = sumBy(view.monthly, (month) => month.in);
+  const outflow = sumBy(view.monthly, (month) => month.out);
+  const money = moneyOf(view.currency);
+  // The totals sum `monthly`, so the span quoted must be `monthly`'s own.
+  const from = view.monthly[0]
+    ? `${view.monthly[0].month}-01`
+    : view.window.from;
+  return [
+    "## Current view",
+    `The user is looking at account ${view.id} — ${view.name} (${view.type}).`,
+    `Balance ${money(view.balance)} · last activity ${formatDay(view.asOf)}.`,
+    `Trailing window ${from} → ${view.asOf}: in ${money(inflow)}, out ${money(outflow)}.`,
+    'Answer questions about "this account" against these figures; use tools for anything deeper.',
+  ].join("\n");
 };

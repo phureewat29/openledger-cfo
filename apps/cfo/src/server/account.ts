@@ -43,7 +43,6 @@ import { caller } from "~/trpc/server";
 
 export interface MonthFlow {
   readonly month: string;
-  /** Money the ledger debited to this account. */
   readonly in: number;
   readonly out: number;
 }
@@ -109,7 +108,6 @@ export interface AccountView {
   readonly subtype: string | null;
   readonly currency: string;
   readonly balance: number;
-  /** Where this account's own story ends — every window is measured from here. */
   readonly asOf: string;
   readonly window: { readonly from: string; readonly to: string };
   readonly flow: FlowGraph | null;

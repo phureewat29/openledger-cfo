@@ -93,9 +93,8 @@ export interface PrefixFacts {
 type NetMovement = ReadonlyMap<string, number>;
 
 /**
- * Every prefix reads the same window, and a prefix only ever wants the accounts
- * under it, so the rows are folded onto their accounts once and each prefix
- * then sums its own share of a set the size of the chart of accounts.
+ * Every prefix reads the same window, so the rows are folded onto their accounts
+ * once — each prefix then sums its own share of a set the size of the chart of accounts.
  */
 export const netMovement = (
   movements: readonly MovementRow[],
@@ -115,13 +114,8 @@ export const netMovement = (
 };
 
 /**
- * A goal prefix names either assets gathering toward a target or a debt being
- * retired, and the balance means the opposite thing in each: for assets it is
- * the progress itself, for a liability it is what is still owed, so progress is
- * the principal already paid. A debit moves both toward their target, which is
- * why one growth sum serves both. Parent accounts carry a zero balance with the
- * total on their children, which is what makes a plain prefix sum correct
- * rather than double counted.
+ * A goal prefix's balance means opposite things by mode — assets hold progress
+ * itself, a liability holds what's still owed. Parent accounts carry zero balance (children hold the total), so a prefix sum is never double-counted.
  */
 export const prefixFacts = (
   prefix: string,

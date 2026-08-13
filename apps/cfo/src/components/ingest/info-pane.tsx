@@ -12,8 +12,7 @@ import { Button } from "@openledger-fleet/ui/button";
 import { Input } from "@openledger-fleet/ui/input";
 import { Pane } from "@openledger-fleet/ui/pane";
 
-import type { FileImpact } from "~/domain/ingest-files";
-import type { IngestQuestion } from "~/server/ingest";
+import type { FileImpact, IngestQuestion } from "~/domain/ingest-files";
 import { useSelection } from "~/components/ingest/selection";
 import { LoadingLine } from "~/components/loading-line";
 import { countNoun, moneyOf } from "~/domain/format";

@@ -11,9 +11,12 @@ import {
 import { Button } from "@openledger-fleet/ui/button";
 import { Pane } from "@openledger-fleet/ui/pane";
 
-import type { FileActionKind } from "~/domain/ingest-files";
+import type {
+  FileActionKind,
+  IngestCounts,
+  IngestFile,
+} from "~/domain/ingest-files";
 import type { RunMode } from "~/domain/ingest-run";
-import type { IngestCounts, IngestFile } from "~/server/ingest";
 import { startIngestRun, useIngestRun } from "~/components/ingest-run-provider";
 import { Dropzone } from "~/components/ingest/dropzone";
 import { FileRow } from "~/components/ingest/file-row";
