@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import { TRPCError } from "@trpc/server";
 import { partition } from "es-toolkit";
 
 import type { LangGraphEvent } from "@openledger-fleet/agent";
@@ -19,6 +20,7 @@ import type {
   RunWaiting,
 } from "~/domain/ingest-run";
 import type { IngestFile } from "~/server/ingest";
+import { countNoun } from "~/domain/format";
 import { openQuestionsByFile, WORKABLE } from "~/domain/ingest-files";
 import {
   isRunLive,
@@ -157,10 +159,8 @@ const countOf = (
   value: unknown,
   one: string,
   many: string,
-): string | undefined => {
-  if (typeof value !== "number") return undefined;
-  return `${String(value)} ${value === 1 ? one : many}`;
-};
+): string | undefined =>
+  typeof value === "number" ? countNoun(value, one, many) : undefined;
 
 /**
  * The only result fields a line may quote: what was read and what was posted.
@@ -246,11 +246,16 @@ interface Target extends RunTarget {
  * No command reads an extraction back; this opens the artifact and spawns
  * nothing, which is what keeps it affordable once per file.
  */
-const hasDocument = (fileId: string): Promise<boolean> =>
-  caller.ledger.ingest.document({ fileId }).then(
-    () => true,
-    () => false,
-  );
+const hasDocument = async (fileId: string): Promise<boolean> => {
+  try {
+    await caller.ledger.ingest.document({ fileId });
+    return true;
+  } catch (cause) {
+    // Only a missing extraction means "not prepared"; anything else is real.
+    if (cause instanceof TRPCError && cause.code === "NOT_FOUND") return false;
+    throw cause;
+  }
+};
 
 const targetOfRow = async (row: IngestFile): Promise<Target> => {
   const prepared = row.file_id !== null && (await hasDocument(row.file_id));
@@ -326,13 +331,17 @@ const noteClarifications = async (): Promise<void> => {
   const [files, questions] = await Promise.all([
     caller.ledger.ingest.list().then(
       (page) => page.rows,
-      () => [],
+      () => undefined,
     ),
     caller.ledger.questions.list({}).then(
       (page) => page.rows,
-      () => [],
+      () => undefined,
     ),
   ]);
+  if (files === undefined || questions === undefined) {
+    note("Skipped the clarification check", "the ledger did not answer");
+    return;
+  }
 
   const openByFile = openQuestionsByFile(questions);
 
@@ -419,12 +428,16 @@ const superviseClose = async (
   run.refusedCloses.set(fileId, refused);
   if (refused !== REFUSED_CLOSE_LIMIT) return;
 
-  // A close that fails here found the file already closed: nothing to say.
-  const closed = await caller.ledger.ingest.done({ fileId }).then(
-    (out) => out.ok,
-    () => false,
-  );
-  if (closed) note(runLine("Closed", name), RECONCILE_SKIPPED);
+  try {
+    const out = await caller.ledger.ingest.done({ fileId });
+    // A refusal here means the model's next fileId-only retry can still land.
+    if (out.ok) note(runLine("Closed", name), RECONCILE_SKIPPED);
+  } catch (cause) {
+    note(
+      runLine("Close failed", name),
+      cause instanceof Error ? firstLine(cause.message) : undefined,
+    );
+  }
 };
 
 interface OpenCall {
@@ -696,7 +709,19 @@ export const startRun = async (
     if (row.file_id !== null) run.names.set(row.file_id, row.rel_path);
   }
 
-  const { targets, locked } = await selectTargets(scope, rows);
+  let selection: Selection;
+  try {
+    selection = await selectTargets(scope, rows);
+  } catch (cause) {
+    slot.run = previous;
+    return {
+      ok: false,
+      reason: "unavailable",
+      message:
+        cause instanceof Error ? cause.message : "The ledger did not answer.",
+    };
+  }
+  const { targets, locked } = selection;
   run.files = targets.length;
   for (const target of targets) {
     run.own.add(target.relPath);

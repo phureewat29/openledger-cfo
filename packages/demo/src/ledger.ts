@@ -29,6 +29,7 @@ export const LEDGER = {
 
 const readOcrConfig = (
   path: string,
+  log: (line: string) => void,
 ): { ocrBaseUrl?: string; ocrModel?: string } => {
   if (!existsSync(path)) return {};
   try {
@@ -44,7 +45,8 @@ const readOcrConfig = (
         : {}),
       ...(typeof ocrModel === "string" && ocrModel !== "" ? { ocrModel } : {}),
     };
-  } catch {
+  } catch (cause) {
+    log(`ocr config unreadable, continuing without it: ${String(cause)}`);
     return {};
   }
 };
@@ -89,7 +91,7 @@ export const bootstrapLedger = async (
 
   // The OCR endpoint is a machine setting, not a dataset fact: carry it across
   // the reset so a reseed never turns image ingest off.
-  const ocr = readOcrConfig(LEDGER.configPath);
+  const ocr = readOcrConfig(LEDGER.configPath, options.log);
 
   if (!options.keep) {
     await rm(LEDGER.root, { recursive: true, force: true });
