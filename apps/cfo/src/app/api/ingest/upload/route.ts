@@ -52,17 +52,15 @@ const writeUnique = async (
       attempt === 0
         ? `${stem}.${extension}`
         : `${stem}-${attempt}.${extension}`;
-    const failure = await writeFile(join(dir, name), bytes, {
-      flag: "wx",
-    }).then(
-      () => undefined,
-      (cause: unknown) => cause,
-    );
-    if (failure === undefined) return name;
-    if (errnoOf(failure) !== "EEXIST") {
-      throw failure instanceof Error
-        ? failure
-        : new Error(`Could not write ${name}`);
+    try {
+      await writeFile(join(dir, name), bytes, { flag: "wx" });
+      return name;
+    } catch (failure) {
+      if (errnoOf(failure) !== "EEXIST") {
+        throw failure instanceof Error
+          ? failure
+          : new Error(`Could not write ${name}`);
+      }
     }
   }
   return undefined;

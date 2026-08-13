@@ -158,25 +158,25 @@ export function BudgetsPane({
     : undefined;
   const error = upsert.error ?? remove.error;
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setAdded(undefined);
     const monthlyLimit = Number(amount);
     if (category.length === 0) return;
     if (!Number.isFinite(monthlyLimit) || monthlyLimit <= 0) return;
-    try {
-      // The column keeps two decimals, and the schema rejects anything finer.
-      await upsert.mutateAsync({
-        category,
-        monthlyLimit: Math.round(monthlyLimit * 100) / 100,
-      });
-      const label =
-        options.find((option) => option.value === category)?.label ?? category;
-      setAdded(`Set · ${label} ${formatThb(monthlyLimit)}/mo`);
-      setAmount("");
-    } catch {
-      // Already surfaced inline below via `error`.
-    }
+    // The column keeps two decimals, and the schema rejects anything finer.
+    upsert.mutate(
+      { category, monthlyLimit: Math.round(monthlyLimit * 100) / 100 },
+      {
+        onSuccess: () => {
+          const label =
+            options.find((option) => option.value === category)?.label ??
+            category;
+          setAdded(`Set · ${label} ${formatThb(monthlyLimit)}/mo`);
+          setAmount("");
+        },
+      },
+    );
   };
 
   const cancel = () => {

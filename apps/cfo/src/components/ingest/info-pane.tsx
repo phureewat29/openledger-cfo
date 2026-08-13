@@ -16,7 +16,7 @@ import type { FileImpact } from "~/domain/ingest-files";
 import type { IngestQuestion } from "~/server/ingest";
 import { useSelection } from "~/components/ingest/selection";
 import { LoadingLine } from "~/components/loading-line";
-import { moneyOf } from "~/domain/format";
+import { countNoun, moneyOf } from "~/domain/format";
 import { fileImpactOf, SETTLED } from "~/domain/ingest-files";
 import { runLine } from "~/domain/ingest-run";
 import { useTRPC } from "~/trpc/react";
@@ -318,14 +318,14 @@ export function InfoPane({ className }: { className?: string }) {
 
   const detail = () => {
     if (viewerMode === "questions") {
-      return `${String(raised.length)} ${raised.length === 1 ? "question" : "questions"}`;
+      return countNoun(raised.length, "question");
     }
     if (settled) {
       if (posted.data === undefined) return undefined;
-      return `${String(posted.data.length)} ${posted.data.length === 1 ? "row" : "rows"} posted`;
+      return `${countNoun(posted.data.length, "row")} posted`;
     }
     if (extraction === undefined) return undefined;
-    return `${String(extraction.page_count)} ${extraction.page_count === 1 ? "page" : "pages"}`;
+    return countNoun(extraction.page_count, "page");
   };
 
   return (

@@ -8,6 +8,7 @@ import { Pane } from "@openledger-fleet/ui/pane";
 import { useCliLog } from "~/components/cli-log-provider";
 import { useHydrated } from "~/components/use-hydrated";
 import { NO_ENTRIES } from "~/domain/cli-log";
+import { countNoun } from "~/domain/format";
 
 /** Below this the reader is at the tail and new commands should follow. */
 const STUCK_PX = 40;
@@ -39,7 +40,7 @@ export function CliLog({ className }: { className?: string }) {
   return (
     <Pane
       title="oled"
-      meta={`${entries.length} ${entries.length === 1 ? "command" : "commands"}`}
+      meta={countNoun(entries.length, "command")}
       bodyClassName="min-h-0 flex-1 p-0"
       className={className}
     >

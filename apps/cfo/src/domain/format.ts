@@ -257,3 +257,10 @@ export const accountLabel = (
   const segment = accountId.slice(accountId.lastIndexOf(":") + 1);
   return SEGMENT_LABELS[segment] ?? titleCase(segment);
 };
+
+/** "3 rows", "1 file": the count and its noun, agreeing in number. */
+export const countNoun = (
+  count: number,
+  one: string,
+  many = `${one}s`,
+): string => `${String(count)} ${count === 1 ? one : many}`;

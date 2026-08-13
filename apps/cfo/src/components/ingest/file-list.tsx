@@ -20,6 +20,7 @@ import { FileRow } from "~/components/ingest/file-row";
 import { ModeDialog } from "~/components/ingest/mode-dialog";
 import { useSelection } from "~/components/ingest/selection";
 import { useHydrated } from "~/components/use-hydrated";
+import { countNoun } from "~/domain/format";
 import {
   actionsFor,
   openCountOf,
@@ -65,7 +66,7 @@ const countPart = (value: number, label: string) =>
  */
 const countsOf = (summary: IngestCounts | null | undefined, rows: number) => {
   if (summary === null || summary === undefined) {
-    return `${String(rows)} ${rows === 1 ? "file" : "files"}`;
+    return countNoun(rows, "file");
   }
   const counts = runLine(
     countPart(summary.new, "new"),
@@ -249,8 +250,7 @@ export function FileList({
       {confirming === null ? null : (
         <div className="border-border bg-secondary/40 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
           <p className="min-w-0 flex-1 text-[11px]">
-            Delete {confirming.length}{" "}
-            {confirming.length === 1 ? "file" : "files"}? Anything the ledger
+            Delete {countNoun(confirming.length, "file")}? Anything the ledger
             already registered is deregistered first — its rows and questions go
             with it.
           </p>

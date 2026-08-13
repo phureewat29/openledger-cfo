@@ -128,21 +128,23 @@ export function RemindersPane({
     (remove.isPending ? remove.variables.id : undefined);
   const error = create.error ?? complete.error ?? remove.error;
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setAdded(undefined);
     if (title.length === 0 || dueDate.length === 0) return;
-    try {
-      await create.mutateAsync({ title, dueDate, monthly });
-      // A reminder dated past the horizon is saved but never listed, so this
-      // line is the only proof the row exists.
-      setAdded(`Added · due ${formatDayMonth(dueDate)}`);
-      setTitle("");
-      setDueDate("");
-      setMonthly(false);
-    } catch {
-      // Already surfaced inline below via `error`.
-    }
+    create.mutate(
+      { title, dueDate, monthly },
+      {
+        onSuccess: () => {
+          // A reminder dated past the horizon is saved but never listed, so
+          // this line is the only proof the row exists.
+          setAdded(`Added · due ${formatDayMonth(dueDate)}`);
+          setTitle("");
+          setDueDate("");
+          setMonthly(false);
+        },
+      },
+    );
   };
 
   const act = (run: () => void) => {

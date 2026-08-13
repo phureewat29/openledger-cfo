@@ -228,18 +228,13 @@ export function ActionPane({
 
   const restoreAll = async () => {
     setRestoring(true);
-    try {
-      await Promise.all(
-        dismissed.map((insight) =>
-          clear.mutateAsync({ insightId: insight.id }),
-        ),
-      );
+    const cleared = await Promise.allSettled(
+      dismissed.map((insight) => clear.mutateAsync({ insightId: insight.id })),
+    );
+    if (cleared.every((result) => result.status === "fulfilled")) {
       setHiddenIds(new Set());
-    } catch {
-      // Already surfaced inline below via `error`.
-    } finally {
-      setRestoring(false);
     }
+    setRestoring(false);
   };
 
   const due = queue.due.slice(0, MAX_DUE);

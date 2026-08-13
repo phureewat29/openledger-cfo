@@ -208,26 +208,28 @@ export function GoalsPane({
   const removingId = remove.isPending ? remove.variables.id : undefined;
   const error = create.error ?? remove.error;
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setAdded(undefined);
     const targetAmount = Number(amount);
     if (name.length === 0 || prefix.length === 0) return;
     if (!Number.isFinite(targetAmount) || targetAmount <= 0) return;
-    try {
-      await create.mutateAsync({
+    create.mutate(
+      {
         name,
         targetAmount,
         targetDate: date.length > 0 ? date : undefined,
         accountPrefix: prefix,
-      });
-      setAdded(`Added · ${name}`);
-      setName("");
-      setAmount("");
-      setDate("");
-    } catch {
-      // Already surfaced inline below via `error`.
-    }
+      },
+      {
+        onSuccess: () => {
+          setAdded(`Added · ${name}`);
+          setName("");
+          setAmount("");
+          setDate("");
+        },
+      },
+    );
   };
 
   const cancel = () => {

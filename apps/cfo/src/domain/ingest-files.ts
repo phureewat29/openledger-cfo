@@ -1,4 +1,4 @@
-import { countBy } from "es-toolkit";
+import { countBy, groupBy, orderBy, partition, sumBy } from "es-toolkit";
 
 import type {
   IngestFile,
@@ -78,58 +78,45 @@ export interface FileImpact {
 export const fileImpactOf = (
   rows: readonly IngestFileTransaction[],
 ): FileImpact[] => {
-  const impacts = new Map<
-    string,
+  const legs = rows.flatMap((row) => [
     {
-      account: string;
-      name: string | null;
-      currency: string;
-      debits: number;
-      credits: number;
-      legs: number;
-    }
-  >();
+      account: row.debit_account_id,
+      name: row.debit_account_name,
+      currency: row.currency,
+      side: "debit" as const,
+      amount: row.amount,
+    },
+    {
+      account: row.credit_account_id,
+      name: row.credit_account_name,
+      currency: row.currency,
+      side: "credit" as const,
+      amount: row.amount,
+    },
+  ]);
 
-  const touch = (
-    account: string,
-    name: string | null,
-    currency: string,
-    side: "debits" | "credits",
-    amount: number,
-  ) => {
-    const impact = impacts.get(account) ?? {
-      account,
-      name,
-      currency,
-      debits: 0,
-      credits: 0,
-      legs: 0,
-    };
-    impact[side] += amount;
-    impact.legs += 1;
-    impact.name ??= name;
-    impacts.set(account, impact);
-  };
+  const impacts = Object.values(groupBy(legs, (leg) => leg.account)).flatMap(
+    (group): FileImpact[] => {
+      const first = group[0];
+      if (first === undefined) return [];
+      const [debits, credits] = partition(group, (leg) => leg.side === "debit");
+      return [
+        {
+          account: first.account,
+          name: group.find((leg) => leg.name !== null)?.name ?? null,
+          currency: first.currency,
+          debits: sumBy(debits, (leg) => leg.amount),
+          credits: sumBy(credits, (leg) => leg.amount),
+          legs: group.length,
+        },
+      ];
+    },
+  );
 
-  for (const row of rows) {
-    touch(
-      row.debit_account_id,
-      row.debit_account_name,
-      row.currency,
-      "debits",
-      row.amount,
-    );
-    touch(
-      row.credit_account_id,
-      row.credit_account_name,
-      row.currency,
-      "credits",
-      row.amount,
-    );
-  }
-
-  return [...impacts.values()].sort(
-    (a, b) => Math.max(b.debits, b.credits) - Math.max(a.debits, a.credits),
+  return orderBy(
+    impacts,
+    [(one) => Math.max(one.debits, one.credits)],
+    ["desc"],
   );
 };
 

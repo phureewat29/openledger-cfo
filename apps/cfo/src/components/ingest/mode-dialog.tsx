@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { Button } from "@openledger-fleet/ui/button";
 
 import type { RunMode } from "~/domain/ingest-run";
+import { countNoun } from "~/domain/format";
 
 const CHOICES: readonly {
   readonly mode: RunMode;
@@ -52,9 +53,7 @@ export function ModeDialog({
   }, [open]);
 
   const scope =
-    files === null
-      ? "the whole queue"
-      : `${String(files)} ${files === 1 ? "statement" : "statements"}`;
+    files === null ? "the whole queue" : countNoun(files, "statement");
 
   return (
     <dialog

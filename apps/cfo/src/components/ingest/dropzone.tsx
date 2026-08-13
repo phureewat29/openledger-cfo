@@ -21,12 +21,15 @@ const messageOf = (cause: unknown): string =>
 const upload = async (file: File): Promise<UploadReply> => {
   const body = new FormData();
   body.append("file", file);
-  return fetch("/api/ingest/upload", { method: "POST", body })
-    .then((response) => response.json() as Promise<UploadReply>)
-    .catch(
-      (cause: unknown) =>
-        ({ ok: false, error: messageOf(cause) }) satisfies UploadReply,
-    );
+  try {
+    const response = await fetch("/api/ingest/upload", {
+      method: "POST",
+      body,
+    });
+    return (await response.json()) as UploadReply;
+  } catch (cause) {
+    return { ok: false, error: messageOf(cause) };
+  }
 };
 
 export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
