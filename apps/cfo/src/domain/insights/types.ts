@@ -9,7 +9,7 @@ export type RuleKey =
   | "top-outliers"
   | "loan-progress";
 
-export interface Figure {
+interface Figure {
   readonly label: string;
   readonly value: string;
 }

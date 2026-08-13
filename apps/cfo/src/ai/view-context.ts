@@ -1,3 +1,5 @@
+import { sumBy } from "es-toolkit";
+
 import { formatDay, moneyOf } from "~/domain/format";
 import { loadAccount } from "~/server/account";
 
@@ -11,8 +13,8 @@ export const accountViewBlock = async (
   const view = await loadAccount(id).catch(() => null);
   if (!view) return undefined;
 
-  const inflow = view.monthly.reduce((sum, m) => sum + m.in, 0);
-  const outflow = view.monthly.reduce((sum, m) => sum + m.out, 0);
+  const inflow = sumBy(view.monthly, (month) => month.in);
+  const outflow = sumBy(view.monthly, (month) => month.out);
   const money = moneyOf(view.currency);
   // The totals sum `monthly`, so the span quoted must be `monthly`'s own.
   const from = view.monthly[0]

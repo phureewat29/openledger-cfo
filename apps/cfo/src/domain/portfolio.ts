@@ -174,7 +174,7 @@ export const tradesOf = (input: {
         },
       ];
     })
-    .sort((left, right) => left.date.localeCompare(right.date));
+    .toSorted((left, right) => left.date.localeCompare(right.date));
 };
 
 const isBank = (row: PortfolioAccount) =>
@@ -237,6 +237,6 @@ export const splitPortfolio = (
     openLoans: orderBy(openLoans, [(row) => row.balance], ["desc"]),
     closedLoans: loans.length - openLoans.length,
     holdings,
-    positions: holdings.reduce((sum, holding) => sum + holding.rows.length, 0),
+    positions: sumBy(holdings, (holding) => holding.rows.length),
   };
 };

@@ -3,7 +3,7 @@ import type { LinkedLeg } from "@openledger-fleet/openledger";
 import { fromUnits } from "./money";
 import { leg } from "./types";
 
-export interface Disposal {
+interface Disposal {
   /** Where the proceeds land. */
   readonly cash: string;
   /** The account that carries the position's cost. */

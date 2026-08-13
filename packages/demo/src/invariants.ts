@@ -1040,7 +1040,7 @@ const payoutCheck = (
   );
 };
 
-export interface MonthNet {
+interface MonthNet {
   readonly month: string;
   readonly income: number;
   readonly expenses: number;

@@ -47,7 +47,7 @@ const accountMetadata = z.object({
   unit_of: z.string().optional(),
 });
 
-export type AccountMetadata = Readonly<z.infer<typeof accountMetadata>>;
+type AccountMetadata = Readonly<z.infer<typeof accountMetadata>>;
 
 /** A column written by another process may be anything at all, including nothing. */
 const readJson = (text: string): unknown => {

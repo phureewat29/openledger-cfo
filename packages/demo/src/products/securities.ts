@@ -211,7 +211,7 @@ const dcaFundSchema = z.object({
   dps: z.number(),
 });
 
-export type DcaFund = z.infer<typeof dcaFundSchema>;
+type DcaFund = z.infer<typeof dcaFundSchema>;
 
 /**
  * SSF and RMF buy tax relief rather than exposure, and the relief is claimed
@@ -369,7 +369,7 @@ export const INSTRUMENTS: Instrument[] = [...HOLDINGS, ...THAI_FUNDS, ...COINS];
  * the day decides the proceeds and the cost basis released decides the gain.
  * Sales never reach the dataset schema, so this stays a plain shape.
  */
-export interface Sale {
+interface Sale {
   readonly account: string;
   readonly ticker: string;
   readonly date: string;

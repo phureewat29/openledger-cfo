@@ -9,7 +9,6 @@ import {
 
 import { buildBriefing } from "~/ai/system";
 import { accountViewBlock } from "~/ai/view-context";
-import { env } from "~/env";
 import { loadDashboard } from "~/server/dashboard";
 import { startRun } from "~/server/ingest-run";
 
@@ -40,9 +39,6 @@ export async function POST(request: Request) {
     const path = PATH_PATTERN.test(rawPath) ? rawPath : "/";
 
     const system = await systemFor(path);
-    if (env.NODE_ENV === "development") {
-      console.log(">>> chat", { path });
-    }
 
     const agent = createAgent("cfo", {
       system,
@@ -59,7 +55,7 @@ export async function POST(request: Request) {
     return agent.stream(body.messages, request.signal);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown failure";
-    console.error(">>> /api/chat failed", error);
+    console.error("/api/chat failed", error);
     return Response.json({ error: message }, { status: 500 });
   }
 }

@@ -24,7 +24,7 @@ interface AccountLike {
 }
 
 /** The ledger's own grouping, carried through under its own name. */
-export interface LoanLeg {
+interface LoanLeg {
   readonly group_id: string | null;
   readonly amount: number;
 }

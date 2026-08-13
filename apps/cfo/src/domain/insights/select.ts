@@ -356,11 +356,12 @@ export const selectRuleInput = (snapshot: LedgerSnapshot): RuleInput => {
           entry.debit_account_id === row.id ||
           entry.credit_account_id === row.id,
       );
-      const closedOn = history.reduce(
-        (latest, entry) => (entry.date > latest ? entry.date : latest),
-        "",
+      const closedOn = history.reduce<string | undefined>(
+        (latest, entry) =>
+          latest === undefined || entry.date > latest ? entry.date : latest,
+        undefined,
       );
-      if (closedOn === "") return undefined;
+      if (closedOn === undefined) return undefined;
       const payments = history
         .filter((entry) => entry.debit_account_id === row.id)
         .map((entry) => entry.amount);

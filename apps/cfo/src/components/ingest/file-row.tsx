@@ -8,6 +8,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { isEqual } from "es-toolkit";
+import { Lock } from "lucide-react";
 
 import { cn } from "@openledger-fleet/ui";
 import { Button } from "@openledger-fleet/ui/button";
@@ -134,9 +135,10 @@ function Row({
           {row.rel_path}
         </button>
         {row.encrypted ? (
-          <span title="Password protected" className="shrink-0">
-            🔒
-          </span>
+          <Lock
+            className="text-muted-foreground size-3 shrink-0"
+            aria-label="Password protected"
+          />
         ) : null}
         {prepare.isPending ? (
           <span

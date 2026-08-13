@@ -268,13 +268,12 @@ const buildDashboard = async (): Promise<Dashboard> => {
       monthToDateSpend(postings, category, input.month, input.dayOfMonth),
     ]),
   );
-  /**
-   * Ranks each category by what it has already cost this month, un-budgeted
-   * categories first, so the budget form's picker defaults to the largest one
-   * still worth setting a limit on.
-   */
   const budgeted = new Set(budgets.map((budget) => budget.category));
-  // Labeled the same way the budget rows are, so the picker and the row agree.
+  /**
+   * Ranked by what each category already cost this month, un-budgeted first,
+   * so the budget picker defaults to the largest one still worth a limit.
+   * Labeled the same way the budget rows are, so picker and row agree.
+   */
   const budgetOptions = orderBy(
     budgetable.map((row) => ({ value: row.id, label: accountLabel(row.id) })),
     [

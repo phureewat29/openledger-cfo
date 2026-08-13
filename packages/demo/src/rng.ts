@@ -1,3 +1,5 @@
+import { sumBy } from "es-toolkit";
+
 import { satang } from "./money";
 
 /** Every random draw in the seed flows through one generator, so a fixed seed reproduces the ledger byte for byte. */
@@ -69,7 +71,7 @@ export const weighted = <T>(
   rng: Rng,
   entries: readonly [readonly [T, number], ...(readonly [T, number])[]],
 ): T => {
-  const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
+  const total = sumBy(entries, ([, weight]) => weight);
   let cursor = rng() * total;
   for (const [value, weight] of entries) {
     cursor -= weight;

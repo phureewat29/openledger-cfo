@@ -1,3 +1,5 @@
+import { sortBy } from "es-toolkit";
+
 import type { Insight, Rule, RuleInput, RuleKey } from "./types";
 import { cardDueCoverage } from "./rules/card-due-coverage";
 import { categorySpike } from "./rules/category-spike";
@@ -21,9 +23,7 @@ const RULES = {
 
 /** Severity first; within a severity, the rule order declared above. */
 export const runInsights = (input: RuleInput): Insight[] =>
-  Object.values(RULES)
-    .flatMap((rule) => rule(input))
-    .sort(
-      (left, right) =>
-        severityRank(left.severity) - severityRank(right.severity),
-    );
+  sortBy(
+    Object.values(RULES).flatMap((rule) => rule(input)),
+    [(insight) => severityRank(insight.severity)],
+  );

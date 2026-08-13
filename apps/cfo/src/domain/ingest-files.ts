@@ -31,7 +31,7 @@ const isIngestable = (row: IngestFile): boolean =>
 const isRemovable = (row: IngestFile): boolean => row.status !== "ingested";
 
 /** Posted, still open, and with nothing left for the operator to answer. */
-export const isCloseable = (row: IngestFile, openQuestions: number): boolean =>
+const isCloseable = (row: IngestFile, openQuestions: number): boolean =>
   row.status === "pending" && openQuestions === 0;
 
 /**

@@ -8,7 +8,7 @@ import { caller } from "~/trpc/server";
 /** An empty ledger and an unreachable one need different words on the page. */
 export type LedgerFailureReason = "not-initialized" | "unavailable";
 
-export interface LedgerFailure {
+interface LedgerFailure {
   readonly ok: false;
   readonly reason: LedgerFailureReason;
   readonly message: string;
@@ -32,7 +32,7 @@ export const toFailure = (error: unknown): LedgerFailure => ({
   message: error instanceof Error ? error.message : String(error),
 });
 
-export interface LedgerHead {
+interface LedgerHead {
   readonly status: RouterOutputs["ledger"]["status"];
   /** Newest activity in the ledger; undefined while it holds nothing. */
   readonly newest: string | undefined;

@@ -20,7 +20,7 @@ export type PaceVerdict =
  * read the prefix's balance in opposite directions, so every figure below is
  * stated as progress toward the target and the mode says which it was.
  */
-export type GoalMode = "save" | "paydown";
+type GoalMode = "save" | "paydown";
 
 interface GoalFacts {
   readonly id: string;
@@ -90,7 +90,7 @@ export interface PrefixFacts {
 }
 
 /** What the window moved toward each account it touched, netted per account. */
-export type NetMovement = ReadonlyMap<string, number>;
+type NetMovement = ReadonlyMap<string, number>;
 
 /**
  * Every prefix reads the same window, and a prefix only ever wants the accounts

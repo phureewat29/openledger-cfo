@@ -21,7 +21,7 @@ import { allRows } from "./dataset";
 import { formatMoney } from "./money";
 import { legsOf } from "./types";
 
-export interface PlansReport {
+interface PlansReport {
   budgets: number;
   goals: number;
   reminders: number;
