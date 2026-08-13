@@ -46,7 +46,7 @@ interface RunPage {
 
 export type RunCommand =
   | { readonly ok: true }
-  | { readonly ok: false; readonly error: string };
+  | { readonly ok: false; readonly message: string };
 
 /**
  * The mounted provider's read, so a command can pull the next one forward: at
@@ -65,12 +65,12 @@ const send = async (url: string, init: RequestInit): Promise<RunCommand> => {
     if (response.ok) return { ok: true };
     return {
       ok: false,
-      error: body.error ?? `The runner answered ${String(response.status)}`,
+      message: body.error ?? `The runner answered ${String(response.status)}`,
     };
   } catch (cause) {
     return {
       ok: false,
-      error: cause instanceof Error ? cause.message : String(cause),
+      message: cause instanceof Error ? cause.message : String(cause),
     };
   }
 };

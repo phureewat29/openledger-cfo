@@ -42,8 +42,8 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
                   the extra width without the data column noticing. */}
                   <div className="grid min-h-0 grid-cols-[3.5rem_minmax(0,1fr)] lg:grid-cols-[3.5rem_minmax(0,1fr)_clamp(320px,25vw,480px)]">
                     <Rail
-                      badges={badges.ok ? badges.data : NO_BADGES}
-                      ledgerBad={!chrome.ok || chrome.data.stale}
+                      badges={badges.ok ? badges.value : NO_BADGES}
+                      ledgerBad={!chrome.ok || chrome.value.stale}
                     />
                     <main
                       id="main"

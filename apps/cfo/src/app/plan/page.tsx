@@ -16,10 +16,12 @@ export const dynamic = "force-dynamic";
 export default async function PlanPage() {
   const loaded = await loadDashboard();
   if (!loaded.ok) {
-    return <SetupCard reason={loaded.reason} message={loaded.message} />;
+    return (
+      <SetupCard reason={loaded.error.reason} message={loaded.error.message} />
+    );
   }
 
-  const dashboard = loaded.data;
+  const dashboard = loaded.value;
 
   return (
     <div className="flex min-h-full flex-col @4xl/main:h-full">

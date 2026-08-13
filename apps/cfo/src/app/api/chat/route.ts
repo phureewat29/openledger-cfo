@@ -47,8 +47,8 @@ export async function POST(request: Request) {
       extraTools: [
         startIngestRunTool(async (paths, mode) => {
           const started = await startRun({ pathOrIds: [...paths] }, mode);
-          if (started.ok) return { ok: true, runId: started.runId };
-          return { ok: false, message: started.message };
+          if (started.ok) return { ok: true, runId: started.value.runId };
+          return { ok: false, message: started.error.message };
         }),
       ],
     });
@@ -64,7 +64,7 @@ const ACCOUNT_PATH = /^\/accounts\/([^/]+)$/;
 
 const systemFor = async (path: string) => {
   const loaded = await loadDashboard();
-  const facts = loaded.ok ? buildBriefing(loaded.data) : undefined;
+  const facts = loaded.ok ? buildBriefing(loaded.value) : undefined;
   const match = ACCOUNT_PATH.exec(path);
   if (!match?.[1]) return facts;
 

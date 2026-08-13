@@ -2,6 +2,7 @@ import { cache } from "react";
 import { groupBy, orderBy } from "es-toolkit";
 
 import type { RouterOutputs } from "@openledger-fleet/api";
+import { ok } from "@openledger-fleet/openledger";
 
 import type { AccountRow } from "~/domain/accounts";
 import type { Baseline } from "~/domain/flows/types";
@@ -163,7 +164,7 @@ const lastActivity = (
 
 export const loadDashboard = cache(async (): Promise<LedgerLoad<Dashboard>> => {
   try {
-    return { ok: true, data: await buildDashboard() };
+    return ok(await buildDashboard());
   } catch (error) {
     return toFailure(error);
   }

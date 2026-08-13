@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       : await submitPassword(parsed.data.password);
   if (!applied.ok) {
     return Response.json(
-      { ok: false, error: applied.message },
+      { ok: false, error: applied.error.message },
       { status: 404 },
     );
   }

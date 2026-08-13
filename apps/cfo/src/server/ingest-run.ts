@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { partition } from "es-toolkit";
 
 import type { LangGraphEvent } from "@openledger-fleet/agent";
+import type { Result } from "@openledger-fleet/openledger";
 import {
   createAgent,
   isAiEnabled,
@@ -11,6 +12,7 @@ import {
   unwrap,
 } from "@openledger-fleet/agent";
 import { appRouter, createTRPCContext } from "@openledger-fleet/api";
+import { err, ok } from "@openledger-fleet/openledger";
 
 import type {
   RunMode,
@@ -47,17 +49,17 @@ export type RunScope =
 
 export type StartFailure = "disabled" | "busy" | "unavailable";
 
-export type StartResult =
-  | { readonly ok: true; readonly runId: string }
-  | {
-      readonly ok: false;
-      readonly reason: StartFailure;
-      readonly message: string;
-    };
+export type StartResult = Result<
+  { runId: string },
+  { reason: StartFailure; message: string }
+>;
 
-export type RunCommandResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly message: string };
+export type RunCommandFailure = "no-run" | "not-parked";
+
+export type RunCommandResult = Result<
+  undefined,
+  { reason: RunCommandFailure; message: string }
+>;
 
 interface Waiting extends RunWaiting {
   /** What ingestPrepare is retried with — a path or an id, never the password. */
@@ -194,7 +196,7 @@ interface Refusal {
  * Two steps can be turned down and still answer with an artifact: a close whose
  * balance does not tie, and a commit only some of whose rows posted. Neither did
  * what its finished tense claims, so neither may be written in it. Keyed by the
- * field that marks the refusal, one per tool.
+ * refusal's reason, one per tool.
  */
 const REFUSAL: Record<string, Refusal> = {
   mismatch: {
@@ -205,7 +207,7 @@ const REFUSAL: Record<string, Refusal> = {
 };
 
 const refusalOf = (artifact: Record<string, unknown>): Refusal | undefined =>
-  Object.entries(REFUSAL).find(([flag]) => artifact[flag] === true)?.[1];
+  typeof artifact.reason === "string" ? REFUSAL[artifact.reason] : undefined;
 
 /**
  * A statement whose closing balance cannot tie is closed on its file id alone,
@@ -514,7 +516,7 @@ const runTurn = async (run: Run): Promise<void> => {
       run.names.set(fileId, call.name);
     }
 
-    if (artifact.needsPassword === true) {
+    if (artifact.reason === "input-required") {
       if (call.target !== undefined) {
         locked.set(call.target, {
           pathOrId: call.target,
@@ -540,7 +542,7 @@ const runTurn = async (run: Run): Promise<void> => {
         detail: refusal.detail,
         fileId,
       });
-      if (artifact.mismatch === true && fileId !== undefined) {
+      if (artifact.reason === "mismatch" && fileId !== undefined) {
         await superviseClose(run, fileId, call.name);
       }
       return;
@@ -660,20 +662,18 @@ export const startRun = async (
   mode: RunMode,
 ): Promise<StartResult> => {
   if (!isAiEnabled()) {
-    return {
-      ok: false,
+    return err({
       reason: "disabled",
       message: "Set OPENROUTER_API_KEY to let the agent work the queue.",
-    };
+    });
   }
 
   const previous = slot.run;
   if (previous !== null && isRunLive(previous.status)) {
-    return {
-      ok: false,
+    return err({
       reason: "busy",
       message: "A run is already working the queue.",
-    };
+    });
   }
 
   const run: Run = {
@@ -698,11 +698,10 @@ export const startRun = async (
   );
   if (rows === null) {
     slot.run = previous;
-    return {
-      ok: false,
+    return err({
       reason: "unavailable",
       message: "The ingest queue could not be read.",
-    };
+    });
   }
 
   for (const row of rows) {
@@ -714,12 +713,11 @@ export const startRun = async (
     selection = await selectTargets(scope, rows);
   } catch (cause) {
     slot.run = previous;
-    return {
-      ok: false,
+    return err({
       reason: "unavailable",
       message:
         cause instanceof Error ? cause.message : "The ledger did not answer.",
-    };
+    });
   }
   const { targets, locked } = selection;
   run.files = targets.length;
@@ -736,7 +734,7 @@ export const startRun = async (
         : "Nothing to ingest until those files are unlocked.",
     );
     settle(run, "done");
-    return { ok: true, runId: run.runId };
+    return ok({ runId: run.runId });
   }
 
   note(
@@ -745,7 +743,7 @@ export const startRun = async (
   );
   for (const target of locked) lockedNote(target);
   advance(run, objectiveOf(targets, mode));
-  return { ok: true, runId: run.runId };
+  return ok({ runId: run.runId });
 };
 
 const parked = (): { run: Run; waiting: Waiting } | null => {
@@ -766,7 +764,7 @@ export const submitPassword = async (
   password: string,
 ): Promise<RunCommandResult> => {
   const found = parked();
-  if (found === null) return { ok: false, message: NOT_PARKED };
+  if (found === null) return err({ reason: "not-parked", message: NOT_PARKED });
   const { run, waiting } = found;
 
   run.status = "running";
@@ -776,13 +774,13 @@ export const submitPassword = async (
     .prepare({ pathOrId: waiting.pathOrId, password })
     .catch((cause: unknown) => ({
       ok: false as const,
-      needsPassword: true as const,
+      reason: "input-required" as const,
       message: messageOf(cause),
     }));
 
   if (!prepared.ok) {
     park(run, { ...waiting, message: prepared.message });
-    return { ok: true };
+    return ok(undefined);
   }
 
   run.names.set(prepared.file_id, waiting.relPath);
@@ -795,31 +793,31 @@ export const submitPassword = async (
     fileId: prepared.file_id,
   });
   advance(run, continuationFor(waiting.relPath, prepared.file_id));
-  return { ok: true };
+  return ok(undefined);
 };
 
 export const skipWaiting = (): RunCommandResult => {
   const found = parked();
-  if (found === null) return { ok: false, message: NOT_PARKED };
+  if (found === null) return err({ reason: "not-parked", message: NOT_PARKED });
 
   note(runLine("Skipped", found.waiting.relPath), "left locked");
   settle(found.run, "done");
-  return { ok: true };
+  return ok(undefined);
 };
 
 export const cancelRun = (): RunCommandResult => {
   const run = slot.run;
   if (run === null || !isRunLive(run.status)) {
-    return { ok: false, message: "No run is working the queue." };
+    return err({ reason: "no-run", message: "No run is working the queue." });
   }
   // A parked run has no turn in flight to interrupt; it ends here instead.
   if (run.status === "waiting-password") {
     settle(run, "cancelled");
     note("Run cancelled. Whatever it already closed stays closed.");
-    return { ok: true };
+    return ok(undefined);
   }
   run.abort.abort();
-  return { ok: true };
+  return ok(undefined);
 };
 
 /** Field by field, so neither the transcript nor the controller can leak out. */

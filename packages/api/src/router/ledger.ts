@@ -223,7 +223,7 @@ export const ledgerRouter = createTRPCRouter({
         if (!out.ok && out.error.kind === "input_required") {
           return {
             ok: false as const,
-            needsPassword: true as const,
+            reason: "input-required" as const,
             message: out.error.message,
           };
         }
@@ -243,7 +243,7 @@ export const ledgerRouter = createTRPCRouter({
         if (!out.ok && out.error.kind === "partial") {
           return {
             ok: false as const,
-            partial: true as const,
+            reason: "partial" as const,
             message: out.error.message,
             failures: out.error.failures ?? [],
           };
@@ -264,7 +264,7 @@ export const ledgerRouter = createTRPCRouter({
         if (!out.ok && out.error.kind === "invalid") {
           return {
             ok: false as const,
-            mismatch: true as const,
+            reason: "mismatch" as const,
             // The corrective travels with the refusal so a caller that only
             // reads messages still learns the one move that closes the file.
             message: `${out.error.message} — the rows are already posted; close again with only the fileId.`,

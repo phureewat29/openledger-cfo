@@ -48,9 +48,9 @@ export async function POST(request: Request) {
 
   const started = await startRun(scopeOf(start.data), start.data.mode);
   if (!started.ok) {
-    return fail(START_STATUS[started.reason], started.message);
+    return fail(START_STATUS[started.error.reason], started.error.message);
   }
-  return Response.json({ ok: true, runId: started.runId });
+  return Response.json({ ok: true, runId: started.value.runId });
 }
 
 /** Memory only: this answers without spawning a single `oled` process. */
@@ -62,6 +62,6 @@ export function GET(request: Request) {
 
 export function DELETE() {
   const cancelled = cancelRun();
-  if (!cancelled.ok) return fail(404, cancelled.message);
+  if (!cancelled.ok) return fail(404, cancelled.error.message);
   return Response.json({ ok: true });
 }

@@ -27,9 +27,9 @@ const newestUseful = (entries: readonly CliEntry[]) =>
 
 const asOfText = (chrome: LedgerLoad<Chrome>) => {
   if (!chrome.ok) return "LEDGER UNAVAILABLE";
-  if (chrome.data.stale)
-    return `STALE · THROUGH ${formatStamp(chrome.data.asOf)}`;
-  return `AS OF ${formatStamp(chrome.data.asOf)}`;
+  if (chrome.value.stale)
+    return `STALE · THROUGH ${formatStamp(chrome.value.asOf)}`;
+  return `AS OF ${formatStamp(chrome.value.asOf)}`;
 };
 
 export function StatusBar({
@@ -47,19 +47,19 @@ export function StatusBar({
       <span
         className={cn(
           "shrink-0",
-          chrome.ok && !chrome.data.stale
+          chrome.ok && !chrome.value.stale
             ? "text-muted-foreground"
             : "text-destructive",
         )}
-        title={chrome.ok ? undefined : chrome.message}
+        title={chrome.ok ? undefined : chrome.error.message}
       >
         {asOfText(chrome)}
       </span>
 
       {chrome.ok ? (
         <span className="text-muted-foreground hidden shrink-0 sm:block">
-          {chrome.data.transactions.toLocaleString("en-US")} TX ·{" "}
-          {chrome.data.accounts} ACCT
+          {chrome.value.transactions.toLocaleString("en-US")} TX ·{" "}
+          {chrome.value.accounts} ACCT
         </span>
       ) : null}
 

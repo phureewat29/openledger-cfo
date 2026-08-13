@@ -41,10 +41,12 @@ function Total({ label, value }: { label: string; value: string }) {
 export default async function AccountsPage() {
   const loaded = await loadDashboard();
   if (!loaded.ok) {
-    return <SetupCard reason={loaded.reason} message={loaded.message} />;
+    return (
+      <SetupCard reason={loaded.error.reason} message={loaded.error.message} />
+    );
   }
 
-  const dashboard = loaded.data;
+  const dashboard = loaded.value;
   const portfolio = splitPortfolio(dashboard.accounts);
   const headline = headlineOf(dashboard.input);
   const net = headline.netWorthThb;

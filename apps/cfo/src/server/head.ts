@@ -2,6 +2,8 @@ import { cache } from "react";
 import { TRPCError } from "@trpc/server";
 
 import type { RouterOutputs } from "@openledger-fleet/api";
+import type { Result } from "@openledger-fleet/openledger";
+import { err } from "@openledger-fleet/openledger";
 
 import { caller } from "~/trpc/server";
 
@@ -9,28 +11,25 @@ import { caller } from "~/trpc/server";
 export type LedgerFailureReason = "not-initialized" | "unavailable";
 
 interface LedgerFailure {
-  readonly ok: false;
   readonly reason: LedgerFailureReason;
   readonly message: string;
 }
 
 /**
- * How every server read answers: the data, or why there is none. A reader that
+ * How every server read answers: the value, or why there is none. A reader that
  * only knows something failed has nothing to print but "unavailable", which is
  * the one thing the operator already knows.
  */
-export type LedgerLoad<T> =
-  | { readonly ok: true; readonly data: T }
-  | LedgerFailure;
+export type LedgerLoad<T> = Result<T, LedgerFailure>;
 
-export const toFailure = (error: unknown): LedgerFailure => ({
-  ok: false,
-  reason:
-    error instanceof TRPCError && error.code === "PRECONDITION_FAILED"
-      ? "not-initialized"
-      : "unavailable",
-  message: error instanceof Error ? error.message : String(error),
-});
+export const toFailure = (error: unknown): LedgerLoad<never> =>
+  err({
+    reason:
+      error instanceof TRPCError && error.code === "PRECONDITION_FAILED"
+        ? "not-initialized"
+        : "unavailable",
+    message: error instanceof Error ? error.message : String(error),
+  });
 
 interface LedgerHead {
   readonly status: RouterOutputs["ledger"]["status"];

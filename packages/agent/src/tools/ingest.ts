@@ -64,7 +64,7 @@ export const ingestPrepare = tool(
   {
     name: "ingestPrepare",
     description:
-      "Register one statement and extract its text or page images. Takes minutes on a scan. Returns the file id every later step needs, or needsPassword for a locked PDF.",
+      "Register one statement and extract its text or page images. Takes minutes on a scan. Returns the file id every later step needs, or an input-required refusal for a locked PDF.",
     schema: z.object({
       pathOrId: z
         .string()

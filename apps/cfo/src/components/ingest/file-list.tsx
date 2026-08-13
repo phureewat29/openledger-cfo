@@ -189,7 +189,7 @@ export function FileList({
     setPending(null);
     if (scope === null) return;
     const result = await startIngestRun(scope, mode);
-    setError(result.ok ? null : result.error);
+    setError(result.ok ? null : result.message);
   };
 
   const perform: Record<

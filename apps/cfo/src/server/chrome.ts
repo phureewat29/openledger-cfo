@@ -1,5 +1,7 @@
 import { cache } from "react";
 
+import { ok } from "@openledger-fleet/openledger";
+
 import type { LedgerLoad } from "~/server/head";
 import { overdueCount } from "~/domain/action";
 import { isoToday, monthOf } from "~/domain/period";
@@ -28,15 +30,12 @@ export const loadChrome = cache(async (): Promise<LedgerLoad<Chrome>> => {
     const { status, newest } = await ledgerHead();
     // Clamped like the dashboard's, so both sides run the same staleness test.
     const asOf = newest !== undefined && newest < today ? newest : today;
-    return {
-      ok: true,
-      data: {
-        asOf,
-        stale: monthOf(asOf) !== monthOf(today),
-        transactions: status.counts?.transactions ?? 0,
-        accounts: status.counts?.accounts ?? 0,
-      },
-    };
+    return ok({
+      asOf,
+      stale: monthOf(asOf) !== monthOf(today),
+      transactions: status.counts?.transactions ?? 0,
+      accounts: status.counts?.accounts ?? 0,
+    });
   } catch (error) {
     return toFailure(error);
   }
@@ -54,16 +53,13 @@ export const loadRailBadges = cache(
         ledgerHead(),
         caller.reminders.list(),
       ]);
-      return {
-        ok: true,
-        data: {
-          monitor: overdueCount(reminders, isoToday()),
-          ingest:
-            status.files.new +
-            status.files.failed +
-            (status.questions?.open ?? 0),
-        },
-      };
+      return ok({
+        monitor: overdueCount(reminders, isoToday()),
+        ingest:
+          status.files.new +
+          status.files.failed +
+          (status.questions?.open ?? 0),
+      });
     } catch (error) {
       return toFailure(error);
     }

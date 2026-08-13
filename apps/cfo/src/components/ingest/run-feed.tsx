@@ -95,7 +95,7 @@ function LockPanel({ relPath }: { relPath: string }) {
     const result = await unlockIngestRun(body);
     setPassword("");
     setBusy(false);
-    setError(result.ok ? null : result.error);
+    setError(result.ok ? null : result.message);
   };
 
   return (

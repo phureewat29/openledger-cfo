@@ -4,11 +4,9 @@ import { useId, useState } from "react";
 
 import { cn } from "@openledger-fleet/ui";
 
-interface UploadReply {
-  ok: boolean;
-  error?: string;
-  relPath?: string;
-}
+type UploadReply =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: string };
 
 interface UploadFailure {
   readonly name: string;
@@ -54,8 +52,7 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
       setProgress({ done: index, total: files.length });
       const reply = await upload(file);
       if (reply.ok) landed += 1;
-      else
-        failed.push({ name: file.name, error: reply.error ?? "Upload failed" });
+      else failed.push({ name: file.name, error: reply.error });
     }
 
     setProgress(undefined);

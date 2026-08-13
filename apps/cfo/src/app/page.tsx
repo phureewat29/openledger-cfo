@@ -26,10 +26,12 @@ export const dynamic = "force-dynamic";
 export default async function EverythingPage() {
   const loaded = await loadDashboard();
   if (!loaded.ok) {
-    return <SetupCard reason={loaded.reason} message={loaded.message} />;
+    return (
+      <SetupCard reason={loaded.error.reason} message={loaded.error.message} />
+    );
   }
 
-  const dashboard = loaded.data;
+  const dashboard = loaded.value;
   const queue = buildActionQueue(
     mergeUpcoming(
       dashboard.upcomingLedger,
