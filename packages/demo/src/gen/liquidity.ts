@@ -98,13 +98,8 @@ const roundUpTo = (units: number, step: number): number =>
   Math.ceil(units / step) * step;
 
 /**
- * Replays the funded account row by row and splices each refill in ahead of the
- * spend that would breach the floor. Position is the whole point: a batch posts
- * in array order, so a refill merely dated the same day still lands behind the
- * spends it pays for and the account dips negative in between.
- *
- * The refill restores the target, or covers the pending outflow when that alone
- * is larger, so the balance after the spend is never below the floor.
+ * Splices each refill in ahead of the spend that would breach the floor — a batch
+ * posts in array order, so same-day dating alone isn't enough. The refill restores the target or covers the outflow, whichever is larger.
  */
 const applyRule = (rows: SeedRow[], rule: TopUpRule): SeedRow[] => {
   const floorUnits = toUnits(rule.floor);

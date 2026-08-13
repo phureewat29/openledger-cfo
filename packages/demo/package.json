@@ -1,5 +1,6 @@
 {
   "name": "@openledger-fleet/demo",
+  "description": "The demo dataset generator, its invariants, and the committed dataset",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",

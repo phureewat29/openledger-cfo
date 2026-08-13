@@ -18,13 +18,8 @@ interface Disposal {
 }
 
 /**
- * A sale splits three ways: what came in, what cost left the book, and the
- * difference between them. Gain and loss are the same account read in opposite
- * directions — a loss debits realized gain rather than inventing an expense
- * head — and either way the position is credited the whole basis it released,
- * so nothing of what the holding cost is left behind. The unit leg hands the
- * quantity back, which is what keeps the price recoverable as the ratio of the
- * two sides.
+ * A sale splits three ways: proceeds in, basis cost out, and their difference.
+ * Gain and loss share one account read in opposite directions (a loss debits it, not an expense head), and the position is always credited its whole basis.
  */
 export const disposalLegs = (sale: Disposal): LinkedLeg[] => {
   const unitLeg = leg(sale.unit.equity, sale.unit.position, sale.quantity);

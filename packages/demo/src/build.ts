@@ -41,16 +41,8 @@ const chunkByMonth = (rows: SeedRow[]): Life["months"] =>
     .sort((left, right) => (left.month < right.month ? -1 : 1));
 
 /**
- * Cards, liquidity and interest read the rows the other generators produced, so
- * they run as passes over the result rather than as peers: a statement total is
- * only knowable once every card spend exists, a refill only once the spends it
- * funds are placed, and a credit of interest only once the balance it is paid on
- * has settled.
- *
- * The sort runs before those passes, not after. Sorting is stable, so it settles
- * same-day order from the generator order above and each pass can then treat the
- * array as the posting order it really is — which is what lets a refill be placed
- * ahead of the spend it funds rather than merely on the same date.
+ * Cards, liquidity and interest run as passes over the result, not as peers — each needs rows
+ * the other generators already placed. The sort runs first and is stable, so a refill can still precede the same-day spend it funds.
  */
 export const buildLife = (variant: number): Life => {
   const window = PERSONA.window;

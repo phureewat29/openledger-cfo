@@ -371,14 +371,8 @@ const goalChecks = (life: Life, goals: GoalInsert[]): Check[] =>
   });
 
 /**
- * Resets and reseeds the postgres control plane's plans — budgets, goals and
- * reminders — all derived from the committed dataset, so a rerun on the same
- * dataset is a no-op on its inputs. Only `today` (for "next due date" math)
- * reads the clock; nothing here draws a random number.
- *
- * A dataset that cannot produce a plan at all is an error; a plan that does not
- * line up with the dataset is a failing check, which the caller prints beside
- * every other check rather than dying on.
+ * Resets and reseeds the control plane's plans from the committed dataset — deterministic
+ * except for `today`, so a rerun is a no-op. A plan that can't be built is an error; one that doesn't line up is a failing check, not a throw.
  */
 export const seedPlans = async (
   life: Life,

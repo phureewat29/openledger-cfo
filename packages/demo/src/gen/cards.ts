@@ -26,15 +26,6 @@ const chargesFor = (rows: SeedRow[], account: string): Charge[] =>
       .map((entry) => ({ date: seedRow.date, units: toUnits(entry.amount) })),
   );
 
-/**
- * A card is a running cycle, not a per-row fact: spends land in whichever
- * statement window contains them, the statement total is paid on the following
- * due date from the bank that issued the card, and anything left unpaid accrues
- * interest onto the next statement. The balance carried in at the window's start
- * arrives as an opening row dated the first day, so it is already one of the
- * charges the first statement bills — and being the first, it meets no carried
- * balance and so attracts no interest.
- */
 const lastDueInWindow = (ctx: SeedContext, card: Card): string => {
   let last = "";
   for (const month of ctx.months) {
@@ -46,6 +37,11 @@ const lastDueInWindow = (ctx: SeedContext, card: Card): string => {
   return last;
 };
 
+/**
+ * A card is a running cycle: spends land in the statement window that contains
+ * them and are paid on the next due date. The opening balance is dated day one,
+ * already inside the first statement, so it accrues no interest.
+ */
 const cycleRows = (
   ctx: SeedContext,
   card: Card,
