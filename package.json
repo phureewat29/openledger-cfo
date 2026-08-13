@@ -1,6 +1,6 @@
 {
   "name": "openledger-examples",
-  "description": "Corgi CFO — a terminal-styled personal finance app built on OpenLedger's oled CLI",
+  "description": "A local-first personal CFO agent in a terminal, powered by OpenLedger's oled CLI",
   "license": "AGPL-3.0-only",
   "private": true,
   "engines": {

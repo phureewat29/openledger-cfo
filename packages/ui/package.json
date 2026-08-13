@@ -1,5 +1,6 @@
 {
   "name": "@openledger-fleet/ui",
+  "description": "Dark theme tokens, the Pane primitive, Geist Mono",
   "private": true,
   "type": "module",
   "exports": {

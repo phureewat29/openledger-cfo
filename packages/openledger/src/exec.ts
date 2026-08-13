@@ -20,12 +20,8 @@ const OLED_BIN = "oled";
 const MAX_BUFFER = 64 * 1024 * 1024;
 
 /**
- * Two queues, not one: `ingest prepare` holds a statement for minutes while OCR
- * reads it, and a single queue would park every list behind it. WAL keeps
- * readers live meanwhile. What the split gives up is the guarantee that only
- * one `oled` process exists at a time — overlapping commands race twice over,
- * in the millisecond between prepare registering its pending file row and its
- * first read, and at every database open (see BUSY_OPEN below).
+ * Two lanes, not one: `ingest prepare` can hold a statement for minutes under OCR, and a single
+ * queue would block every read behind it — overlaps can still race at each database open (BUSY_OPEN).
  */
 const LANES = { fast: createSerialQueue(), slow: createSerialQueue() };
 
@@ -117,12 +113,8 @@ const spawnOled = (argv: string[], stdin?: string): Promise<SpawnOutcome> =>
   });
 
 /**
- * `oled` sets `journal_mode = WAL` on every open, and that pragma wants a brief
- * exclusive lock: a second process opening the same ledger in that instant is
- * refused, and the CLI reports the refusal as a corrupt database on exit 3.
- * Measured at roughly one in seven overlapping pairs, reads included. The
- * attempt is repeated because it died before the database opened, so no part of
- * the command has run — a genuinely corrupt file just fails a few times over.
+ * `oled`'s WAL pragma takes a brief exclusive lock on every open; a second process opening at that instant
+ * is refused and reported as a corrupt database on exit 3 — not real corruption, hence the retry.
  */
 const BUSY_OPEN = "is corrupt or is not a database";
 

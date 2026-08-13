@@ -1,5 +1,6 @@
 {
   "name": "@openledger-fleet/openledger",
+  "description": "Typed connector over the oled CLI with serialized exec lanes and Result unions",
   "private": true,
   "type": "module",
   "exports": {

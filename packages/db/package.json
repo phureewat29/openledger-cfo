@@ -1,5 +1,6 @@
 {
   "name": "@openledger-fleet/db",
+  "description": "Drizzle schema for budgets, goals, reminders, and insight state",
   "private": true,
   "type": "module",
   "exports": {

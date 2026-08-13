@@ -105,9 +105,8 @@ export interface BatchOutcome<TRow, TSummary> {
 export type WithCommand<T> = T & { command: string };
 
 /**
- * Batch commands exit 7 and keep the successful rows when some rows fail, so a
- * partial batch surfaces as an error carrying the failed rows rather than as a
- * silent success.
+ * Batch commands exit 7 and keep the successful rows when some fail, so a
+ * partial batch surfaces as an error carrying the failed rows, not a silent success.
  */
 const toBatchOutcome = <
   TRow extends { ok: boolean },

@@ -1,5 +1,6 @@
 {
   "name": "@openledger-fleet/agent",
+  "description": "The cfo and ingest agents: personas, ledger tools, and the stream bridge",
   "private": true,
   "type": "module",
   "exports": {

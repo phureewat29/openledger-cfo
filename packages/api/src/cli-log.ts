@@ -13,12 +13,8 @@ export interface CliLogEntry {
 const CAPACITY = 200;
 
 /**
- * One ring per process, for the same reason the connector is one per process:
- * Next instantiates this module once per module graph, and the commands are
- * recorded from the graph that renders while the reader polls from the graph
- * that answers the request. Two rings means the reader watches an empty one.
- * The cursor sits beside it so a re-evaluated module cannot hand out a seq the
- * ring has already used.
+ * One ring per process: the graph that records commands differs from the one the reader
+ * polls, so two rings would leave it empty; the cursor beside it survives re-evaluation so no seq repeats.
  */
 const forRing = globalThis as unknown as {
   oledCliLog?: CliLogEntry[];

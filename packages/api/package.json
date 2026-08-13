@@ -1,5 +1,6 @@
 {
   "name": "@openledger-fleet/api",
+  "description": "tRPC routers over the ledger and the Postgres control plane",
   "private": true,
   "type": "module",
   "exports": {

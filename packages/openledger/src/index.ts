@@ -119,12 +119,8 @@ export {
   transactionAddInputSchema,
 } from "./schemas";
 /**
- * Most of these are named by nothing in this repo's source. They are still
- * load-bearing: `packages/api` and `packages/agent` emit declarations, and
- * `createOpenLedger`'s inferred return type prints them as
- * `import("@openledger-fleet/openledger").X`. This package exposes no
- * subpath for these schema types, so there is no deep-import fallback —
- * dropping one turns into TS2742 in a consumer's build.
+ * Unused in this repo's own source, but load-bearing: consumers' inferred types print these by name,
+ * and there's no subpath fallback for them — dropping one turns into TS2742 in a consumer's build.
  */
 export type {
   AccountAdjustResult,
