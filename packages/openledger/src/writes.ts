@@ -149,25 +149,11 @@ const CONFIG_FLAGS = {
   ocrModel: "--ocr-model",
 } as const;
 
-const toConfigArgs = (input: ConfigInitInput): string[] =>
-  Object.entries(CONFIG_FLAGS).flatMap(([key, flag]) => {
-    const value = input[key as keyof typeof CONFIG_FLAGS];
-    if (value === undefined) return [];
-    return [flag, value];
-  });
-
 const MERCHANT_FLAGS = {
   name: "--name",
   alias: "--alias",
   default_account: "--default-account",
 } as const;
-
-const toMerchantArgs = (input: MerchantUpsertInput): string[] =>
-  Object.entries(MERCHANT_FLAGS).flatMap(([key, flag]) => {
-    const value = input[key as keyof typeof MERCHANT_FLAGS];
-    if (value === undefined) return [];
-    return [flag, value];
-  });
 
 const TRANSACTION_ADD_FLAGS = {
   debit_account: "--debit-account",
@@ -177,15 +163,6 @@ const TRANSACTION_ADD_FLAGS = {
   description: "--description",
   merchant_name: "--merchant-name",
 } as const;
-
-const toTransactionAddArgs = (input: TransactionAddInput): string[] => [
-  ...Object.entries(TRANSACTION_ADD_FLAGS).flatMap(([key, flag]) => {
-    const value = input[key as keyof typeof TRANSACTION_ADD_FLAGS];
-    if (value === undefined) return [];
-    return [flag, String(value)];
-  }),
-  ...(input.resolve === true ? ["--resolve"] : []),
-];
 
 const ACCOUNT_CREATE_FLAGS = {
   id: "--id",
@@ -199,17 +176,6 @@ const ACCOUNT_CREATE_FLAGS = {
   statement_day: "--statement-day",
 } as const;
 
-const toAccountCreateArgs = (input: AccountCreateInput): string[] => [
-  ...Object.entries(ACCOUNT_CREATE_FLAGS).flatMap(([key, flag]) => {
-    const value = input[key as keyof typeof ACCOUNT_CREATE_FLAGS];
-    if (value === undefined) return [];
-    return [flag, String(value)];
-  }),
-  ...(input.metadata === undefined
-    ? []
-    : ["--metadata", JSON.stringify(input.metadata)]),
-];
-
 const ACCOUNT_UPDATE_FLAGS = {
   name: "--name",
   due_day: "--due-day",
@@ -219,28 +185,20 @@ const ACCOUNT_UPDATE_FLAGS = {
   account_number_masked: "--masked",
 } as const;
 
-const toAccountUpdateArgs = (input: AccountUpdateInput): string[] => [
-  ...Object.entries(ACCOUNT_UPDATE_FLAGS).flatMap(([key, flag]) => {
-    const value = input[key as keyof typeof ACCOUNT_UPDATE_FLAGS];
-    if (value === undefined) return [];
-    return [flag, String(value)];
-  }),
-  ...(input.metadata === undefined
-    ? []
-    : ["--metadata", JSON.stringify(input.metadata)]),
-];
-
 const TRANSACTION_UPDATE_FLAGS = {
   date: "--date",
   description: "--description",
   merchant: "--merchant",
 } as const;
 
-const toTransactionUpdateArgs = (input: TransactionUpdateInput): string[] =>
-  Object.entries(TRANSACTION_UPDATE_FLAGS).flatMap(([key, flag]) => {
-    const value = input[key as keyof typeof TRANSACTION_UPDATE_FLAGS];
-    if (value === undefined) return [];
-    return [flag, value];
+/** Flag tables carry the knowledge; this walks any of them over an input. */
+const toFlagArgs = <TInput extends object>(
+  flags: Partial<Record<keyof TInput & string, string>>,
+  input: TInput,
+): string[] =>
+  Object.entries(flags).flatMap(([key, flag]) => {
+    const value = input[key as keyof TInput];
+    return value === undefined ? [] : [flag as string, String(value)];
   });
 
 /** Both sides of a move or merge must name the same ledger. */
@@ -282,6 +240,20 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
   const toCommand = (args: string[]): string =>
     formatOledCommand(args, configPath);
 
+  /** The shared tail of every single-row command: run, parse, stamp the command. */
+  const runSingle = async <T extends object>(
+    args: string[],
+    schema: Parameters<typeof parseSingle<T>>[0],
+    opts: { stdin?: string; allowPartial?: boolean; lane?: OledLane } = {},
+  ): Promise<Result<WithCommand<T>, OledError>> => {
+    const out = await exec(args, opts);
+    if (!out.ok) return out;
+
+    const parsed = parseSingle(schema, out.value);
+    if (!parsed.ok) return parsed;
+    return ok({ ...parsed.value, command: toCommand(args) });
+  };
+
   /**
    * Initializes a brand-new ledger. The target config path is a positional
    * argument here, so this is the one method that ignores the instance's
@@ -299,7 +271,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
         "config",
         validated.data.configPath,
         "--init",
-        ...toConfigArgs(validated.data),
+        ...toFlagArgs(CONFIG_FLAGS, validated.data),
       ],
       { onCommand },
     );
@@ -357,7 +329,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     const out = await exec([
       "merchants",
       "upsert",
-      ...toMerchantArgs(validated.data),
+      ...toFlagArgs(MERCHANT_FLAGS, validated.data),
     ]);
     if (!out.ok) return out;
     return parseSingle(merchantUpsertResultSchema, out.value);
@@ -385,12 +357,10 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     ];
 
     // Exit 7 is a document with holes, not a failed read: failed_pages names them.
-    const out = await exec(args, { lane: "slow", allowPartial: true });
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(prepareResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, prepareResultSchema, {
+      lane: "slow",
+      allowPartial: true,
+    });
   };
 
   const ingestCommit = async (
@@ -430,12 +400,6 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     return ok({ ...outcome.value, command: toCommand(args) });
   };
 
-  /** A bootstrap load posts rows that belong to no statement. */
-  const ingestCommitBatch = (
-    rows: IngestRowInput[],
-  ): Promise<Result<BatchOutcome<IngestResult, IngestSummary>, OledError>> =>
-    ingestCommit(rows);
-
   const ingestDone = async (
     fileId: string,
     opts: IngestDoneOptions = {},
@@ -461,12 +425,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
         : ["--closing-balance", String(opts.closingBalance)]),
     ];
 
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(ingestDoneResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, ingestDoneResultSchema);
   };
 
   const ingestFail = async (
@@ -481,12 +440,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     }
 
     const args = ["ingest", "fail", fileId, "--error", note];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(ingestFailResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, ingestFailResultSchema);
   };
 
   /**
@@ -503,12 +457,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     }
 
     const args = ["files", "drop", fileId, "--yes"];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(fileDropResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, fileDropResultSchema);
   };
 
   /** `also` closes sibling questions in the same call; every id must exist or none close. */
@@ -561,12 +510,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       ...(opts.days === undefined ? [] : ["--days", String(opts.days)]),
     ];
 
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(questionDeferRowSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, questionDeferRowSchema);
   };
 
   const transactionAdd = async (
@@ -580,14 +524,10 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     const args = [
       "transactions",
       "add",
-      ...toTransactionAddArgs(validated.data),
+      ...toFlagArgs(TRANSACTION_ADD_FLAGS, validated.data),
+      ...(validated.data.resolve === true ? ["--resolve"] : []),
     ];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(transactionAddResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, transactionAddResultSchema);
   };
 
   const transactionUpdate = async (
@@ -606,14 +546,9 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "transactions",
       "update",
       id,
-      ...toTransactionUpdateArgs(validated.data),
+      ...toFlagArgs(TRANSACTION_UPDATE_FLAGS, validated.data),
     ];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(transactionUpdateResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, transactionUpdateResultSchema);
   };
 
   const transactionDelete = async (
@@ -624,12 +559,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     }
 
     const args = ["transactions", "delete", id, "--yes"];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(transactionDeleteResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, transactionDeleteResultSchema);
   };
 
   /** Re-points one account's ENTIRE history; there is no narrower filter. */
@@ -650,12 +580,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "--set-account",
       validated.data.to,
     ];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(recategorizeResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, recategorizeResultSchema);
   };
 
   const transactionsMerge = async (input: {
@@ -681,12 +606,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       input.to,
       "--yes",
     ];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(transactionMergeResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, transactionMergeResultSchema);
   };
 
   const accountsCreate = async (
@@ -697,13 +617,15 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       return err(toInvalidInput(validated.error, "accounts create"));
     }
 
-    const args = ["accounts", "create", ...toAccountCreateArgs(validated.data)];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(accountCreatedResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    const args = [
+      "accounts",
+      "create",
+      ...toFlagArgs(ACCOUNT_CREATE_FLAGS, validated.data),
+      ...(validated.data.metadata === undefined
+        ? []
+        : ["--metadata", JSON.stringify(validated.data.metadata)]),
+    ];
+    return runSingle(args, accountCreatedResultSchema);
   };
 
   const accountsUpdate = async (
@@ -722,14 +644,12 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "accounts",
       "update",
       id,
-      ...toAccountUpdateArgs(validated.data),
+      ...toFlagArgs(ACCOUNT_UPDATE_FLAGS, validated.data),
+      ...(validated.data.metadata === undefined
+        ? []
+        : ["--metadata", JSON.stringify(validated.data.metadata)]),
     ];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(accountUpdateResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, accountUpdateResultSchema);
   };
 
   const accountsMerge = async (input: {
@@ -750,12 +670,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       validated.data.to,
       "--yes",
     ];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(accountMergeResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, accountMergeResultSchema);
   };
 
   const accountsAdjust = async (
@@ -786,12 +701,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       opts.reason,
       ...(opts.date === undefined ? [] : ["--date", opts.date]),
     ];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(accountAdjustResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, accountAdjustResultSchema);
   };
 
   const accountsDelete = async (
@@ -802,12 +712,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     }
 
     const args = ["accounts", "delete", id, "--yes"];
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(accountDeleteResultSchema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    return runSingle(args, accountDeleteResultSchema);
   };
 
   return {
@@ -821,7 +726,6 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     merchantsUpsert,
     ingestPrepare,
     ingestCommit,
-    ingestCommitBatch,
     ingestDone,
     ingestFail,
     filesDrop,

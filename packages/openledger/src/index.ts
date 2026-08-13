@@ -71,7 +71,8 @@ export const createOpenLedger = (opts: CreateOpenLedgerOptions = {}) => {
       configInit: writes.configInit,
       accountsCreateBatch: writes.accountsCreateBatch,
       merchantsUpsert: writes.merchantsUpsert,
-      ingestCommitBatch: writes.ingestCommitBatch,
+      /** A bootstrap load posts rows that belong to no statement. */
+      ingestCommitBatch: writes.ingestCommit,
     },
   };
 };
