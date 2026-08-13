@@ -33,8 +33,9 @@ import {
 import { appendEntry, updateEntry } from "~/server/ingest-journal";
 
 /**
- * The run outlives the request, so it can't borrow the request-scoped caller (it reads
- * `headers()` and throws once detached) — this one shares the connector, so commands still land in the same lanes and log.
+ * The run outlives the request, so it cannot borrow the request-scoped caller
+ * (it reads `headers()` and throws once detached) — this one shares the
+ * connector, so commands still land in the same lanes and log.
  */
 const caller = appRouter.createCaller(
   createTRPCContext({ headers: new Headers() }),
@@ -52,12 +53,7 @@ export type StartResult = Result<
   { reason: StartFailure; message: string }
 >;
 
-export type RunCommandFailure = "no-run" | "not-parked";
-
-export type RunCommandResult = Result<
-  undefined,
-  { reason: RunCommandFailure; message: string }
->;
+export type RunCommandResult = Result<undefined, { message: string }>;
 
 interface Waiting extends RunWaiting {
   /** What ingestPrepare is retried with — a path or an id, never the password. */
@@ -73,8 +69,9 @@ interface Run {
   /** File id → the name the operator dropped, so later lines can say it back. */
   readonly names: Map<string, string>;
   /**
-   * Every name this run's files answer to: the paths it was handed, plus the ids
-   * its own prepares gave them. The agent does wander into files nobody asked for — being worked is not the test, being asked for is.
+   * Every name this run's files answer to: the paths it was handed, plus the
+   * ids its own prepares gave them. The agent does wander into files nobody
+   * asked for — being worked is not the test, being asked for is.
    */
   readonly own: Set<string>;
   /** Consecutive closes the ledger turned down, per file. */
@@ -128,8 +125,9 @@ const inputOf = (event: LangGraphEvent): Record<string, unknown> => {
 };
 
 /**
- * The only two fields anything here reads: which statement a step is about. No
- * other field of a tool's input is looked at or kept — a password stays out of the journal's reach by construction.
+ * The only two fields anything here reads: which statement a step is about.
+ * No other field of a tool's input is looked at or kept — a password stays
+ * out of the journal's reach by construction.
  */
 const targetOf = (input: Record<string, unknown>): string | undefined => {
   const target = asString(input.pathOrId) || asString(input.fileId);
@@ -161,7 +159,8 @@ const countOf = (
 
 /**
  * The only result fields a line may quote: what was read and what was posted.
- * A tool's arguments are never serialized here, so there's no path by which a password could reach a journal entry.
+ * A tool's arguments are never serialized here, so there is no path by which
+ * a password could reach a journal entry.
  */
 const detailOf = (artifact: Record<string, unknown>): string | undefined => {
   const summary = asRecord(artifact.summary);
@@ -187,8 +186,9 @@ interface Refusal {
 }
 
 /**
- * Two steps can be turned down and still answer with an artifact — a close whose
- * balance doesn't tie, a commit where only some rows posted. Neither did what its finished tense claims, so neither is written in it.
+ * Two steps can be turned down and still answer with an artifact — a close
+ * whose balance does not tie, a commit where only some rows posted. Neither
+ * did what its finished tense claims, so neither is written in it.
  */
 const REFUSAL: Record<string, Refusal> = {
   mismatch: {
@@ -202,8 +202,9 @@ const refusalOf = (artifact: Record<string, unknown>): Refusal | undefined =>
   typeof artifact.reason === "string" ? REFUSAL[artifact.reason] : undefined;
 
 /**
- * Some models won't take the prompt's escape — closing on file id alone — when the
- * balance can't tie, looping until steps run out and leaving a posted file stuck. Twice is enough to know this one won't take it.
+ * Some models will not take the prompt's escape — closing on file id alone —
+ * when the balance cannot tie, looping until steps run out and leaving a
+ * posted file stuck. Twice is enough to know this one will not take it.
  */
 const REFUSED_CLOSE_LIMIT = 2;
 
@@ -233,8 +234,9 @@ interface Target extends RunTarget {
 }
 
 /**
- * A file id alone doesn't say whether a file is prepared — a locked prepare registers
- * it anyway, and closing deletes its text. This opens the artifact rather than spawning a command, so it's affordable once per file.
+ * A file id alone does not say whether a file is prepared — a locked prepare
+ * registers it anyway, and closing deletes its text. This opens the artifact
+ * rather than spawning a command, so it is affordable once per file.
  */
 const hasDocument = async (fileId: string): Promise<boolean> => {
   try {
@@ -752,7 +754,7 @@ export const submitPassword = async (
   password: string,
 ): Promise<RunCommandResult> => {
   const found = parked();
-  if (found === null) return err({ reason: "not-parked", message: NOT_PARKED });
+  if (found === null) return err({ message: NOT_PARKED });
   const { run, waiting } = found;
 
   run.status = "running";
@@ -786,7 +788,7 @@ export const submitPassword = async (
 
 export const skipWaiting = (): RunCommandResult => {
   const found = parked();
-  if (found === null) return err({ reason: "not-parked", message: NOT_PARKED });
+  if (found === null) return err({ message: NOT_PARKED });
 
   note(runLine("Skipped", found.waiting.relPath), "left locked");
   settle(found.run, "done");
@@ -796,7 +798,7 @@ export const skipWaiting = (): RunCommandResult => {
 export const cancelRun = (): RunCommandResult => {
   const run = slot.run;
   if (run === null || !isRunLive(run.status)) {
-    return err({ reason: "no-run", message: "No run is working the queue." });
+    return err({ message: "No run is working the queue." });
   }
   // A parked run has no turn in flight to interrupt; it ends here instead.
   if (run.status === "waiting-password") {

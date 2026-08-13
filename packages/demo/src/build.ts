@@ -41,8 +41,9 @@ const chunkByMonth = (rows: SeedRow[]): Life["months"] =>
     .sort((left, right) => (left.month < right.month ? -1 : 1));
 
 /**
- * Cards, liquidity and interest run as passes over the result, not as peers — each needs rows
- * the other generators already placed. The sort runs first and is stable, so a refill can still precede the same-day spend it funds.
+ * Cards, liquidity and interest run as passes over the result, not as peers —
+ * each needs rows the other generators already placed. The sort runs first
+ * and is stable, so a refill can still precede the same-day spend it funds.
  */
 export const buildLife = (variant: number): Life => {
   const window = PERSONA.window;

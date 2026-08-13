@@ -5,7 +5,7 @@ import type { Totals } from "../expected";
 import type { Check } from "./shared";
 import { currencyOf } from "../expected";
 import { formatMoney, fromUnits, toUnits } from "../money";
-import { check } from "./shared";
+import { check, typeOf } from "./shared";
 
 const DEBIT_NATURAL = new Set<AccountType>(["asset", "expense"]);
 
@@ -15,13 +15,11 @@ const DEBIT_NATURAL = new Set<AccountType>(["asset", "expense"]);
  * declared type contradicts the direction money actually moved in.
  */
 export const equationChecks = (life: Life, totals: Totals): Check[] => {
-  const typeOf = new Map(
-    life.accounts.map((account) => [account.id, account.type] as const),
-  );
+  const types = typeOf(life);
   const perCurrency = new Map<string, number>();
 
   for (const [account, balance] of Object.entries(totals.balances)) {
-    const type = typeOf.get(account);
+    const type = types.get(account);
     if (!type) continue;
     const currency = currencyOf(account);
     const signed = DEBIT_NATURAL.has(type)

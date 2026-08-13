@@ -20,8 +20,9 @@ const OLED_BIN = "oled";
 const MAX_BUFFER = 64 * 1024 * 1024;
 
 /**
- * Two lanes, not one: `ingest prepare` can hold a statement for minutes under OCR, and a single
- * queue would block every read behind it — overlaps can still race at each database open (BUSY_OPEN).
+ * Two lanes, not one: `ingest prepare` can hold a statement for minutes under
+ * OCR, and a single queue would block every read behind it — overlaps can
+ * still race at each database open (BUSY_OPEN).
  */
 const LANES = { fast: createSerialQueue(), slow: createSerialQueue() };
 
@@ -113,8 +114,9 @@ const spawnOled = (argv: string[], stdin?: string): Promise<SpawnOutcome> =>
   });
 
 /**
- * `oled`'s WAL pragma takes a brief exclusive lock on every open; a second process opening at that instant
- * is refused and reported as a corrupt database on exit 3 — not real corruption, hence the retry.
+ * `oled`'s WAL pragma takes a brief exclusive lock on every open; a second
+ * process opening at that instant is refused and reported as a corrupt
+ * database on exit 3 — not real corruption, hence the retry.
  */
 const BUSY_OPEN = "is corrupt or is not a database";
 

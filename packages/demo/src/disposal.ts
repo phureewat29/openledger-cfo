@@ -19,7 +19,9 @@ interface Disposal {
 
 /**
  * A sale splits three ways: proceeds in, basis cost out, and their difference.
- * Gain and loss share one account read in opposite directions (a loss debits it, not an expense head), and the position is always credited its whole basis.
+ * Gain and loss share one account read in opposite directions (a loss debits
+ * it, not an expense head), and the position is always credited its whole
+ * basis.
  */
 export const disposalLegs = (sale: Disposal): LinkedLeg[] => {
   const unitLeg = leg(sale.unit.equity, sale.unit.position, sale.quantity);

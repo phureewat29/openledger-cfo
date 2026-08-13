@@ -5,7 +5,7 @@ import type { SeedRow } from "../types";
 import type { Check } from "./shared";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { legsOf } from "../types";
-import { check, linkedGroupsCrediting } from "./shared";
+import { check, detail, linkedGroupsCrediting } from "./shared";
 
 const PAYSLIP_MIN_RATE = 0.22;
 const PAYSLIP_MAX_RATE = 0.26;
@@ -51,7 +51,7 @@ export const payslipCheck = (life: Life, rows: SeedRow[]): Check => {
   return check(
     "employment payslips reconcile",
     groups.length > 0 && faults.length === 0,
-    faults.slice(0, 3).join(" · "),
+    detail(faults),
   );
 };
 
@@ -88,6 +88,6 @@ export const retainerCheck = (life: Life, rows: SeedRow[]): Check => {
   return check(
     "consulting invoices reconcile",
     groups.length > 0 && faults.length === 0,
-    faults.slice(0, 3).join(" · "),
+    detail(faults),
   );
 };

@@ -7,7 +7,7 @@ import type { Check } from "./shared";
 import { monthKey } from "../calendar";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { legsOf } from "../types";
-import { check } from "./shared";
+import { check, detail } from "./shared";
 
 interface Installment {
   date: string;
@@ -111,8 +111,10 @@ export const loanCheck = (life: Life, rows: SeedRow[], loan: Loan): Check => {
   return check(
     name,
     installments.length > 0 && faults.length === 0,
-    faults.slice(0, 3).join(" · ") ||
+    detail(
+      faults,
       `${String(installments.length)} installments, closes at ${formatMoney(fromUnits(balanceUnits))}`,
+    ),
   );
 };
 

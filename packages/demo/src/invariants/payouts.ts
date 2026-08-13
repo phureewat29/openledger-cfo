@@ -7,7 +7,7 @@ import { unitAccountsOf } from "../accounts";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { distributionOn, dividendOn } from "../products/securities";
 import { legsOf } from "../types";
-import { check } from "./shared";
+import { check, detail } from "./shared";
 
 interface Payer {
   readonly ticker: string;
@@ -92,6 +92,6 @@ export const payoutCheck = (
   return check(
     name,
     seen > 0 && faults.length === 0,
-    faults.slice(0, 3).join(" · ") || `${String(seen)} payouts`,
+    detail(faults, `${String(seen)} payouts`),
   );
 };

@@ -371,8 +371,10 @@ const goalChecks = (life: Life, goals: GoalInsert[]): Check[] =>
   });
 
 /**
- * Resets and reseeds the control plane's plans from the committed dataset — deterministic
- * except for `today`, so a rerun is a no-op. A plan that can't be built is an error; one that doesn't line up is a failing check, not a throw.
+ * Resets and reseeds the control plane's plans from the committed dataset —
+ * deterministic except for `today`, so a rerun is a no-op. A plan that cannot
+ * be built is an error; one that does not line up is a failing check, not a
+ * throw.
  */
 export const seedPlans = async (
   life: Life,

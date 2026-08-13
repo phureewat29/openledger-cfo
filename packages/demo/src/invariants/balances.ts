@@ -7,7 +7,7 @@ import { lastDayIn } from "../calendar";
 import { currencyOf } from "../expected";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { legsOf } from "../types";
-import { check } from "./shared";
+import { check, typeOf } from "./shared";
 
 const assetIds = (life: Life): Set<string> =>
   new Set(
@@ -58,12 +58,8 @@ export const solvencyCheck = (life: Life, rows: SeedRow[]): Check => {
 };
 
 /**
- * The guarantee that survives storage. `transactions list` orders by random UUID
- * within a date, so no consumer can recover the order rows were written in and
- * no same-day refill can be proved to precede the spend it funds. Day boundaries
- * are the finest granularity the ledger actually preserves, so the closing
- * balance is what has to hold — and unlike the stream check above, this one is
- * true of the ledger however it chooses to sort.
+ * `transactions list` orders by random UUID within a date, so intra-day
+ * order is unrecoverable — only the day's closing balance can be required.
  */
 export const dailyCloseCheck = (life: Life, rows: SeedRow[]): Check => {
   const name = "no asset account closes a day below zero";
@@ -122,9 +118,7 @@ interface MonthNet {
  * signed the way `oled report` signs them, in the ledger's own currency.
  */
 export const monthlyNets = (life: Life): MonthNet[] => {
-  const typeOf = new Map(
-    life.accounts.map((account) => [account.id, account.type] as const),
-  );
+  const types = typeOf(life);
   const primary = life.meta.config.currency;
 
   return life.months.map((chunk) => {
@@ -138,7 +132,7 @@ export const monthlyNets = (life: Life): MonthNet[] => {
           [entry.credit_account, 1],
         ] as const) {
           if (currencyOf(account) !== primary) continue;
-          const type = typeOf.get(account);
+          const type = types.get(account);
           if (type === "income") incomeUnits += sign * units;
           if (type === "expense") expenseUnits -= sign * units;
         }

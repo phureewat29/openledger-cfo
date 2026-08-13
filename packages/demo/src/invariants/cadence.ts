@@ -49,7 +49,7 @@ export const cadenceCheck = (life: Life, rows: SeedRow[]): Check => {
     }
     for (const loan of life.meta.products.loans) {
       const settled =
-        (life.meta.expected.loanBalances[loan.account] ?? 0) === 0;
+        (life.meta.expected.loanBalances[loan.account] ?? -1) === 0;
       const lastMonth = [...(seen.get(loan.account) ?? [])].sort().at(-1) ?? "";
       if (settled && key > lastMonth) continue;
       if (!seen.get(loan.account)?.has(key)) gaps.push(`${key} ${loan.key}`);

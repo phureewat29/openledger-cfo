@@ -10,7 +10,7 @@ import type { Check } from "./shared";
 import { addMonths, dayIn, eachMonth, within } from "../calendar";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { legsOf } from "../types";
-import { check, legUnits } from "./shared";
+import { check, detail, legUnits } from "./shared";
 
 export const cardCheck = (life: Life, rows: SeedRow[], card: Card): Check => {
   const dueDates = eachMonth(life.meta.window)
@@ -107,6 +107,6 @@ export const cardInterestCheck = (life: Life, rows: SeedRow[]): Check => {
   return check(
     "card interest stays under the annual-rate ceiling",
     breaches.length === 0,
-    breaches.slice(0, 3).join(" · "),
+    detail(breaches),
   );
 };

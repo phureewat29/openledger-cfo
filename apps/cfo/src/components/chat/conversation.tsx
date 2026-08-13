@@ -31,8 +31,9 @@ export function Conversation({
   const scripted = useRef(false);
 
   /**
-   * Instant, never animated: an animation would race content that grows every frame.
-   * The flag keeps the scroll handler below from mistaking this for the reader scrolling away — more tokens land before the event fires.
+   * Instant, never animated: an animation would race content that grows
+   * every frame. The flag keeps the scroll handler below from mistaking this
+   * for the reader scrolling away — more tokens land before the event fires.
    */
   const scrollTo = useCallback((view: HTMLDivElement, top: number) => {
     const limit = view.scrollHeight - view.clientHeight;

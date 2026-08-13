@@ -5,7 +5,7 @@ import type { SeedRow } from "../types";
 import type { Check } from "./shared";
 import { toUnits } from "../money";
 import { legsOf } from "../types";
-import { check } from "./shared";
+import { check, detail } from "./shared";
 
 const FX_RATE_MIN = 33;
 const FX_RATE_MAX = 38;
@@ -42,6 +42,6 @@ export const conversionCheck = (life: Life, rows: SeedRow[]): Check => {
   return check(
     "currency conversions imply a plausible rate",
     seen > 0 && faults.length === 0,
-    faults.slice(0, 3).join(" · "),
+    detail(faults),
   );
 };

@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { partition } from "es-toolkit";
 import { z } from "zod/v4";
 
 import type { OledError } from "./errors";
@@ -123,7 +122,7 @@ const toBatchOutcome = <
     });
   }
 
-  const [failed] = partition(rows, (row) => !row.ok);
+  const failed = rows.filter((row) => !row.ok);
   if (summary.failed > 0 || failed.length > 0) {
     return err<OledError>({
       kind: "partial",
@@ -146,13 +145,13 @@ const CONFIG_FLAGS = {
   userName: "--user-name",
   ocrBaseUrl: "--ocr-base-url",
   ocrModel: "--ocr-model",
-} as const;
+} as const satisfies Partial<Record<keyof ConfigInitInput, string>>;
 
 const MERCHANT_FLAGS = {
   name: "--name",
   alias: "--alias",
   default_account: "--default-account",
-} as const;
+} as const satisfies Partial<Record<keyof MerchantUpsertInput, string>>;
 
 const TRANSACTION_ADD_FLAGS = {
   debit_account: "--debit-account",
@@ -161,7 +160,7 @@ const TRANSACTION_ADD_FLAGS = {
   date: "--date",
   description: "--description",
   merchant_name: "--merchant-name",
-} as const;
+} as const satisfies Partial<Record<keyof TransactionAddInput, string>>;
 
 const ACCOUNT_CREATE_FLAGS = {
   id: "--id",
@@ -173,7 +172,7 @@ const ACCOUNT_CREATE_FLAGS = {
   account_number_masked: "--masked",
   due_day: "--due-day",
   statement_day: "--statement-day",
-} as const;
+} as const satisfies Partial<Record<keyof AccountCreateInput, string>>;
 
 const ACCOUNT_UPDATE_FLAGS = {
   name: "--name",
@@ -182,13 +181,13 @@ const ACCOUNT_UPDATE_FLAGS = {
   points: "--points",
   bank_name: "--bank",
   account_number_masked: "--masked",
-} as const;
+} as const satisfies Partial<Record<keyof AccountUpdateInput, string>>;
 
 const TRANSACTION_UPDATE_FLAGS = {
   date: "--date",
   description: "--description",
   merchant: "--merchant",
-} as const;
+} as const satisfies Partial<Record<keyof TransactionUpdateInput, string>>;
 
 /** Flag tables carry the knowledge; this walks any of them over an input. */
 const toFlagArgs = <TInput extends object>(
@@ -243,7 +242,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
   const runSingle = async <T extends object>(
     args: string[],
     schema: Parameters<typeof parseSingle<T>>[0],
-    opts: { stdin?: string; allowPartial?: boolean; lane?: OledLane } = {},
+    opts: Parameters<typeof exec>[1] = {},
   ): Promise<Result<WithCommand<T>, OledError>> => {
     const out = await exec(args, opts);
     if (!out.ok) return out;

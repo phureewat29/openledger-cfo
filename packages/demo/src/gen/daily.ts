@@ -29,9 +29,8 @@ interface CadenceStream {
   funding: FundingWeights;
 }
 
-// Weighted towards the debit account rather than the cards: a household that
-// settles as it spends carries less revolving balance into the next month, and
-// pays less interest for the privilege of the same basket.
+// Weighted towards the debit account over the cards: settling as you spend
+// carries less revolving balance and less interest.
 const CARD_HEAVY: FundingWeights = [
   ["visa", 0.34],
   ["first", 0.16],

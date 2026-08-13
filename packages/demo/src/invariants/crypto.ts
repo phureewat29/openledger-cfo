@@ -3,7 +3,7 @@ import type { SeedRow } from "../types";
 import type { Check } from "./shared";
 import { toUnits } from "../money";
 import { legsOf } from "../types";
-import { check } from "./shared";
+import { check, detail } from "./shared";
 
 export const cryptoBasisCheck = (life: Life, rows: SeedRow[]): Check => {
   const coins = new Set(life.meta.products.coins.map((coin) => coin.account));
@@ -31,7 +31,7 @@ export const cryptoBasisCheck = (life: Life, rows: SeedRow[]): Check => {
 
   return check(
     "crypto disposals never exceed cost basis",
-    faults.length === 0,
-    faults.slice(0, 3).join(" · "),
+    coins.size > 0 && faults.length === 0,
+    detail(faults),
   );
 };

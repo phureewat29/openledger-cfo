@@ -1,5 +1,8 @@
 import { sumBy } from "es-toolkit";
 
+import type { AccountType } from "@openledger-fleet/openledger";
+
+import type { Life } from "../dataset";
 import type { SeedRow } from "../types";
 import { toUnits } from "../money";
 import { legsOf } from "../types";
@@ -15,6 +18,14 @@ export const check = (name: string, ok: boolean, detail = ""): Check => ({
   ok,
   detail,
 });
+
+/** The first few faults, joined for display; empty when there are none. */
+export const detail = (faults: readonly string[], fallback = ""): string =>
+  faults.slice(0, 3).join(" · ") || fallback;
+
+/** Every charted account's own type, by id. */
+export const typeOf = (life: Life): Map<string, AccountType> =>
+  new Map(life.accounts.map((account) => [account.id, account.type] as const));
 
 export const legUnits = (
   rows: SeedRow[],

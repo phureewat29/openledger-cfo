@@ -200,9 +200,8 @@ export const generateStocks = (ctx: SeedContext): SeedRow[] => {
         },
       );
 
-      // A bank charges its fee per remittance, not per order, so the day's buys
-      // are funded by one transfer sized to what they all cost together. The
-      // brokerage account is still left exactly where it started.
+      // Bank fees are per remittance, not per order, so the day's buys share
+      // one transfer sized to their combined cost.
       const funded = satang(sumBy(orders, (order) => order.cost));
       if (funded > 0) {
         rows.push(

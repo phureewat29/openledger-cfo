@@ -68,8 +68,9 @@ export interface Dashboard {
   readonly lifetime: { readonly income: number; readonly expenses: number };
   readonly prefixOptions: readonly PrefixOption[];
   /**
-   * What the ledger says about every prefix a goal can name, offered or already
-   * claimed. Adding or dropping a goal moves none of it, so goals re-derive from this without re-reading the ledger.
+   * What the ledger says about every prefix a goal can name, offered or
+   * already claimed. Adding or dropping a goal moves none of it, so goals
+   * re-derive from this without re-reading the ledger.
    */
   readonly prefixFacts: Readonly<Record<string, PrefixFacts>>;
   readonly goalRows: RouterOutputs["goals"]["list"];
@@ -111,8 +112,9 @@ const isAssetPrefix = (id: string, parentIds: ReadonlySet<string>) => {
 };
 
 /**
- * A group whose auto-title-cased name collides with its only child is a redundant
- * dropdown entry — drop the group, keep the leaf. Multiple children keep the group, labeled "All X" instead.
+ * A group whose auto-title-cased name collides with its only child is a
+ * redundant dropdown entry — drop the group, keep the leaf. Multiple children
+ * keep the group, labeled "All X" instead.
  */
 const groupLabel = (
   groupName: string,

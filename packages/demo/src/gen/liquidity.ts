@@ -98,8 +98,9 @@ const roundUpTo = (units: number, step: number): number =>
   Math.ceil(units / step) * step;
 
 /**
- * Splices each refill in ahead of the spend that would breach the floor — a batch
- * posts in array order, so same-day dating alone isn't enough. The refill restores the target or covers the outflow, whichever is larger.
+ * Splices each refill in ahead of the spend that would breach the floor — a
+ * batch posts in array order, so same-day dating alone is not enough. The
+ * refill restores the target or covers the outflow, whichever is larger.
  */
 const applyRule = (rows: SeedRow[], rule: TopUpRule): SeedRow[] => {
   const floorUnits = toUnits(rule.floor);

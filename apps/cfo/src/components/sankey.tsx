@@ -430,9 +430,8 @@ export function Sankey({
     (id: string, kind: Hot["kind"]) => (event: React.PointerEvent) =>
       setHot({ id, kind, ...at(event.clientX, event.clientY) });
 
-  // Tabbing in reaches a node without a pointer ever having entered, so there
-  // is no box to trust and nothing to clear one that a scroll has since moved.
-  // A focus is not a per-frame path, so it measures.
+  // Keyboard focus can land without a pointer ever entering, so there is no
+  // cached box to trust — measure directly instead.
   const focus = (id: string) => (event: React.FocusEvent<SVGRectElement>) => {
     const plot = ref.current?.getBoundingClientRect();
     const mark = event.currentTarget.getBoundingClientRect();

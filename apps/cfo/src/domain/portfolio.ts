@@ -194,9 +194,8 @@ const isLoan = (row: PortfolioAccount) =>
 export const splitPortfolio = (
   accounts: readonly PortfolioAccount[],
 ): Portfolio => {
-  // The unit ledgers stay out of every group and every total — they are the
-  // quantities, not the money — but the join still needs them, so they are
-  // dropped here rather than before the list arrives.
+  // Unit ledgers are quantities, not money, and stay out of every group and
+  // total — dropped here, not before the join needs them.
   const units = unitCurrencies(accounts);
   const money = accounts.filter((row) => isMoneyCurrency(row.currency, units));
   const loans = money.filter(isLoan);

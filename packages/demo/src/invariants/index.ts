@@ -11,8 +11,7 @@ import { equationChecks } from "./equation";
 import { payslipCheck, retainerCheck } from "./income";
 import { flatLoanClosesCheck, loanCheck } from "./loans";
 import { distributionPayers, dividendPayers, payoutCheck } from "./payouts";
-import { impliedPriceCheck, scanTrades, unitSolvencyCheck } from "./securities";
-import { check } from "./shared";
+import { securitiesChecks } from "./securities";
 import { chunkCheck, coverageChecks, totalsCheck } from "./structural";
 
 export type { Check } from "./shared";
@@ -26,23 +25,9 @@ export { monthlyNets } from "./balances";
 export const checkInvariants = (life: Life): Check[] => {
   const rows = allRows(life);
   const totals = foldTotals(life.accounts, rows);
-  const scan = scanTrades(life, rows);
   return [
     ...equationChecks(life, totals),
-    check(
-      "every trade pairs its money with one unit leg",
-      scan.trades.length > 0 && scan.pairingFaults.length === 0,
-      scan.pairingFaults.slice(0, 3).join(" · ") ||
-        `${String(scan.trades.length)} paired trades`,
-    ),
-    check(
-      "a realized gain or loss names one instrument",
-      scan.disposals > 0 && scan.gainFaults.length === 0,
-      scan.gainFaults.slice(0, 3).join(" · ") ||
-        `${String(scan.disposals)} disposals`,
-    ),
-    impliedPriceCheck(life, scan.trades),
-    unitSolvencyCheck(life, rows),
+    ...securitiesChecks(life, rows),
     payoutCheck(
       "dividends pay the declared rate on the shares held",
       "dividend",

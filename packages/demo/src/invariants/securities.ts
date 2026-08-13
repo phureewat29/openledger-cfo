@@ -9,7 +9,7 @@ import { monthIndexOf } from "../calendar";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { priceOn, withinPriceBand } from "../prices";
 import { legsOf } from "../types";
-import { check } from "./shared";
+import { check, detail } from "./shared";
 
 const REALIZED_GAIN_SUFFIX = ":investment:realized-gain";
 
@@ -50,7 +50,7 @@ interface TradeScan {
  * what makes a price recoverable, and a group that breaks it has recorded a
  * quantity nobody can put a value on, or a value nobody can put a quantity on.
  */
-export const scanTrades = (life: Life, rows: SeedRow[]): TradeScan => {
+const scanTrades = (life: Life, rows: SeedRow[]): TradeScan => {
   const byMoney = new Map(
     tradedInstruments(life).map((entry) => [entry.instrument.account, entry]),
   );
@@ -101,9 +101,8 @@ export const scanTrades = (life: Life, rows: SeedRow[]): TradeScan => {
 
     if (gainLegs > 0) {
       disposals += 1;
-      // The gain belongs to whichever instrument was sold, and a group naming
-      // two of them says nothing about which. Every price it implies would then
-      // carry the other one's gain.
+      // A gain belongs to whichever instrument was sold; naming more than one
+      // leaves every implied price carrying the wrong gain.
       if (unitLegs.size > 1) {
         gainFaults.push(
           `${seedRow.date} "${seedRow.description}" books a realized gain across ${String(unitLegs.size)} instruments`,
@@ -114,9 +113,8 @@ export const scanTrades = (life: Life, rows: SeedRow[]): TradeScan => {
     for (const account of new Set([...moneyLegs.keys(), ...unitLegs.keys()])) {
       const money = moneyLegs.get(account) ?? [];
       const quantity = unitLegs.get(account) ?? [];
-      // A sale at a loss credits the position twice — what came in and what was
-      // left short — so the money side is summed rather than counted. The
-      // quantity is one leg or the price it implies belongs to nobody.
+      // A loss sale credits the position twice, so money is summed, not
+      // counted; quantity must still be exactly one leg.
       if (money.length === 0 || quantity.length !== 1) {
         pairingFaults.push(
           `${seedRow.date} "${seedRow.description}" pairs ${String(money.length)} money legs with ${String(quantity.length)} unit legs on ${account}`,
@@ -165,7 +163,7 @@ export const impliedPriceCheck = (life: Life, trades: Trade[]): Check => {
   return check(
     "every trade implies a price inside the band",
     trades.length > 0 && faults.length === 0,
-    faults.slice(0, 3).join(" · ") || `${String(trades.length)} trades priced`,
+    detail(faults, `${String(trades.length)} trades priced`),
   );
 };
 
@@ -210,7 +208,25 @@ export const unitSolvencyCheck = (life: Life, rows: SeedRow[]): Check => {
   return check(
     "unit positions stay solvent and close where the dataset says",
     positions.size > 0 && faults.length === 0,
-    faults.slice(0, 3).join(" · ") ||
-      `${String(positions.size)} unit ledgers replayed`,
+    detail(faults, `${String(positions.size)} unit ledgers replayed`),
   );
+};
+
+/** The four trade-derived checks, sharing one scan of the rows. */
+export const securitiesChecks = (life: Life, rows: SeedRow[]): Check[] => {
+  const scan = scanTrades(life, rows);
+  return [
+    check(
+      "every trade pairs its money with one unit leg",
+      scan.trades.length > 0 && scan.pairingFaults.length === 0,
+      detail(scan.pairingFaults, `${String(scan.trades.length)} paired trades`),
+    ),
+    check(
+      "a realized gain or loss names one instrument",
+      scan.disposals > 0 && scan.gainFaults.length === 0,
+      detail(scan.gainFaults, `${String(scan.disposals)} disposals`),
+    ),
+    impliedPriceCheck(life, scan.trades),
+    unitSolvencyCheck(life, rows),
+  ];
 };

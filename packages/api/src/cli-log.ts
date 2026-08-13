@@ -13,8 +13,9 @@ export interface CliLogEntry {
 const CAPACITY = 200;
 
 /**
- * One ring per process: the graph that records commands differs from the one the reader
- * polls, so two rings would leave it empty; the cursor beside it survives re-evaluation so no seq repeats.
+ * One ring per process: the graph that records commands differs from the one
+ * the reader polls, so two rings would leave it empty; the cursor beside it
+ * survives re-evaluation so no seq repeats.
  */
 const forRing = globalThis as unknown as {
   oledCliLog?: CliLogEntry[];
@@ -53,11 +54,8 @@ export const recordCliCommand = (event: OledCommandEvent) => {
     return;
   }
 
-  // An end whose start the ring has already evicted must still leave the exit
-  // behind: a reader handed that start is showing it as running, and the only
-  // thing that can settle the row is another entry under the same id, which is
-  // what the reader merges by. So an end never returns empty-handed — it
-  // appends what it knows, which is everything the start knew plus the exit.
+  // A start already evicted from the ring must not drop its end: append a new
+  // entry so the exit is still recorded.
   entries.push(toEntry(event, ++cursor.seq));
   if (entries.length > CAPACITY) {
     entries.splice(0, entries.length - CAPACITY);

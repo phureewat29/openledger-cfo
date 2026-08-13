@@ -205,8 +205,9 @@ function Row({
 }
 
 /**
- * Compares by value, not identity: the queue arrives as fresh objects each poll,
- * and most change nothing worth losing. Picking still re-renders — selection arrives through context, which memo can't block.
+ * Compares by value, not identity: the queue arrives as fresh objects each
+ * poll, and most change nothing worth losing. Picking still re-renders —
+ * selection arrives through context, which memo cannot block.
  */
 export const FileRow = memo(
   Row,

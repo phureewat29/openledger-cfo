@@ -114,8 +114,10 @@ export const netMovement = (
 };
 
 /**
- * A goal prefix's balance means opposite things by mode — assets hold progress
- * itself, a liability holds what's still owed. Parent accounts carry zero balance (children hold the total), so a prefix sum is never double-counted.
+ * A goal prefix's balance means opposite things by mode — assets hold
+ * progress itself, a liability holds what is still owed. Parent accounts
+ * carry zero balance (children hold the total), so a prefix sum is never
+ * double-counted.
  */
 export const prefixFacts = (
   prefix: string,

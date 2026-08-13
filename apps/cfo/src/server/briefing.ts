@@ -80,7 +80,8 @@ const briefing = (dashboard: Dashboard) => {
 
 /**
  * The facts the page is showing, for the agent to answer from. Persona, tool
- * guidance and the untrusted-data note belong to the agent package, which appends this as context.
+ * guidance and the untrusted-data note belong to the agent package, which
+ * appends this as context.
  */
 export const buildBriefing = (dashboard: Dashboard): string => {
   const { input, insights } = dashboard;

@@ -31,8 +31,9 @@ interface Viewer {
 const CLOSED: Viewer = { fileId: null, mode: "document" };
 
 /**
- * Two selections, kept apart on purpose: what's acted on vs what's read. Both
- * stay in memory, not the URL — this page is force-dynamic, so a navigation would re-run the `oled` reads behind it.
+ * Two selections, kept apart on purpose: what is acted on vs what is read.
+ * Both stay in memory, not the URL — this page is force-dynamic, so a
+ * navigation would re-run the `oled` reads behind it.
  */
 export function SelectionProvider({ children }: { children: React.ReactNode }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(NOTHING);

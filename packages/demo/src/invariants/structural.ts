@@ -9,7 +9,7 @@ import type { Check } from "./shared";
 import { monthKey, within } from "../calendar";
 import { toUnits } from "../money";
 import { legsOf } from "../types";
-import { check } from "./shared";
+import { check, detail } from "./shared";
 
 const leafIds = (accounts: AccountCreateInput[]): string[] =>
   accounts
@@ -127,6 +127,6 @@ export const chunkCheck = (life: Life): Check => {
   return check(
     "months are ordered and hold only their own rows",
     faults.length === 0,
-    faults.slice(0, 3).join(" · "),
+    detail(faults),
   );
 };
