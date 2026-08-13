@@ -114,9 +114,8 @@ const spawnOled = (argv: string[], stdin?: string): Promise<SpawnOutcome> =>
   });
 
 /**
- * `oled`'s WAL pragma takes a brief exclusive lock on every open; a second
- * process opening at that instant is refused and reported as a corrupt
- * database on exit 3 — not real corruption, hence the retry.
+ * A concurrent open is refused as a corrupt database on exit 3. Retrying is
+ * safe: the process died before the open, so no part of the command ran.
  */
 const BUSY_OPEN = "is corrupt or is not a database";
 

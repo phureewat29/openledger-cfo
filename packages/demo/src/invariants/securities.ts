@@ -140,7 +140,7 @@ const scanTrades = (life: Life, rows: SeedRow[]): TradeScan => {
  * of a trade. Recomputing it from the posted amounts and holding it against the
  * curve is what proves the ledger and the price table describe one world.
  */
-export const impliedPriceCheck = (life: Life, trades: Trade[]): Check => {
+const impliedPriceCheck = (life: Life, trades: Trade[]): Check => {
   const faults: string[] = [];
 
   for (const trade of trades) {
@@ -172,7 +172,7 @@ export const impliedPriceCheck = (life: Life, trades: Trade[]): Check => {
  * law money does: it can never go short, and where it ends has to be what the
  * dataset says it holds.
  */
-export const unitSolvencyCheck = (life: Life, rows: SeedRow[]): Check => {
+const unitSolvencyCheck = (life: Life, rows: SeedRow[]): Check => {
   const positions = new Set(
     tradedInstruments(life).map((entry) => entry.position),
   );
