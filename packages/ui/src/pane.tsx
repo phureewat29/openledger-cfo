@@ -9,7 +9,8 @@ function Pane({
   bodyClassName,
   children,
   ...props
-}: React.ComponentProps<"section"> & {
+}: Omit<React.ComponentProps<"section">, "title"> & {
+  /** Shadows the HTML attribute: the header renders it, a tooltip does not. */
   title: React.ReactNode;
   meta?: React.ReactNode;
   actions?: React.ReactNode;
