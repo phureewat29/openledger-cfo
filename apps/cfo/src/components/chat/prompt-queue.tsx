@@ -12,6 +12,8 @@ export interface Prompt {
   readonly text: string;
   /** The route the question was asked from, not the one it may land on. */
   readonly path: string;
+  /** Likewise the model picked when asking, not when the turn comes up. */
+  readonly model: string;
 }
 
 interface Queue {
@@ -23,8 +25,13 @@ interface Queue {
 
 const EMPTY: Queue = { sending: undefined, waiting: [], seq: 0 };
 
-const enqueue = (state: Queue, text: string, path: string): Queue => {
-  const prompt = { id: String(state.seq), text, path };
+const enqueue = (
+  state: Queue,
+  text: string,
+  path: string,
+  model: string,
+): Queue => {
+  const prompt = { id: String(state.seq), text, path, model };
   const seq = state.seq + 1;
   return state.sending === undefined
     ? { ...state, sending: prompt, seq }
@@ -58,14 +65,14 @@ export function usePromptQueue(send: UseChatHelpers<UIMessage>["sendMessage"]) {
     const settle = () => setQueue(advance);
     void send(
       { text: sending.text },
-      { body: { context: { path: sending.path } } },
+      { body: { context: { path: sending.path }, model: sending.model } },
     ).then(settle, settle);
   }, [sending, send]);
 
   return {
     waiting: queue.waiting,
-    ask: (text: string, path: string) =>
-      setQueue((state) => enqueue(state, text, path)),
+    ask: (text: string, path: string, model: string) =>
+      setQueue((state) => enqueue(state, text, path, model)),
     drop: (id: string) => setQueue((state) => remove(state, id)),
   };
 }

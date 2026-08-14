@@ -4,6 +4,11 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 
+import {
+  DEFAULT_MODEL,
+  RECOMMENDED_MODELS,
+} from "@openledger-fleet/agent/catalog";
+
 import { OlLogo } from "~/components/logo";
 import { ChatMessage } from "./chat-message";
 import { Conversation } from "./conversation";
@@ -24,6 +29,7 @@ const PLACEHOLDER = "Talk to your money";
 
 export function ChatPane({ enabled }: { enabled: boolean }) {
   const [input, setInput] = useState("");
+  const [model, setModel] = useState<string>(DEFAULT_MODEL);
   const pathname = usePathname();
   const dock = useChatDock();
   const { messages, sendMessage, stop, status, error } = useChat();
@@ -34,7 +40,7 @@ export function ChatPane({ enabled }: { enabled: boolean }) {
   const ask = (text: string) => {
     if (text.trim().length === 0) return;
     setInput("");
-    queue.ask(text, pathname);
+    queue.ask(text, pathname, model);
   };
 
   return (
@@ -57,7 +63,24 @@ export function ChatPane({ enabled }: { enabled: boolean }) {
             <OlLogo size={14} className="shrink-0" />
             <span className="label">Corgi</span>
           </span>
-          {enabled ? null : (
+          {enabled ? (
+            <select
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              aria-label="Model"
+              className="text-muted-foreground hover:text-foreground focus-visible:outline-ring max-w-[45%] shrink cursor-pointer truncate bg-transparent text-right text-[10px] tracking-[0.12em] uppercase outline-none focus-visible:outline-2"
+            >
+              {RECOMMENDED_MODELS.map((choice) => (
+                <option
+                  key={choice.id}
+                  value={choice.id}
+                  className="bg-card text-foreground"
+                >
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          ) : (
             <span className="border-border text-muted-foreground shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px] tracking-[0.12em] uppercase">
               No key
             </span>

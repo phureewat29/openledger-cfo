@@ -6,6 +6,7 @@ import {
   isAiEnabled,
   startIngestRunTool,
 } from "@openledger-fleet/agent";
+import { RECOMMENDED_MODELS } from "@openledger-fleet/agent/catalog";
 
 import { accountViewBlock, buildBriefing } from "~/server/briefing";
 import { loadDashboard } from "~/server/dashboard";
@@ -16,9 +17,13 @@ export const maxDuration = 300;
 const BodySchema = z.object({
   messages: z.array(z.custom<UIMessage>()),
   context: z.object({ path: z.string().max(200) }).optional(),
+  model: z.string().max(80).optional(),
 });
 
 const PATH_PATTERN = /^\/(?:accounts\/[A-Za-z0-9:%._-]+)?$/;
+
+/** Off the list falls back to `OPENAI_COMPATIBLE_MODEL`, the same as not choosing. */
+const MODEL_IDS = new Set(RECOMMENDED_MODELS.map((choice) => choice.id));
 
 /** The one boundary that catches: every failure below becomes a JSON body. */
 export async function POST(request: Request) {
@@ -41,6 +46,10 @@ export async function POST(request: Request) {
 
     const agent = createAgent("cfo", {
       system,
+      model:
+        body.model !== undefined && MODEL_IDS.has(body.model)
+          ? body.model
+          : undefined,
       // The runner lives in this app's module graph; the agent package takes
       // the tool ready-made rather than importing upward.
       extraTools: [
