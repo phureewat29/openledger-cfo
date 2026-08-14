@@ -8,12 +8,12 @@ import { partition } from "es-toolkit";
 import { Bell, CreditCard, Landmark, Repeat } from "lucide-react";
 
 import { cn } from "@openledger-fleet/ui";
-import { Button } from "@openledger-fleet/ui/button";
 import { Pane } from "@openledger-fleet/ui/pane";
 
 import type { ActionQueue } from "~/domain/action";
 import type { Insight, Severity } from "~/domain/insights/types";
 import type { UpcomingItem, UpcomingSource } from "~/domain/upcoming";
+import { RemoveButton } from "~/components/plan/remove-button";
 import { accountLabel, formatDayMonth, formatThb } from "~/domain/format";
 import { SOURCE_LABEL } from "~/domain/upcoming";
 import { useTRPC } from "~/trpc/react";
@@ -146,13 +146,8 @@ function FlagRow({
   const figure = insight.figures[0];
 
   return (
-    <li
-      className={cn(
-        "group relative border-l-2 px-3 py-1.5",
-        TONE[insight.severity],
-      )}
-    >
-      <div className="flex items-baseline gap-2">
+    <li className={cn("group border-l-2 px-3 py-1.5", TONE[insight.severity])}>
+      <div className="flex items-center gap-2">
         <span
           className={cn(
             "min-w-0 flex-1 truncate text-xs",
@@ -167,17 +162,13 @@ function FlagRow({
             {figure.value}
           </span>
         ) : null}
-        {/* Out of the flow: an invisible control must not spend the title's width. */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="bg-card absolute top-1 right-1.5 size-5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          aria-label={`Dismiss ${insight.title}`}
+        {/* In flow, costing the title its width: the absolute button it
+            replaced painted over the figure on hover. */}
+        <RemoveButton
+          label={`Dismiss ${insight.title}`}
           disabled={pending}
           onClick={() => onDismiss(insight.id)}
-        >
-          ×
-        </Button>
+        />
       </div>
       {/* What to do about the flag is the whole point of raising it, so it gets
           the lines it takes rather than an ellipsis on the first verb. */}
