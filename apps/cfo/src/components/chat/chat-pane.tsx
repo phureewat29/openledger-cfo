@@ -11,6 +11,7 @@ import { useChatDock } from "./dock";
 import { Greeting } from "./greeting";
 import { Thinking } from "./message";
 import { PromptInput } from "./prompt-input";
+import { QueuedPrompts, usePromptQueue } from "./prompt-queue";
 
 const SUGGESTIONS: readonly string[] = [
   "How am I doing this month",
@@ -26,13 +27,14 @@ export function ChatPane({ enabled }: { enabled: boolean }) {
   const pathname = usePathname();
   const dock = useChatDock();
   const { messages, sendMessage, stop, status, error } = useChat();
+  const queue = usePromptQueue(sendMessage);
   const busy = status === "submitted" || status === "streaming";
   const turnKey = messages.findLast((message) => message.role === "user")?.id;
 
   const ask = (text: string) => {
     if (text.trim().length === 0) return;
     setInput("");
-    void sendMessage({ text }, { body: { context: { path: pathname } } });
+    queue.ask(text, pathname);
   };
 
   return (
@@ -65,10 +67,15 @@ export function ChatPane({ enabled }: { enabled: boolean }) {
         {!enabled ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
             <p className="text-muted-foreground text-xs">
-              Set <code className="text-foreground">OPENROUTER_API_KEY</code> in{" "}
-              <code className="text-foreground">.env</code> to wake Corgi. Every
-              pane is computed from the ledger by rules, so nothing else waits
-              on it.
+              Set{" "}
+              <code className="text-foreground">
+                OPENAI_COMPATIBLE_BASE_URL
+              </code>{" "}
+              and{" "}
+              <code className="text-foreground">OPENAI_COMPATIBLE_API_KEY</code>{" "}
+              in <code className="text-foreground">.env</code> to wake Corgi.
+              Every pane is computed from the ledger by rules, so nothing else
+              waits on it.
             </p>
           </div>
         ) : messages.length === 0 ? (
@@ -113,7 +120,8 @@ export function ChatPane({ enabled }: { enabled: boolean }) {
         ) : null}
 
         {enabled ? (
-          <div className="border-border shrink-0 border-t p-2">
+          <div className="border-border flex shrink-0 flex-col gap-2 border-t p-2">
+            <QueuedPrompts items={queue.waiting} onRemove={queue.drop} />
             <PromptInput
               value={input}
               onValueChange={setInput}

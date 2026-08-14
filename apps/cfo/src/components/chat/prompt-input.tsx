@@ -22,7 +22,7 @@ export function PromptInput({
   placeholder?: string;
 }) {
   const field = useRef<HTMLTextAreaElement>(null);
-  const ready = value.trim().length > 0 && !busy;
+  const ready = value.trim().length > 0;
 
   const resize = () => {
     const element = field.current;
@@ -65,28 +65,28 @@ export function PromptInput({
       {busy ? (
         <Button
           type="button"
+          variant="outline"
           size="icon"
           onClick={onStop}
-          aria-label="Stop"
-          className="shrink-0"
+          aria-label="Stop response"
+          className="text-muted-foreground hover:text-foreground shrink-0"
         >
           <span aria-hidden className="text-[9px] leading-none">
             ■
           </span>
         </Button>
-      ) : (
-        <Button
-          type="submit"
-          size="icon"
-          disabled={!ready}
-          aria-label="Send"
-          className="shrink-0"
-        >
-          <span aria-hidden className="text-sm leading-none">
-            ↑
-          </span>
-        </Button>
-      )}
+      ) : null}
+      <Button
+        type="submit"
+        size="icon"
+        disabled={!ready}
+        aria-label="Send"
+        className="shrink-0"
+      >
+        <span aria-hidden className="text-sm leading-none">
+          ↑
+        </span>
+      </Button>
     </form>
   );
 }
