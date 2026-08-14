@@ -94,8 +94,6 @@ pnpm typecheck   # builds the dist-publishing packages first, then checks everyt
 pnpm lint        # eslint across the workspace
 pnpm format      # prettier check
 pnpm build       # full production build
-pnpm reset       # empty ledger and plans, for testing ingest from scratch
-pnpm demo        # reload the demo dataset and plans
 ```
 
 ## Layout

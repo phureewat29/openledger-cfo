@@ -12,9 +12,10 @@ import { bootstrapLedger, LEDGER } from "./ledger";
 import { describeError, log } from "./report";
 
 /**
- * The inverse of `demo`: both stores emptied rather than filled. The ledger
- * keeps only what `oled` itself seeds on init, so an ingest test starts the
- * way a brand-new user's ledger would. The dataset is still read — its meta
+ * The recovery hatch when the data has been manipulated past trusting: both
+ * stores emptied rather than filled, the ledger keeping only what `oled`
+ * itself seeds on init. Deliberately absent from the README — `demo` is the
+ * documented way back to a known state. The dataset is still read: its meta
  * carries the config the fresh ledger is initialized with.
  */
 const run = async (): Promise<number> => {
