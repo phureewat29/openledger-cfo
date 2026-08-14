@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ACCOUNT_ID_PATTERN } from "@openledger-fleet/api";
 import { Pane } from "@openledger-fleet/ui/pane";
 
+import { ACCOUNT_GRID, POSTINGS_COL } from "~/app/accounts/[id]/grid";
 import { AccountHead } from "~/components/account/account-head";
 import { PAGE_SIZE } from "~/components/account/paging";
 import { PostingsTable } from "~/components/account/postings-table";
@@ -55,16 +56,13 @@ export default async function AccountPage(props: {
           { label: account.name },
         ]}
       />
-      {/* Fractional rows only resolve against a definite height, which is what
-          `flex-1` hands them; left content-sized, the postings list would scale
-          the charts above it. The floors still scroll a short window. */}
-      <div className="grid min-h-0 flex-1 grid-cols-12 gap-3 p-3 @4xl/main:grid-rows-[auto_minmax(280px,1fr)_minmax(300px,1.1fr)]">
+      <div className={ACCOUNT_GRID}>
         <AccountHead account={account} className="col-span-12" />
         <VizRow account={account} />
         <Pane
           title="Postings"
           meta={`through ${formatDay(account.asOf)}`}
-          className="col-span-12 @2xl/main:h-[360px] @4xl/main:h-auto"
+          className={POSTINGS_COL}
           bodyClassName="flex min-h-0 flex-1 flex-col p-0"
         >
           <HydrateClient>

@@ -11,12 +11,10 @@ import { moneyOf } from "~/domain/format";
 import { hasMovement, payoffPoints } from "~/domain/series/account";
 
 /**
- * The sankey carries its own aspect ratio, so it can grow to content on one
- * column. Every other chart here is HTML with nothing to grow from and holds a
- * height until the grid gives it one.
+ * Every chart here — the sankey's absolutely-positioned svg included — has no
+ * intrinsic height, so each slot holds one until the wide grid's fractional
+ * rows take over.
  */
-const FLOW_SLOT =
-  "col-span-12 @2xl/main:h-[300px] @4xl/main:col-span-8 @4xl/main:h-auto";
 const WIDE = "col-span-12 h-[300px] @4xl/main:col-span-8 @4xl/main:h-auto";
 const NARROW = "col-span-12 h-[300px] @4xl/main:col-span-4 @4xl/main:h-auto";
 const FULL = "col-span-12 h-[300px] @4xl/main:h-auto";
@@ -36,7 +34,7 @@ function FlowPane({ account }: { account: AccountView }) {
       title="Flow"
       meta="avg / month"
       expandable={flow !== null}
-      className={FLOW_SLOT}
+      className={WIDE}
       bodyClassName="flex min-h-0 flex-1 flex-col p-1"
       expandedChildren={flow === null ? null : <Sankey graph={flow} expanded />}
     >

@@ -118,7 +118,9 @@ function LoanRow({ widths }: { widths: (typeof LOANS)[number] }) {
 function PositionRow({ rank }: { rank: number }) {
   return (
     <li className={ROW}>
-      <Shimmer className="w-[4ch] shrink-0" />
+      <span className="flex w-16 shrink-0">
+        <Shimmer className="w-[4ch]" />
+      </span>
       <Shimmer className={POSITION_NAMES[rank % POSITION_NAMES.length]} />
       <span className="ml-auto flex w-24 shrink-0 justify-end">
         <Shimmer className="w-[7ch] text-[10px]" />

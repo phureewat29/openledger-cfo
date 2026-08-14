@@ -1,6 +1,7 @@
 import { orderBy, sumBy } from "es-toolkit";
 
 import type { CategoryTotal } from "~/domain/series/types";
+import { flipTipClassName, shouldFlipTip } from "~/components/charts/flip-tip";
 import { ChartTip } from "~/components/charts/tooltip";
 import { formatPercent, moneyOf } from "~/domain/format";
 
@@ -74,13 +75,13 @@ export function HBarList({
             <span className="w-20 shrink-0 text-right tabular-nums">
               {format(line.value)}
             </span>
+            {/* This list sits in a clipped box, not a scroller — the flip is
+                earned here, where a floor-row tip would otherwise be cut. */}
             <ChartTip
               rows={[
                 { key: line.key, label: line.label, value: format(line.value) },
               ]}
-              className={`left-0 opacity-0 group-hover:opacity-100 ${
-                index < lines.length / 2 ? "top-full" : "bottom-full"
-              }`}
+              className={flipTipClassName(shouldFlipTip(index, lines.length))}
             />
           </li>
         );

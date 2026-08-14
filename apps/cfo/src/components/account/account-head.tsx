@@ -84,8 +84,10 @@ const cellsOf = (
         meta.lastTrade === undefined
           ? { label: "Last buy", value: dateText(meta.lastBuy) }
           : {
-              label: `Last buy · ${formatDayMonth(meta.lastTrade.date)}`,
-              value: `${formatQuantity(meta.lastTrade.quantity)} @ ${price(meta.lastTrade.price)}`,
+              // The quantity rides in the label: two figures in one value is
+              // the only composition wide enough to clip at the narrow tiers.
+              label: `Last buy · ${formatDayMonth(meta.lastTrade.date)} · ${formatQuantity(meta.lastTrade.quantity)}`,
+              value: price(meta.lastTrade.price),
             },
         { label: "Invested 12 mo", value: money(meta.invested12m) },
       ];
@@ -149,8 +151,13 @@ export function AccountHead({
             key={cell.label}
             className="border-border flex min-w-0 flex-col justify-center gap-0.5 border-l px-3 py-1.5 first:border-l-0"
           >
-            <figcaption className="label truncate">{cell.label}</figcaption>
-            <div className="truncate text-[20px] leading-6 font-medium tabular-nums">
+            <figcaption className="label truncate" title={cell.label}>
+              {cell.label}
+            </figcaption>
+            <div
+              className="truncate text-[20px] leading-6 font-medium tabular-nums"
+              title={cell.value}
+            >
               {cell.value}
             </div>
           </figure>

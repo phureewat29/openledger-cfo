@@ -27,11 +27,14 @@ function Pane({
       {...props}
     >
       <header className="border-border flex h-8 shrink-0 items-center justify-between gap-3 border-b px-3">
-        <span className="label truncate">{title}</span>
+        {/* Titles are short and load-bearing; the meta is the half that yields. */}
+        <span className="label shrink-0 truncate">{title}</span>
         {meta === undefined && actions === undefined ? null : (
-          <span className="flex shrink-0 items-center gap-2">
+          // The meta yields before an action does: a clipped figure still has
+          // its pane behind it, a clipped button is gone.
+          <span className="flex min-w-0 items-center gap-2">
             {meta === undefined ? null : (
-              <span className="text-muted-foreground text-[10px] tracking-[0.12em] uppercase tabular-nums">
+              <span className="text-muted-foreground min-w-0 truncate text-[10px] tracking-[0.12em] uppercase tabular-nums">
                 {meta}
               </span>
             )}

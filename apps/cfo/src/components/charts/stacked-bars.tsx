@@ -88,7 +88,10 @@ export function StackedBars({
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2" data-chart="stacked">
+    <div
+      className="@container/bars flex min-h-0 flex-1 flex-col gap-2"
+      data-chart="stacked"
+    >
       <ColumnHover
         columns={columns}
         bands={series.length > 1 ? bands : undefined}
@@ -130,8 +133,12 @@ export function StackedBars({
                     ))}
                 </div>
                 {total > 0 ? (
+                  // Hidden where a column is narrower than its own compact
+                  // figure — overhanging caps collide with their neighbours.
+                  // Gated on the plot's own box, so the expanded dialog keeps
+                  // its caps however narrow the page behind it is.
                   <span
-                    className="text-muted-foreground absolute inset-x-0 text-center text-[10px] tabular-nums"
+                    className="text-muted-foreground absolute inset-x-0 hidden text-center text-[10px] tabular-nums @[480px]/bars:block"
                     style={{ bottom: `calc(${share}% + 2px)` }}
                   >
                     {capOf(index)}

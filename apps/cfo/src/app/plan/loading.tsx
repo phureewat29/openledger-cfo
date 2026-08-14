@@ -68,7 +68,7 @@ export default function PlanLoading() {
             <ul className="divide-border divide-y">
               {GOALS.map((row, rank) => (
                 <li key={rank} className="flex flex-col gap-1 py-1.5">
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-center gap-2">
                     <Shimmer className={cn("text-[11px]", row.name)} />
                     <Shimmer
                       className={cn(
@@ -83,8 +83,8 @@ export default function PlanLoading() {
                     <span className="flex w-10 shrink-0 justify-end">
                       <Shimmer className="w-[4ch] text-[10px]" />
                     </span>
-                    <span className="flex w-24 shrink-0 justify-end">
-                      <Shimmer className="w-[11ch] text-[10px]" />
+                    <span className="flex w-32 shrink-0 justify-end">
+                      <Shimmer className="w-[17ch] text-[10px]" />
                     </span>
                   </div>
                   <div className="flex">
@@ -125,7 +125,7 @@ export default function PlanLoading() {
             <ul className="divide-border divide-y">
               {REMINDERS.map((row, rank) => (
                 <li key={rank} className="flex flex-col gap-0.5 py-1.5">
-                  <div className="flex items-baseline gap-2 text-[11px]">
+                  <div className="flex items-center gap-2 text-[11px]">
                     <Shimmer className="w-11 shrink-0" />
                     <Shimmer className={row.title} />
                     {row.manual ? (

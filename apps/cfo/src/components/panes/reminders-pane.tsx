@@ -33,7 +33,7 @@ function Row({
 
   return (
     <li className="group flex flex-col gap-0.5 py-1.5">
-      <div className="flex items-baseline gap-2 text-[11px]">
+      <div className="flex items-center gap-2 text-[11px]">
         <span
           className={cn(
             "w-11 shrink-0 tabular-nums",

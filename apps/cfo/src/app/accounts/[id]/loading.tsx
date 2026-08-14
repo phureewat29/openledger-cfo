@@ -1,3 +1,4 @@
+import { ACCOUNT_GRID, POSTINGS_COL } from "~/app/accounts/[id]/grid";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { LoadingLine } from "~/components/loading-line";
 import { PaneFrame } from "~/components/pane-frame";
@@ -21,7 +22,7 @@ export default function AccountLoading() {
   return (
     <div className="flex min-h-full flex-col @4xl/main:h-full">
       <Breadcrumbs crumbs={[{ label: "Accounts", href: "/accounts" }]} />
-      <div className="grid min-h-0 flex-1 grid-cols-12 gap-3 p-3 @4xl/main:grid-rows-[auto_minmax(280px,1fr)_minmax(300px,1.1fr)]">
+      <div className={ACCOUNT_GRID}>
         <section className="border-border bg-card col-span-12 overflow-hidden rounded-lg border">
           <div className="flex h-10 items-center justify-between gap-3 px-3">
             <div className="flex min-w-0 items-baseline gap-2">
@@ -61,7 +62,7 @@ export default function AccountLoading() {
 
         <PaneFrame
           title="Postings"
-          className="col-span-12 @2xl/main:h-[360px] @4xl/main:h-auto"
+          className={POSTINGS_COL}
           bodyClassName="flex min-h-0 flex-1 flex-col p-0"
         >
           <div className="p-3">

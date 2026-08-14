@@ -12,7 +12,6 @@ import type { GoalProgress, PaceVerdict, PrefixFacts } from "~/domain/goals";
 import type { PrefixOption } from "~/server/dashboard";
 import { ChartTip } from "~/components/charts/tooltip";
 import { Field } from "~/components/plan/field";
-import { flipTipClassName, shouldFlipTip } from "~/components/plan/flip-tip";
 import { PlanForm } from "~/components/plan/form";
 import { RemoveButton } from "~/components/plan/remove-button";
 import { formatPercent, formatThb, formatThbCompact } from "~/domain/format";
@@ -103,12 +102,10 @@ const paceRows = (goal: GoalProgress) => [
 
 function Row({
   goal,
-  flip,
   onRemove,
   pending,
 }: {
   goal: GoalProgress;
-  flip: boolean;
   onRemove: (id: string) => void;
   pending: boolean;
 }) {
@@ -116,7 +113,7 @@ function Row({
 
   return (
     <li className="group relative flex flex-col gap-1 py-1.5">
-      <div className="flex items-baseline gap-2">
+      <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-[11px]" title={goal.name}>
           {goal.name}
         </span>
@@ -138,7 +135,7 @@ function Row({
         <span className="text-muted-foreground w-10 shrink-0 text-right text-[10px] tabular-nums">
           {formatPercent(goal.progress)}
         </span>
-        <span className="w-24 shrink-0 text-right text-[10px] tabular-nums">
+        <span className="w-32 shrink-0 text-right text-[10px] whitespace-nowrap tabular-nums">
           {formatThbCompact(goal.current)}
           <span className="text-muted-foreground">
             {" / "}
@@ -148,8 +145,9 @@ function Row({
       </div>
       <p className="text-muted-foreground truncate text-xs">{paceLine(goal)}</p>
 
+      {/* Downward only: this list scrolls, so upward overflow is unreachable. */}
       <ChartTip
-        className={flipTipClassName(flip)}
+        className="top-full left-0 opacity-0 group-hover:opacity-100"
         header={goal.name}
         rows={paceRows(goal)}
       />
@@ -244,11 +242,10 @@ export function GoalsPane({
           </p>
         ) : (
           <ul className="divide-border divide-y">
-            {goals.map((goal, index) => (
+            {goals.map((goal) => (
               <Row
                 key={goal.id}
                 goal={goal}
-                flip={shouldFlipTip(index, goals.length)}
                 onRemove={(id) => remove.mutate({ id })}
                 pending={goal.id === removingId}
               />

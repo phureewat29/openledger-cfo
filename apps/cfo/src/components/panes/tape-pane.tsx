@@ -75,11 +75,13 @@ export function TapePane({
                 </span>
                 <span
                   className={`text-muted-foreground hidden w-[7rem] @md/tape:block ${CELL}`}
+                  title={rowCategoryOf(row)}
                 >
                   {rowCategoryOf(row)}
                 </span>
                 <span
                   className={`text-muted-foreground hidden w-[8rem] @xl/tape:block ${CELL}`}
+                  title={sanitizeOptional(row.merchant_name) ?? undefined}
                 >
                   {sanitizeOptional(row.merchant_name) ?? "—"}
                 </span>

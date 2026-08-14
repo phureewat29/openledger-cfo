@@ -196,10 +196,16 @@ export function LoansPane({
                       </span>
                     </span>
                     {/* The share is the only figure the bar states; the two it
-                        was divided from belong to the same glance. */}
+                        was divided from belong to the same glance. The tip
+                        covers the row's own balance, so it restates it first. */}
                     <ChartTip
                       className="top-1/2 right-3 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/loan:opacity-100"
                       rows={[
+                        {
+                          key: "left",
+                          label: "Left",
+                          value: formatThb(row.balance),
+                        },
                         {
                           key: "repaid",
                           label: "Repaid",
@@ -260,7 +266,10 @@ export function InvestmentsPane({
                 {holding.rows.map((row) => (
                   <li key={row.id}>
                     <Link href={href(row.id)} className={ROW}>
-                      <span className="text-muted-foreground w-16 shrink-0 truncate">
+                      <span
+                        className="text-muted-foreground w-16 shrink-0 truncate"
+                        title={tickerOf(row)}
+                      >
                         {tickerOf(row)}
                       </span>
                       <span className={NAME} title={row.name}>

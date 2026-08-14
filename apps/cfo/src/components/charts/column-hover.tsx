@@ -115,10 +115,20 @@ export function ColumnHover({
             header={column.header}
             rows={column.rows}
             className="top-0"
+            // Capped at the space between the anchor and the plot's far edge,
+            // so a narrow pane truncates the tip instead of clipping it.
             style={
               share > 0.5
-                ? { right: `${(1 - share) * 100}%`, marginRight: 6 }
-                : { left: `${share * 100}%`, marginLeft: 6 }
+                ? {
+                    right: `${(1 - share) * 100}%`,
+                    marginRight: 6,
+                    maxWidth: `calc(${share * 100}% - 6px)`,
+                  }
+                : {
+                    left: `${share * 100}%`,
+                    marginLeft: 6,
+                    maxWidth: `calc(${(1 - share) * 100}% - 6px)`,
+                  }
             }
           />
         )}

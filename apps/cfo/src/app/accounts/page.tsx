@@ -6,6 +6,7 @@ import {
   GROUP_COL,
   GROUP_HALF,
   INVESTMENTS_COL,
+  STRIP_ROW,
   TOTALS_CELL,
   TOTALS_ROW,
 } from "~/app/accounts/grid";
@@ -63,7 +64,7 @@ export default async function AccountsPage() {
           <Total label="Net" value={formatThb(net)} />
         </section>
 
-        <CompositionStrip portfolio={portfolio} className="col-span-12" />
+        <CompositionStrip portfolio={portfolio} className={STRIP_ROW} />
 
         <BanksPane
           rows={portfolio.banks}

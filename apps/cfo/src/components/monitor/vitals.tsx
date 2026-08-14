@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cn } from "@openledger-fleet/ui";
 
 import type { Dashboard } from "~/server/dashboard";
+import { SEGMENT_STRIP } from "~/app/grid";
 import { Sparkline } from "~/components/charts/sparkline";
 import {
   formatMonths,
@@ -186,7 +187,7 @@ export function Vitals({
         />
       </div>
 
-      <div className="border-border flex h-7 items-center gap-4 overflow-hidden border-t px-3 text-[11px]">
+      <div className={SEGMENT_STRIP}>
         {portfolio.positions === 0 && portfolio.banks.length === 0 ? (
           <span className="text-muted-foreground">
             No accounts with balances.

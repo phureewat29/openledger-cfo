@@ -4,6 +4,7 @@ import {
   ACTION_COL,
   EVERYTHING_GRID,
   FLOW_COL,
+  SEGMENT_STRIP,
   TAPE_COL,
   TRAJECTORY_COL,
 } from "~/app/grid";
@@ -95,7 +96,7 @@ export default function EverythingLoading() {
               </figure>
             ))}
           </div>
-          <div className="border-border flex h-7 items-center gap-4 overflow-hidden border-t px-3 text-[11px]">
+          <div className={SEGMENT_STRIP}>
             {STRIP.map((segment) => (
               <span
                 key={segment.label}
@@ -114,7 +115,7 @@ export default function EverythingLoading() {
           className={FLOW_COL}
           bodyClassName="flex min-h-0 flex-1 flex-col p-1"
         >
-          <ShimmerBox className="aspect-[48/25] w-full @2xl/main:aspect-auto @2xl/main:min-h-0 @2xl/main:flex-1" />
+          <ShimmerBox className="min-h-0 flex-1" />
         </PaneFrame>
 
         <PaneFrame
@@ -166,9 +167,11 @@ export default function EverythingLoading() {
                   key={rank}
                   className={cn("border-l-2 px-3 py-1.5", flag.tone)}
                 >
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-center gap-2">
                     <Shimmer className={cn("text-xs", flag.title)} />
                     <Shimmer className="ml-auto w-[6ch] text-[11px]" />
+                    {/* Stands where the dismiss button will: its box is in flow. */}
+                    <span className="size-5 shrink-0" />
                   </div>
                   <div className="flex flex-col">
                     <Shimmer className="w-[95%] text-[10px]" />

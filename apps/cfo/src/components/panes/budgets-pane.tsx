@@ -12,7 +12,6 @@ import type { BudgetRow } from "~/domain/budgets";
 import type { PrefixOption } from "~/server/dashboard";
 import { ChartTip } from "~/components/charts/tooltip";
 import { Field } from "~/components/plan/field";
-import { flipTipClassName, shouldFlipTip } from "~/components/plan/flip-tip";
 import { PlanForm } from "~/components/plan/form";
 import { RemoveButton } from "~/components/plan/remove-button";
 import { budgetRows } from "~/domain/budgets";
@@ -25,14 +24,12 @@ const OVER_PACE = 1.15;
 function Row({
   row,
   elapsed,
-  flip,
   onRemove,
   pending,
 }: {
   row: BudgetRow;
   /** The share of the month already gone, which is where the tick sits. */
   elapsed: number;
-  flip: boolean;
   onRemove: (category: string) => void;
   pending: boolean;
 }) {
@@ -83,8 +80,9 @@ function Row({
         />
       </div>
 
+      {/* Downward only: this list scrolls, so upward overflow is unreachable. */}
       <ChartTip
-        className={flipTipClassName(flip)}
+        className="top-full left-0 opacity-0 group-hover:opacity-100"
         header={row.label}
         rows={[
           { key: "spent", label: "spent", value: formatThb(row.spent) },
@@ -189,12 +187,11 @@ export function BudgetsPane({
           <p className="text-muted-foreground py-2 text-xs">No budgets set.</p>
         ) : (
           <ul className="divide-border divide-y">
-            {rows.map((row, index) => (
+            {rows.map((row) => (
               <Row
                 key={row.category}
                 row={row}
                 elapsed={elapsed}
-                flip={shouldFlipTip(index, rows.length)}
                 onRemove={(value) => remove.mutate({ category: value })}
                 pending={row.category === removingCategory}
               />
