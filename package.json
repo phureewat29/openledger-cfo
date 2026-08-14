@@ -1,6 +1,6 @@
 {
-  "name": "openledger-examples",
-  "description": "A local-first personal CFO agent in a terminal, powered by OpenLedger's oled CLI",
+  "name": "openledger-fleet",
+  "description": "A personal CFO agent with terminal, powered by OpenLedger",
   "license": "AGPL-3.0-only",
   "private": true,
   "engines": {
