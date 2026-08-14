@@ -654,7 +654,8 @@ export const startRun = async (
   if (!isAiEnabled()) {
     return err({
       reason: "disabled",
-      message: "Set OPENROUTER_API_KEY to let the agent work the queue.",
+      message:
+        "Set OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY to let the agent work the queue.",
     });
   }
 

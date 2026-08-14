@@ -12,7 +12,7 @@ import { AGENTS } from "./registry";
 import { toUIMessageStreamResponse } from "./stream";
 import { scopedQuestionTools } from "./tools/ingest";
 
-// The OpenRouter key and a CLI-spawning connector both live behind this import.
+// The gateway key and a CLI-spawning connector both live behind this import.
 if ("window" in globalThis) {
   throw new Error("@openledger-fleet/agent is server-only");
 }
@@ -20,6 +20,8 @@ if ("window" in globalThis) {
 export interface AgentOptions {
   /** Appended to the kind's system prompt: what the app already put on screen. */
   system?: string;
+  /** Overrides `OPENAI_COMPATIBLE_MODEL` for this run; the id the gateway routes on. */
+  model?: string;
   /** Raises the kind's ceiling for a caller whose one turn spans several files. */
   recursionLimit?: number;
   /**
@@ -86,7 +88,7 @@ export const createAgent = (
   const replacement = new Map(scoped.map((tool) => [tool.name, tool]));
 
   const agent = createDeepAgent({
-    model: model(),
+    model: model(opts.model),
     tools: [
       ...spec.tools
         .filter((tool) => !excluded.has(tool.name))

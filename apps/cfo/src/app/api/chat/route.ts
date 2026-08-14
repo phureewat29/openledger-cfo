@@ -25,8 +25,8 @@ export async function POST(request: Request) {
   if (!isAiEnabled()) {
     return Response.json(
       {
-        error: "OPENROUTER_API_KEY not set",
-        hint: "Add OPENROUTER_API_KEY to .env to enable Corgi. The rest of the terminal works without it.",
+        error: "AI gateway not configured",
+        hint: "Set OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY in .env to enable Corgi. The rest of the terminal works without it.",
       },
       { status: 503 },
     );

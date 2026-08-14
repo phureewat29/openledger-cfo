@@ -11,6 +11,7 @@ import type { UIMessage, UIMessageChunk } from "ai";
 
 import type { AgentKind } from "../src/registry";
 import type { LangGraphEvent } from "../src/stream";
+import { DEFAULT_MODEL } from "../src/catalog";
 import { createAgent, isAiEnabled } from "../src/index";
 import { AGENTS } from "../src/registry";
 import { toUIMessageStreamResponse } from "../src/stream";
@@ -111,13 +112,13 @@ const assert = (label: string, ok: boolean, detail = "") => {
 };
 
 if (!isAiEnabled()) {
-  console.error("OPENROUTER_API_KEY is not set");
+  console.error(
+    "OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY are not set",
+  );
   process.exit(1);
 }
 
-console.log(
-  `model: ${process.env.OPENROUTER_MODEL ?? "openai/gpt-5.6-luna"}\n`,
-);
+console.log(`model: ${process.env.OPENAI_COMPATIBLE_MODEL ?? DEFAULT_MODEL}\n`);
 
 console.log("=== cfo ===");
 const cfo = await runAgent(

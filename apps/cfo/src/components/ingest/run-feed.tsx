@@ -169,9 +169,11 @@ export function RunFeed({
     if (!enabled) {
       return (
         <p className="text-muted-foreground text-xs">
-          Set <code className="text-foreground">OPENROUTER_API_KEY</code> to let
-          the agent work the queue. Every file can still be prepared and closed
-          by hand from the list.
+          Set{" "}
+          <code className="text-foreground">OPENAI_COMPATIBLE_BASE_URL</code>{" "}
+          and <code className="text-foreground">OPENAI_COMPATIBLE_API_KEY</code>{" "}
+          to let the agent work the queue. Every file can still be prepared and
+          closed by hand from the list.
         </p>
       );
     }

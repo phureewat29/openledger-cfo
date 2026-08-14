@@ -1,29 +1,33 @@
 import { ChatOpenAI } from "@langchain/openai";
 
-const BASE_URL = "https://openrouter.ai/api/v1";
-
-const DEFAULT_MODEL = "openai/gpt-5.6-luna";
+import { DEFAULT_MODEL } from "./catalog";
 
 export const isAiEnabled = (): boolean =>
-  Boolean(process.env.OPENROUTER_API_KEY);
+  Boolean(
+    process.env.OPENAI_COMPATIBLE_BASE_URL &&
+      process.env.OPENAI_COMPATIBLE_API_KEY,
+  );
 
 /**
- * OpenRouter speaks the OpenAI wire protocol, so the OpenAI chat model class is
- * the client; only the base URL and the `vendor/model` id differ.
+ * Any endpoint speaking the OpenAI wire protocol: the OpenAI chat model class
+ * is the client, and the gateway is whatever `OPENAI_COMPATIBLE_BASE_URL`
+ * names. Keyless local endpoints still want a non-empty
+ * `OPENAI_COMPATIBLE_API_KEY`; any string satisfies them.
  */
-export const model = (): ChatOpenAI => {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
+export const model = (id?: string): ChatOpenAI => {
+  const baseURL = process.env.OPENAI_COMPATIBLE_BASE_URL;
+  const apiKey = process.env.OPENAI_COMPATIBLE_API_KEY;
+  if (!baseURL || !apiKey) {
     throw new Error(
-      "OPENROUTER_API_KEY is not set; gate calls with isAiEnabled()",
+      "OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY are not set; gate calls with isAiEnabled()",
     );
   }
 
   return new ChatOpenAI({
-    model: process.env.OPENROUTER_MODEL ?? DEFAULT_MODEL,
+    model: id ?? process.env.OPENAI_COMPATIBLE_MODEL ?? DEFAULT_MODEL,
     apiKey,
     // Figures are read from the ledger, never sampled.
     temperature: 0,
-    configuration: { baseURL: BASE_URL },
+    configuration: { baseURL },
   });
 };
