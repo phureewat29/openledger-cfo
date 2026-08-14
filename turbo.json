@@ -32,18 +32,7 @@
     "//#clean": {
       "cache": false
     },
-    "push": {
-      "cache": false,
-      "interactive": true
-    },
-    "studio": {
-      "cache": false,
-      "persistent": true
-    },
     "demo": {
-      "cache": false
-    },
-    "oled:init": {
       "cache": false
     },
     "demo:generate": {
