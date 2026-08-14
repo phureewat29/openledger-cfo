@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { cn } from "@openledger-fleet/ui";
+
 import { useHydrated } from "~/components/use-hydrated";
 
 /** One corgi at work per load; the ledger jokes stay dry and short. */
@@ -62,23 +64,25 @@ const FALLBACK = PHRASES[0];
 
 /**
  * Server render and first client paint agree on the fallback; the random pick
- * shows once hydration says the client owns the frame.
+ * shows once hydration says the client owns the frame. A span, not a p: it
+ * also stands in for pane header meta, which is inline context.
  */
-export function LoadingLine() {
+export function LoadingLine({ className }: { className?: string }) {
   const hydrated = useHydrated();
   const [phrase] = useState<string>(
     () => PHRASES[Math.floor(Math.random() * PHRASES.length)] ?? FALLBACK,
   );
 
   return (
-    <p
-      className={
+    <span
+      className={cn(
         "animate-[shimmer-sweep_2.4s_linear_infinite] " +
-        "bg-[linear-gradient(90deg,var(--color-muted-foreground)_38%,var(--color-accent)_50%,var(--color-muted-foreground)_62%)] " +
-        "bg-[length:200%_100%] bg-clip-text text-xs text-transparent"
-      }
+          "bg-[linear-gradient(90deg,var(--color-muted-foreground)_38%,var(--color-accent)_50%,var(--color-muted-foreground)_62%)] " +
+          "bg-[length:200%_100%] bg-clip-text text-xs text-transparent",
+        className,
+      )}
     >
       {hydrated ? phrase : FALLBACK}
-    </p>
+    </span>
   );
 }
