@@ -84,7 +84,7 @@ export function CompositionStrip({
         {slices.map((slice, rank) => (
           <div
             key={slice.key}
-            className="group relative min-w-0"
+            className="group relative min-w-0 cursor-crosshair"
             style={{ width: width(slice) }}
           >
             <div
