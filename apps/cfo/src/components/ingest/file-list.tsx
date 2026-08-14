@@ -117,7 +117,7 @@ export function FileList({
   const queryClient = useQueryClient();
   const hydrated = useHydrated();
   const { run } = useIngestRun();
-  const { selected, clear } = useSelection();
+  const { selected, selectAll, clear } = useSelection();
   const [pending, setPending] = useState<PendingRun | null>(null);
   const [confirming, setConfirming] = useState<readonly IngestFile[] | null>(
     null,
@@ -244,6 +244,19 @@ export function FileList({
               {ACTION_LABEL[action.kind](action.targets.length)}
             </Button>
           ))}
+          {/* Mutually exclusive with Clear: five buttons overflow the header
+              at the pane's own tiers, and a partial pick already has Clear. */}
+          {selected.size > 0 || rows.length === 0 ? null : (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-5 px-1.5 text-[10px]"
+              disabled={busy}
+              onClick={() => selectAll(rows.map((row) => row.rel_path))}
+            >
+              Select all
+            </Button>
+          )}
           {selected.size === 0 ? null : (
             <Button
               size="sm"

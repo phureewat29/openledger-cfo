@@ -12,6 +12,8 @@ interface Selection {
    */
   readonly selected: ReadonlySet<string>;
   readonly toggle: (relPath: string) => void;
+  /** Replaces the pick wholesale — select-all hands in the queue's paths. */
+  readonly selectAll: (relPaths: readonly string[]) => void;
   readonly clear: () => void;
   /** What the info pane reads. Preparing and View drive this, not picking. */
   readonly viewerFileId: string | null;
@@ -48,6 +50,7 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
           if (!next.delete(relPath)) next.add(relPath);
           return next;
         }),
+      selectAll: (relPaths) => setSelected(new Set(relPaths)),
       clear: () => setSelected(NOTHING),
       viewerFileId: viewer.fileId,
       viewerMode: viewer.mode,
