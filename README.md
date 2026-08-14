@@ -1,6 +1,6 @@
-<p align="center">
+<h1 align="center">
   <strong>Corgi CFO</strong>
-</p>
+</h1>
 
 <p align="center">
   Corgi CFO can tells you what to do about your money, powered by
@@ -9,10 +9,6 @@
 
 <p align="center">
   A terminal with AI agent, and double-entry ledger that using your bank statement data, running privately on your machine.
-</p>
-
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="AGPL-3.0 License" /></a>
 </p>
 
 <p align="center">
@@ -98,6 +94,8 @@ pnpm typecheck   # builds the dist-publishing packages first, then checks everyt
 pnpm lint        # eslint across the workspace
 pnpm format      # prettier check
 pnpm build       # full production build
+pnpm reset       # empty ledger and plans, for testing ingest from scratch
+pnpm demo        # reload the demo dataset and plans
 ```
 
 ## Layout

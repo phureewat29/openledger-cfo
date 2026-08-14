@@ -21,6 +21,7 @@
     "format:fix": "turbo run format --continue -- --write --cache --cache-location .cache/.prettiercache",
     "lint": "turbo run lint --continue -- --cache --cache-location .cache/.eslintcache",
     "lint:fix": "turbo run lint --continue -- --fix --cache --cache-location .cache/.eslintcache",
+    "reset": "turbo run reset -F @openledger-fleet/demo",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {

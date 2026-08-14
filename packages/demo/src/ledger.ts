@@ -115,10 +115,17 @@ export const bootstrapLedger = async (
     options.log(`config  ${init.value.config_path}`);
   }
 
-  const chart = await oled.bootstrap.accountsCreateBatch(options.accounts);
-  if (!chart.ok) return chart;
+  // No chart is a legal ask — reset-to-empty — and the CLI refuses an empty
+  // batch, so zero accounts skips the call instead of sending it.
+  const summary = { created: 0, duplicates: 0 };
+  if (options.accounts.length > 0) {
+    const chart = await oled.bootstrap.accountsCreateBatch(options.accounts);
+    if (!chart.ok) return chart;
+    summary.created = chart.value.summary.created;
+    summary.duplicates = chart.value.summary.duplicates;
+  }
   options.log(
-    `chart   ${String(chart.value.summary.created)} created, ${String(chart.value.summary.duplicates)} already present`,
+    `chart   ${String(summary.created)} created, ${String(summary.duplicates)} already present`,
   );
 
   for (const merchant of options.merchants) {
@@ -128,8 +135,8 @@ export const bootstrapLedger = async (
   options.log(`merchants ${String(options.merchants.length)} upserted`);
 
   return ok({
-    accountsCreated: chart.value.summary.created,
-    accountsDuplicate: chart.value.summary.duplicates,
+    accountsCreated: summary.created,
+    accountsDuplicate: summary.duplicates,
     merchants: options.merchants.length,
   });
 };

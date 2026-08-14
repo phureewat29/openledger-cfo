@@ -37,6 +37,9 @@
     },
     "demo:generate": {
       "cache": false
+    },
+    "reset": {
+      "cache": false
     }
   },
   "globalEnv": [
