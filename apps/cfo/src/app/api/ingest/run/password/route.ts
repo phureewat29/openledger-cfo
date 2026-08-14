@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
   const applied =
     "skip" in parsed.data
-      ? skipWaiting()
+      ? await skipWaiting()
       : await submitPassword(parsed.data.password);
   if (!applied.ok) {
     return Response.json(

@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { TRPCError } from "@trpc/server";
-import { partition } from "es-toolkit";
+import { partition, uniqBy } from "es-toolkit";
 
 import type { LangGraphEvent } from "@openledger-fleet/agent";
 import type { Result } from "@openledger-fleet/openledger";
@@ -55,10 +55,14 @@ export type StartResult = Result<
 
 export type RunCommandResult = Result<undefined, { message: string }>;
 
-interface Waiting extends RunWaiting {
+/** The two names a locked file answers to, and neither of them is its password. */
+interface Lockable {
   /** What ingestPrepare is retried with — a path or an id, never the password. */
   readonly pathOrId: string;
+  readonly relPath: string;
 }
+
+interface Waiting extends RunWaiting, Lockable {}
 
 interface Run {
   readonly runId: string;
@@ -76,9 +80,17 @@ interface Run {
   readonly own: Set<string>;
   /** Consecutive closes the ledger turned down, per file. */
   readonly refusedCloses: Map<string, number>;
+  /** Prepares this run has spent trying its password on a file, per file. */
+  readonly unlockAttempts: Map<string, number>;
   status: RunStatus;
   files: number;
   currentFile?: string;
+  /**
+   * The password the operator typed, kept for this run's other locked files and
+   * nothing else: it reaches `oled` as one masked argv and never the transcript,
+   * the journal or a snapshot.
+   */
+  password?: string;
   waiting?: Waiting;
   finishedAt?: number;
   transcript: UIMessage[];
@@ -358,14 +370,13 @@ const noteClarifications = async (): Promise<void> => {
   }
 };
 
-const continuationFor = (relPath: string, fileId: string): string =>
-  `The operator unlocked ${relPath}; it is prepared as ${fileId}, so do not prepare it again. Read it, post its rows and close it, then finish the rest of the queue.`;
-
 const settle = (run: Run, status: RunStatus): void => {
   run.status = status;
   run.finishedAt = Date.now();
   run.currentFile = undefined;
   run.waiting = undefined;
+  // A finished run lingers in the slot until the next start; its password does not.
+  run.password = undefined;
 };
 
 const park = (run: Run, waiting: Waiting): void => {
@@ -387,14 +398,18 @@ const isTimeout = (cause: unknown): boolean =>
   cause instanceof Error &&
   (cause.name === "TimeoutError" || cause.name === "AbortError");
 
+const settleCancelled = (run: Run): void => {
+  settle(run, "cancelled");
+  note("Run cancelled. Whatever it already closed stays closed.");
+};
+
 /**
  * Every way a turn can end badly, said plainly. The files themselves are
  * whatever `oled` last recorded, which stays true whatever happened here.
  */
 const settleFailure = (run: Run, cause: unknown): void => {
   if (run.abort.signal.aborted) {
-    settle(run, "cancelled");
-    note("Run cancelled. Whatever it already closed stays closed.");
+    settleCancelled(run);
     return;
   }
   if (cause instanceof Error && cause.name === "GraphRecursionError") {
@@ -411,6 +426,203 @@ const settleFailure = (run: Run, cause: unknown): void => {
   }
   settle(run, "failed");
   note("Run failed.", messageOf(cause));
+};
+
+interface Unlocked {
+  readonly relPath: string;
+  readonly fileId: string;
+}
+
+/**
+ * One prepare with the password the run holds, and the bookkeeping that makes
+ * the file this run's own. Every failure comes back as a value: the route
+ * behind `submitPassword` would turn a throw into a 500 and leave the run
+ * `running` with no turn in flight to run it.
+ */
+const tryUnlock = async (
+  run: Run,
+  { pathOrId, relPath }: Lockable,
+): Promise<Result<Unlocked, { message: string }>> => {
+  const prepared = await caller.ledger.ingest
+    .prepare({ pathOrId, password: run.password })
+    .catch((cause: unknown) => ({
+      ok: false as const,
+      message: messageOf(cause),
+    }));
+  if (!prepared.ok) return err({ message: prepared.message });
+
+  run.names.set(prepared.file_id, relPath);
+  run.own.add(prepared.file_id);
+  appendEntry({
+    id: crypto.randomUUID(),
+    kind: "tool",
+    label: runLine("Unlocked and prepared", relPath),
+    detail: countOf(prepared.page_count, "page", "pages"),
+    fileId: prepared.file_id,
+  });
+  return ok({ relPath, fileId: prepared.file_id });
+};
+
+interface Sweep {
+  readonly unlocked: Unlocked[];
+  /** What the password did not open, each carrying what the ledger said of it. */
+  readonly locked: Waiting[];
+}
+
+/**
+ * A file may be named by rel_path in one turn and by its sf- id in the next;
+ * the attempt ledger counts them as one file, not two.
+ */
+const attemptKeyOf = (run: Run, pathOrId: string): string =>
+  run.names.get(pathOrId) ?? pathOrId;
+
+/**
+ * One file at a time: a prepare is minutes of OCR on the write lane, and the
+ * gap between two of them is the only place a cancel can be noticed — no turn
+ * is in flight to carry one.
+ */
+const unlockEach = async (
+  run: Run,
+  files: readonly Lockable[],
+): Promise<Sweep> => {
+  const unlocked: Unlocked[] = [];
+  const locked: Waiting[] = [];
+  for (const file of files) {
+    if (run.abort.signal.aborted) break;
+    run.currentFile = file.relPath;
+    const key = attemptKeyOf(run, file.pathOrId);
+    run.unlockAttempts.set(key, (run.unlockAttempts.get(key) ?? 0) + 1);
+    const out = await tryUnlock(run, file);
+    if (out.ok) unlocked.push(out.value);
+    else locked.push({ ...file, message: out.error.message });
+  }
+  return { unlocked, locked };
+};
+
+/**
+ * Two tries per file for the whole run: every unlock hands the model a fresh
+ * turn with a fresh budget, so a model that keeps re-preparing one file without
+ * its password would otherwise be unlocked and advanced without end.
+ */
+const UNLOCK_ATTEMPT_LIMIT = 2;
+
+/**
+ * What the password already in hand can do about a turn that ended on locks.
+ * No `own` gate on purpose: a locked file the model wandered into is still the
+ * operator's to unlock — scope discipline is the objective's job, not the
+ * password's.
+ */
+const autoUnlock = async (
+  run: Run,
+  files: readonly Waiting[],
+): Promise<Sweep> => {
+  if (run.password === undefined) return { unlocked: [], locked: [...files] };
+
+  const [tried, spent] = partition(
+    files,
+    (file) =>
+      (run.unlockAttempts.get(attemptKeyOf(run, file.pathOrId)) ?? 0) <
+      UNLOCK_ATTEMPT_LIMIT,
+  );
+  const swept = await unlockEach(run, tried);
+  return { unlocked: swept.unlocked, locked: [...swept.locked, ...spent] };
+};
+
+interface LockedScan {
+  /** Encrypted files whose text is already extracted and readable. */
+  readonly prepared: Unlocked[];
+  /** Encrypted files still without an extraction, by the name a prepare takes. */
+  readonly locked: Lockable[];
+}
+
+/** This run's encrypted files, split by whether their text is already served. */
+const scanLocked = async (run: Run): Promise<LockedScan> => {
+  const page = await caller.ledger.ingest.list().catch(() => null);
+  const mine = (page?.rows ?? []).filter(
+    (row) =>
+      row.encrypted &&
+      WORKABLE.has(row.status) &&
+      (run.own.has(row.rel_path) ||
+        (row.file_id !== null && run.own.has(row.file_id))),
+  );
+
+  const prepared: Unlocked[] = [];
+  const locked: Lockable[] = [];
+  for (const row of mine) {
+    // A cache read the ledger will not serve leaves the file to a prepare.
+    if (
+      row.file_id !== null &&
+      (await hasDocument(row.file_id).catch(() => false))
+    ) {
+      prepared.push({ relPath: row.rel_path, fileId: row.file_id });
+      continue;
+    }
+    // By `rel_path`: a locked file no prepare has registered has no id to send.
+    locked.push({ pathOrId: row.rel_path, relPath: row.rel_path });
+  }
+  return { prepared, locked };
+};
+
+/**
+ * The rest of this run's locked files, opened with the password now in hand —
+ * a bank issues a year of statements under one password, so the operator types
+ * it once. What comes back is everything the model may now read, files an
+ * earlier unlock already prepared included.
+ */
+const unlockRest = async (run: Run, first: Unlocked): Promise<Unlocked[]> => {
+  const scan = await scanLocked(run);
+  const swept = await unlockEach(
+    run,
+    // `first` is prepared by definition, and a second prepare is OCR twice.
+    scan.locked.filter((file) => file.relPath !== first.relPath),
+  );
+  // A file the password did not open would otherwise surface a turn later,
+  // after the model burns its second attempt on it.
+  for (const file of swept.locked) {
+    note(runLine(file.relPath, "did not open"), firstLine(file.message));
+  }
+  return [first, ...scan.prepared, ...swept.unlocked];
+};
+
+/**
+ * Every file the model may now read, named with the id its prepare returned:
+ * without the id it re-prepares, and a second prepare of a locked file asks for
+ * the password all over again. Deduped here because `oled` collapses identical
+ * bytes to one id, so two rel_paths can arrive as one file.
+ */
+const continuationFor = (unlocked: readonly Unlocked[]): string => {
+  const files = uniqBy([...unlocked], (file) => file.fileId);
+  const named = files
+    .map((file) => `- ${file.relPath} is prepared as ${file.fileId}`)
+    .join("\n");
+  return `The operator's password unlocked ${countNoun(files.length, "file")}; every one of them is prepared already, so do not prepare any of them again:\n${named}\n\nRead each one, post its rows and close it, then finish the rest of the queue.`;
+};
+
+/**
+ * How a turn that ended on locked files goes on: the password opens what it can
+ * and the model is handed straight back the files it may now read, and whatever
+ * is still locked is the operator's to type for.
+ */
+const unlockOrPark = async (
+  run: Run,
+  locked: readonly Waiting[],
+): Promise<void> => {
+  const swept = await autoUnlock(run, locked);
+  if (run.abort.signal.aborted) {
+    settleCancelled(run);
+    return;
+  }
+
+  // What opened outranks what parked: files the password already paid to
+  // prepare must reach the model now — a park can end in Skip or Cancel, and
+  // either would strand them. The still-locked re-surface next turn, bounded
+  // by the attempt cap.
+  if (swept.unlocked.length > 0) {
+    advance(run, continuationFor(swept.unlocked));
+    return;
+  }
+  const first = swept.locked[0];
+  if (first !== undefined) park(run, first);
 };
 
 /**
@@ -611,9 +823,11 @@ const runTurn = async (run: Run): Promise<void> => {
     ];
   }
 
-  const waiting = [...locked.values()][0];
-  if (waiting !== undefined) {
-    park(run, waiting);
+  const locks = [...locked.values()];
+  if (locks.length > 0) {
+    // Nothing may fall through: this either parks the run or starts a turn, and
+    // settling under a live turn would end the run the unlock just continued.
+    await unlockOrPark(run, locks);
     return;
   }
 
@@ -683,6 +897,7 @@ export const startRun = async (
     names: new Map(),
     own: new Set(),
     refusedCloses: new Map(),
+    unlockAttempts: new Map(),
     status: "running",
     files: 0,
     transcript: [],
@@ -744,6 +959,8 @@ export const startRun = async (
   return ok({ runId: run.runId });
 };
 
+const wasCancelled = (run: Run): boolean => run.abort.signal.aborted;
+
 const parked = (): { run: Run; waiting: Waiting } | null => {
   const run = slot.run;
   if (run === null) return null;
@@ -755,8 +972,10 @@ const parked = (): { run: Run; waiting: Waiting } | null => {
 const NOT_PARKED = "No run is waiting for a password.";
 
 /**
- * The runner unlocks the file itself. The password reaches `oled` as one argv
- * the connector masks, and never reaches the model, the journal or a log.
+ * The runner unlocks the file itself, and then every other locked file this run
+ * was handed, so one bank's year of statements costs one prompt. The password
+ * reaches `oled` as one argv the connector masks, and never reaches the model,
+ * the journal or a log.
  */
 export const submitPassword = async (
   password: string,
@@ -767,39 +986,55 @@ export const submitPassword = async (
 
   run.status = "running";
   run.waiting = undefined;
+  run.password = password;
 
-  const prepared = await caller.ledger.ingest
-    .prepare({ pathOrId: waiting.pathOrId, password })
-    .catch((cause: unknown) => ({
-      ok: false as const,
-      reason: "input-required" as const,
-      message: messageOf(cause),
-    }));
-
-  if (!prepared.ok) {
-    park(run, { ...waiting, message: prepared.message });
+  const unlocked = await tryUnlock(run, waiting);
+  // Every prepare here spends minutes with no turn in flight: a cancel lands
+  // between them or nowhere, so each gap checks before parking or advancing.
+  // Through a call, not the property: narrowing survives an await, a cancel
+  // does not wait for one.
+  if (wasCancelled(run)) {
+    settleCancelled(run);
+    return ok(undefined);
+  }
+  if (!unlocked.ok) {
+    park(run, { ...waiting, message: unlocked.error.message });
     return ok(undefined);
   }
 
-  run.names.set(prepared.file_id, waiting.relPath);
-  run.own.add(prepared.file_id);
-  appendEntry({
-    id: crypto.randomUUID(),
-    kind: "tool",
-    label: runLine("Unlocked and prepared", waiting.relPath),
-    detail: countOf(prepared.page_count, "page", "pages"),
-    fileId: prepared.file_id,
-  });
-  advance(run, continuationFor(waiting.relPath, prepared.file_id));
+  const named = await unlockRest(run, unlocked.value);
+  if (wasCancelled(run)) {
+    settleCancelled(run);
+    return ok(undefined);
+  }
+  advance(run, continuationFor(named));
   return ok(undefined);
 };
 
-export const skipWaiting = (): RunCommandResult => {
+/**
+ * Skips one file, not the run: earlier unlocks may have paid for prepares no
+ * turn has read yet, and ending here would strand that work. The run goes on
+ * with whatever is already readable and settles only when nothing is.
+ */
+export const skipWaiting = async (): Promise<RunCommandResult> => {
   const found = parked();
   if (found === null) return err({ message: NOT_PARKED });
+  const { run, waiting } = found;
 
-  note(runLine("Skipped", found.waiting.relPath), "left locked");
-  settle(found.run, "done");
+  note(runLine("Skipped", waiting.relPath), "left locked");
+  run.status = "running";
+  run.waiting = undefined;
+
+  const scan = await scanLocked(run);
+  if (run.abort.signal.aborted) {
+    settleCancelled(run);
+    return ok(undefined);
+  }
+  if (scan.prepared.length === 0) {
+    settle(run, "done");
+    return ok(undefined);
+  }
+  advance(run, continuationFor(scan.prepared));
   return ok(undefined);
 };
 
@@ -810,8 +1045,7 @@ export const cancelRun = (): RunCommandResult => {
   }
   // A parked run has no turn in flight to interrupt; it ends here instead.
   if (run.status === "waiting-password") {
-    settle(run, "cancelled");
-    note("Run cancelled. Whatever it already closed stays closed.");
+    settleCancelled(run);
     return ok(undefined);
   }
   run.abort.abort();
