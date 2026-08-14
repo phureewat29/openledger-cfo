@@ -2,6 +2,7 @@ import type { StructuredToolInterface } from "@langchain/core/tools";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod/v4";
 
+import type { IngestFileRow } from "@openledger-fleet/openledger";
 import {
   ACCOUNT_ID_PATTERN,
   FILE_ID_PATTERN,
@@ -164,13 +165,59 @@ export const ingestDone = tool(
   },
 );
 
+/** The api caller throws real TRPCErrors, and the code is all this reads of one. */
+const isNotFound = (cause: unknown): boolean =>
+  typeof cause === "object" &&
+  cause !== null &&
+  "code" in cause &&
+  cause.code === "NOT_FOUND";
+
+const LOCKED_NOT_UNREADABLE =
+  "refused: this file is locked, not unreadable — leave it where it is, the operator's password is the only thing that prepares it";
+
+/**
+ * A locked file is `pending` by the time anything can name it: a prepare with
+ * no password refuses but registers the row anyway, with an id and no text —
+ * and a `new` row has no id at all, so no fileId can reach one. A closed file
+ * has no extraction either, which is what this status rules out.
+ */
+const OPEN_STATUSES = new Set<IngestFileRow["status"]>(["pending"]);
+
+/**
+ * From here a locked statement looks exactly like an unreadable one: nothing
+ * extracted, nothing to post. Discarding one throws away a file a password
+ * opens in a second, so the tool refuses instead of leaving the model to tell
+ * the two apart.
+ */
+const lockedRefusal = async (
+  fileId: string,
+): Promise<ToolFailure | undefined> => {
+  const missing = await caller.ledger.ingest.document({ fileId }).then(
+    () => false,
+    (cause: unknown) => isNotFound(cause),
+  );
+  if (!missing) return undefined;
+
+  // A guard that cannot read the queue must not block the fail it guards.
+  const page = await caller.ledger.ingest.list().catch(() => null);
+  const row = page?.rows.find((candidate) => candidate.file_id === fileId);
+  if (row === undefined || !row.encrypted || !OPEN_STATUSES.has(row.status)) {
+    return undefined;
+  }
+  return { status: "error", message: LOCKED_NOT_UNREADABLE };
+};
+
 export const ingestFail = tool(
   async (input) =>
-    guardedRun(async () => toolResult(await caller.ledger.ingest.fail(input))),
+    guardedRun(async () => {
+      const refused = await lockedRefusal(input.fileId);
+      if (refused !== undefined) return toolResult(refused);
+      return toolResult(await caller.ledger.ingest.fail(input));
+    }),
   {
     name: "ingestFail",
     description:
-      "Close a statement that cannot be read, with a note saying why. Use it instead of guessing at rows.",
+      "Close a statement that cannot be read, with a note saying why. Use it instead of guessing at rows. A locked file is not an unreadable one — it refuses that one, because the operator's password still reads it.",
     schema: z.object({
       fileId,
       note: z.string().min(1).max(500),
