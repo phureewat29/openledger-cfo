@@ -2,20 +2,31 @@ import type { FundingKey } from "../funding";
 import type { Merchant } from "../merchants";
 import type { SeedContext, SeedRow } from "../types";
 import { ACCOUNT } from "../accounts";
-import { dayIn, within } from "../calendar";
+import { dayIn, monthKey, within } from "../calendar";
 import { FUNDING } from "../funding";
 import { MERCHANT } from "../merchants";
+import { satang } from "../money";
 import { money } from "../rng";
 import { row } from "../types";
 
 interface Subscription {
   day: number;
   merchant: Merchant;
+  /** Named where the merchant sells tiers, so a row says which one was billed. */
+  plan?: string;
   amount: number;
   funding: FundingKey;
   /** Cards bill foreign charges in baht and add a separate conversion fee line. */
   foreignCurrency: boolean;
+  /** `YYYY-MM` bounds for a price the persona did not pay all window. */
+  since?: string;
+  until?: string;
 }
+
+/** The rate the Anthropic descriptor prints, so the baht and the statement agree. */
+const USD_RATE = 36.75;
+
+const inBaht = (usd: number): number => satang(usd * USD_RATE);
 
 const SUBSCRIPTIONS: Subscription[] = [
   {
@@ -70,9 +81,20 @@ const SUBSCRIPTIONS: Subscription[] = [
   {
     day: 13,
     merchant: MERCHANT.anthropic,
-    amount: 735,
+    plan: "Claude Pro",
+    amount: inBaht(20),
     funding: "absolute",
     foreignCurrency: true,
+    until: "2025-05",
+  },
+  {
+    day: 13,
+    merchant: MERCHANT.anthropic,
+    plan: "Claude Max 20x",
+    amount: inBaht(200),
+    funding: "absolute",
+    foreignCurrency: true,
+    since: "2025-06",
   },
   {
     day: 15,
@@ -93,6 +115,15 @@ const SUBSCRIPTIONS: Subscription[] = [
 const FX_FEE_MIN = 18;
 const FX_FEE_MAX = 42;
 
+const billedIn = (subscription: Subscription, month: string): boolean =>
+  (subscription.since === undefined || month >= subscription.since) &&
+  (subscription.until === undefined || month <= subscription.until);
+
+const describe = (subscription: Subscription): string =>
+  [subscription.merchant.canonical, subscription.plan, "subscription"]
+    .filter(Boolean)
+    .join(" ");
+
 export const generateSubscriptions = (ctx: SeedContext): SeedRow[] => {
   const rows: SeedRow[] = [];
 
@@ -100,12 +131,13 @@ export const generateSubscriptions = (ctx: SeedContext): SeedRow[] => {
     for (const subscription of SUBSCRIPTIONS) {
       const chargeDate = dayIn(month, subscription.day);
       if (!within(chargeDate, ctx.window)) continue;
+      if (!billedIn(subscription, monthKey(chargeDate))) continue;
 
       const source = FUNDING[subscription.funding];
       rows.push(
         row({
           date: chargeDate,
-          description: `${subscription.merchant.canonical} subscription`,
+          description: describe(subscription),
           debit: subscription.merchant.account,
           credit: source,
           amount: subscription.amount,

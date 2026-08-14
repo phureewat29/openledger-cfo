@@ -294,7 +294,7 @@ export const MERCHANT = define({
   },
   anthropic: {
     canonical: "Anthropic",
-    alias: "ANTHROPIC CLAUDE.AI SAN FRANCISCO US USD 20.00 EXCHANGE RATE 36.75",
+    alias: "ANTHROPIC CLAUDE.AI SAN FRANCISCO US EXCHANGE RATE 36.75",
     account: ACCOUNT.software,
   },
   github: {
