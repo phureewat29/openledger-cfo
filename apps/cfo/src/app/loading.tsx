@@ -65,11 +65,11 @@ const DUE = [
 
 /** Severity hairlines in the mix the queue usually raises: warn, then info. */
 const FLAGS = [
-  { tone: "border-border", title: "w-[24ch]", tail: "w-[60%]" },
-  { tone: "border-transparent", title: "w-[19ch]", tail: "w-[45%]" },
-  { tone: "border-transparent", title: "w-[22ch]", tail: "w-[70%]" },
-  { tone: "border-border", title: "w-[17ch]", tail: "w-[55%]" },
-  { tone: "border-transparent", title: "w-[21ch]", tail: "w-[65%]" },
+  { tone: "border-l-border", title: "w-[24ch]", tail: "w-[60%]" },
+  { tone: "border-l-transparent", title: "w-[19ch]", tail: "w-[45%]" },
+  { tone: "border-l-transparent", title: "w-[22ch]", tail: "w-[70%]" },
+  { tone: "border-l-border", title: "w-[17ch]", tail: "w-[55%]" },
+  { tone: "border-l-transparent", title: "w-[21ch]", tail: "w-[65%]" },
 ];
 
 const TAPE_DESC = ["w-[24ch]", "w-[16ch]", "w-[20ch]", "w-[13ch]", "w-[27ch]"];

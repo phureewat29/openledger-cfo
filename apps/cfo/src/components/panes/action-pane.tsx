@@ -18,11 +18,15 @@ import { accountLabel, formatDayMonth, formatThb } from "~/domain/format";
 import { SOURCE_LABEL } from "~/domain/upcoming";
 import { useTRPC } from "~/trpc/react";
 
-/** Severity is carried by one hairline and the title colour, nothing else. */
+/**
+ * Severity is carried by one hairline and the title colour, nothing else.
+ * Left side only: the rows sit in a divide-y list, and an all-side border
+ * colour would repaint the divider beside a critical flag red.
+ */
 const TONE: Record<Severity, string> = {
-  crit: "border-destructive",
-  warn: "border-border",
-  info: "border-transparent",
+  crit: "border-l-destructive",
+  warn: "border-l-border",
+  info: "border-l-transparent",
 };
 
 /**
