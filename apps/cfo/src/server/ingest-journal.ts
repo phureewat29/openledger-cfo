@@ -45,3 +45,8 @@ export const listEntries = (after?: number) => ({
       : entries.filter((entry) => entry.seq > after),
   latest: cursor.seq,
 });
+
+/** The cursor survives a wipe, so a poller's old cursor never re-reads a seq. */
+export const clearEntries = (): void => {
+  entries.length = 0;
+};

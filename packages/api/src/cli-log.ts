@@ -66,3 +66,8 @@ export const listCliLog = (after?: number) => ({
   entries: after === undefined ? entries : entries.filter((e) => e.seq > after),
   latest: cursor.seq,
 });
+
+/** The cursor survives a wipe, so a poller's old cursor never re-reads a seq. */
+export const clearCliLog = (): void => {
+  entries.length = 0;
+};

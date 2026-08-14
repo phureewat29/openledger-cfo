@@ -8,6 +8,7 @@ export { type AppRouter, appRouter } from "./root";
 export { createTRPCContext } from "./trpc";
 export type { RouterOutputs };
 
+export { clearCliLog } from "./cli-log";
 export { ledger } from "./trpc";
 export {
   ACCOUNT_ID_PATTERN,

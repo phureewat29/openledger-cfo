@@ -90,6 +90,13 @@ const forSlot = globalThis as unknown as {
 };
 const slot = (forSlot.ingestRunSlot ??= { run: null });
 
+/** The reset hatch drops whatever the slot holds, aborting a run still live. */
+export const resetRunSlot = (): void => {
+  const current = slot.run;
+  if (current !== null && isRunLive(current.status)) current.abort.abort();
+  slot.run = null;
+};
+
 /** Graph supersteps, not model turns: one statement costs a dozen round trips. */
 const recursionLimitFor = (files: number): number =>
   Math.min(64 + 40 * (files - 1), 320);
