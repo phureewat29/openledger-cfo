@@ -26,6 +26,7 @@ import { useHydrated } from "~/components/use-hydrated";
 import { countNoun } from "~/domain/format";
 import {
   actionsFor,
+  isLocked,
   openCountOf,
   openQuestionsByFile,
 } from "~/domain/ingest-files";
@@ -211,6 +212,15 @@ export function FileList({
     (action) => enabled || !NEEDS_AGENT[action.kind],
   );
 
+  // What a run leaves behind, said before it starts rather than found afterwards:
+  // the whole queue's locked files, or for a named run the operator's own locked
+  // picks, which the ingest action drops before they ever reach a run.
+  const picked =
+    pending !== null && "pathOrIds" in pending ? pending.pathOrIds : null;
+  const lockedBehind = rows.filter(
+    (row) => isLocked(row) && (picked === null || selected.has(row.rel_path)),
+  ).length;
+
   return (
     <Pane
       title="Files"
@@ -310,9 +320,8 @@ export function FileList({
 
       <ModeDialog
         open={pending !== null}
-        files={
-          pending === null || "all" in pending ? null : pending.pathOrIds.length
-        }
+        files={picked === null ? null : picked.length}
+        locked={lockedBehind}
         onPick={(mode) => void start(mode)}
         onClose={() => setPending(null)}
       />

@@ -25,6 +25,15 @@ const CHOICES: readonly {
 ];
 
 /**
+ * A count, never a promise: the queue tells the app a file is encrypted and
+ * untouched, and only `oled` finds out whether the password behind it works.
+ */
+const lockedLine = (locked: number, all: boolean): string => {
+  const them = locked === 1 ? "it" : "them";
+  return `${countNoun(locked, "locked file")}${all ? "" : " in this pick"} will be skipped — unlock ${them} in the list first to include ${them}.`;
+};
+
+/**
  * Every pane on this page sits inside an `@container`, which makes its
  * ancestor the containing block for anything fixed — a hand-rolled overlay
  * lands inside the column it came from. A native modal renders in the top
@@ -33,12 +42,15 @@ const CHOICES: readonly {
 export function ModeDialog({
   open,
   files,
+  locked,
   onPick,
   onClose,
 }: {
   open: boolean;
   /** How many statements the choice is about, so the question names its scope. */
   files: number | null;
+  /** How many of this scope's files no run can read until a password arrives. */
+  locked: number;
   onPick: (mode: RunMode) => void;
   onClose: () => void;
 }) {
@@ -71,6 +83,11 @@ export function ModeDialog({
           <p className="text-muted-foreground pt-1 text-[11px]">
             The run will work {scope}.
           </p>
+          {locked === 0 ? null : (
+            <p className="text-accent pt-1 text-[11px]">
+              {lockedLine(locked, files === null)}
+            </p>
+          )}
           <div className="flex flex-col gap-2 pt-3">
             {CHOICES.map((choice) => (
               <button
