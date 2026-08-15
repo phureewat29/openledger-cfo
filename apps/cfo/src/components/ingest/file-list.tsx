@@ -7,6 +7,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { sumBy } from "es-toolkit";
 
 import { Button } from "@openledger-fleet/ui/button";
 import { Pane } from "@openledger-fleet/ui/pane";
@@ -138,7 +139,7 @@ export function FileList({
   const queryClient = useQueryClient();
   const hydrated = useHydrated();
   const { run } = useIngestRun();
-  const { selected, selectAll, clear } = useSelection();
+  const { selected, selectAll, clear, view } = useSelection();
   const [pending, setPending] = useState<PendingRun | null>(null);
   const [confirming, setConfirming] = useState<Confirming | null>(null);
   const [errors, setErrors] = useState<readonly string[]>([]);
@@ -234,6 +235,12 @@ export function FileList({
   const shownErrors = query.isError
     ? [query.error.message, ...errors]
     : errors;
+
+  // The queue cannot move past these without a person; the pane says so where
+  // it cannot be scrolled away, not just in a chip per row.
+  const asking = rows.filter((row) => openCountOf(openQuestions, row) > 0);
+  const openCount = sumBy(asking, (row) => openCountOf(openQuestions, row));
+  const firstAsk = asking[0]?.file_id ?? null;
 
   // What a run leaves behind, said before it starts rather than found
   // afterwards: the selection's locked files, which the ingest action drops
@@ -342,6 +349,23 @@ export function FileList({
             disabled={false}
             onClick={() => setErrors([])}
           />
+        </div>
+      )}
+
+      {firstAsk === null ? null : (
+        <div className="border-border bg-accent/10 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
+          <p className="text-accent min-w-0 flex-1 text-[11px]">
+            {countNoun(openCount, "question")}{" "}
+            {openCount === 1 ? "waits" : "wait"} for you — the files stay open
+            until you answer.
+          </p>
+          <Button
+            size="sm"
+            className="shrink-0"
+            onClick={() => view(firstAsk, "questions")}
+          >
+            Answer
+          </Button>
         </div>
       )}
 

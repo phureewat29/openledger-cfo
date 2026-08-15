@@ -180,9 +180,12 @@ function Row({
           <button
             type="button"
             onClick={() => view(fileId, "questions")}
+            /* Filled, not outlined: an open question is the queue waiting on
+               the operator, and the row's loudest mark should be the one
+               asking for a person. */
             className={cn(
               CHIP,
-              "border-accent text-accent hover:bg-secondary cursor-pointer border",
+              "bg-accent text-accent-foreground cursor-pointer font-medium hover:brightness-[0.97]",
             )}
           >
             {countNoun(openQuestions, "question")}
