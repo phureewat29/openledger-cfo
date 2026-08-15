@@ -15,6 +15,7 @@ import {
 } from "~/components/ingest-run-provider";
 import { useSelection } from "~/components/ingest/selection";
 import { LoadingLine } from "~/components/loading-line";
+import { Field } from "~/components/plan/field";
 import { useHydrated } from "~/components/use-hydrated";
 import { isRunLive, NO_RUN_ENTRIES, runLine } from "~/domain/ingest-run";
 
@@ -97,30 +98,31 @@ function LockPanel({ relPath }: { relPath: string }) {
   return (
     <div className="border-border shrink-0 border-t px-3 py-2">
       <p className="text-muted-foreground pb-1 text-[10px]">
-        {relPath} is locked. Enter its password to let the run finish it.
+        {relPath} is locked — enter its password to let the run continue.
       </p>
-      <div className="flex gap-1">
-        <Input
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Document password"
-          aria-label="Document password"
-          className="h-7 min-w-0 flex-1 text-xs"
-        />
+      <div className="flex items-end gap-1">
+        <Field label="Password" className="min-w-0 flex-1">
+          <Input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="h-7 text-xs"
+          />
+        </Field>
         <Button
           size="sm"
           className="h-7 px-2"
           disabled={password.length === 0 || busy}
           onClick={() => void submit({ password })}
         >
-          Submit
+          Unlock
         </Button>
         <Button
           size="sm"
           variant="ghost"
           className="h-7 px-2"
           disabled={busy}
+          title="Skips this file; the run moves on without it."
           onClick={() => void submit({ skip: true })}
         >
           Skip

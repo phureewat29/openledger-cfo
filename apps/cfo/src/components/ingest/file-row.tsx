@@ -16,7 +16,9 @@ import { Input } from "@openledger-fleet/ui/input";
 
 import type { IngestFile } from "~/domain/ingest-files";
 import { useSelection } from "~/components/ingest/selection";
+import { Field } from "~/components/plan/field";
 import { isLocked, SETTLED, STATUS_LABEL } from "~/domain/ingest-files";
+import { runLine } from "~/domain/ingest-run";
 import { useTRPC } from "~/trpc/react";
 
 const CHIP = "shrink-0 rounded-sm px-1.5 text-[10px] uppercase";
@@ -29,7 +31,7 @@ const STATUS_CHIP: Record<IngestFile["status"], string> = {
   unreadable: "text-destructive border-destructive/40 border",
 };
 
-const FIELD = "h-7 flex-1 text-xs";
+const FIELD = "h-7 text-xs";
 
 function Row({
   row,
@@ -57,10 +59,16 @@ function Row({
       { retry: false },
     ),
   );
-  // A locked row keeps its password field open: the password is the only
-  // thing that can move it, and unlocking is what closes the field.
-  const locked = isLocked(row) || extraction.isError;
+  /**
+   * Only a missing extraction means the password is what stands in the way; a
+   * read the ledger failed for any other reason is its own problem, and a
+   * password prompt over it would claim something nobody knows.
+   */
+  const missingExtraction = extraction.error?.data?.code === "NOT_FOUND";
+  const locked = isLocked(row) || missingExtraction;
+  const unreadable = extraction.isError && !missingExtraction;
   const [password, setPassword] = useState("");
+  const [panelOpen, setPanelOpen] = useState(false);
 
   // A prepare raises questions of its own, which at the queue's own pace would
   // sit unread for a poll or two after the command that asked them.
@@ -136,7 +144,26 @@ function Row({
             {row.rel_path}
           </button>
         )}
-        {row.encrypted ? (
+        {row.encrypted && locked ? (
+          <button
+            type="button"
+            onClick={() => setPanelOpen((open) => !open)}
+            aria-expanded={panelOpen}
+            title="Locked — enter its password"
+            aria-label="Locked — enter its password"
+            className="shrink-0 cursor-pointer"
+          >
+            <Lock
+              className={cn(
+                "size-3",
+                panelOpen
+                  ? "text-accent"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            />
+          </button>
+        ) : null}
+        {row.encrypted && !locked ? (
           <Lock
             className="text-muted-foreground size-3 shrink-0"
             aria-label="Password protected"
@@ -173,20 +200,22 @@ function Row({
         </div>
       )}
 
-      {locked ? (
+      {/* Closed by default: a queue of one bank's year is ten locked rows,
+          and ten open forms would push the queue itself out of view. */}
+      {locked && panelOpen ? (
         <div className="flex flex-col gap-1 pb-1">
           <p className="text-muted-foreground text-[10px]">
-            {needsPassword ?? "Locked — enter the password to prepare it."}
+            {needsPassword ?? "Locked — enter its password to prepare it."}
           </p>
-          <div className="flex gap-1">
-            <Input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Document password"
-              aria-label="Document password"
-              className={FIELD}
-            />
+          <div className="flex items-end gap-1">
+            <Field label="Password" className="flex-1">
+              <Input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className={FIELD}
+              />
+            </Field>
             <Button
               size="sm"
               className="h-7 px-2"
@@ -197,6 +226,12 @@ function Row({
             </Button>
           </div>
         </div>
+      ) : null}
+
+      {unreadable ? (
+        <p className="text-destructive text-[10px]">
+          {runLine("Could not read this file", extraction.error.message)}
+        </p>
       ) : null}
 
       {error === undefined ? null : (
