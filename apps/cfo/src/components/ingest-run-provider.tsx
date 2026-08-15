@@ -50,7 +50,7 @@ export type RunCommand =
 
 /**
  * The mounted provider's read, so a command can pull the next one forward: at
- * the idle pace a press of Ingest all would sit there for ten seconds looking
+ * the idle pace a press of Ingest would sit there for ten seconds looking
  * like it missed.
  */
 const readers = new Set<() => void>();
@@ -81,7 +81,7 @@ const asJson = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-/** The route still takes `{all:true}` for the chat tool; this page always names its files. */
+/** A run is always asked for by name; there is no whole-queue scope anywhere. */
 export interface RunScopeInput {
   readonly pathOrIds: readonly string[];
 }

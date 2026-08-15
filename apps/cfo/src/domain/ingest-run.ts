@@ -23,7 +23,7 @@ export interface RunEntry {
   readonly label: string;
   /** Figures the step returned, never anything it was called with. */
   readonly detail?: string;
-  /** Set when the line names a statement the viewer can open. */
+  /** Set when the line names a file the viewer can open. */
   readonly fileId?: string;
   /** A step with no outcome yet. */
   readonly running?: boolean;

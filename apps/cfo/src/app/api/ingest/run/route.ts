@@ -14,16 +14,14 @@ const name = z.string().min(1).max(500);
 const mode = z.enum(RUN_MODES).default("auto");
 
 const StartSchema = z.union([
-  z.object({ all: z.literal(true), mode }),
   z.object({ pathOrId: name, mode }),
   z.object({ pathOrIds: z.array(name).min(1).max(200), mode }),
 ]);
 
-const scopeOf = (input: z.infer<typeof StartSchema>): RunScope => {
-  if ("all" in input) return { all: true };
-  if ("pathOrId" in input) return { pathOrId: input.pathOrId };
-  return { pathOrIds: input.pathOrIds };
-};
+const scopeOf = (input: z.infer<typeof StartSchema>): RunScope =>
+  "pathOrId" in input
+    ? { pathOrId: input.pathOrId }
+    : { pathOrIds: input.pathOrIds };
 
 const AfterSchema = z.coerce.number().int().min(0);
 

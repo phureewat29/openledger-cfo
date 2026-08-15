@@ -42,7 +42,6 @@ const caller = appRouter.createCaller(
 );
 
 export type RunScope =
-  | { readonly all: true }
   | { readonly pathOrId: string }
   | { readonly pathOrIds: readonly string[] };
 
@@ -82,8 +81,16 @@ interface Run {
   readonly refusedCloses: Map<string, number>;
   /** Prepares this run has spent trying its password on a file, per file. */
   readonly unlockAttempts: Map<string, number>;
-  /** What the run changed, counted as the steps land and said back at the end. */
-  readonly tally: { closed: number; discarded: number; rows: number };
+  /**
+   * What the run changed, said back when it settles. Sets, not counters: a
+   * supervised close and the model's idempotent retry are one closed file.
+   * Only files the run was asked for count — the agent does wander.
+   */
+  readonly tally: {
+    readonly closed: Set<string>;
+    readonly discarded: Set<string>;
+    rows: number;
+  };
   status: RunStatus;
   files: number;
   currentFile?: string;
@@ -225,15 +232,24 @@ const refusalOf = (artifact: Record<string, unknown>): Refusal | undefined =>
 /** What each landed step adds to the tally; a tool absent here changes nothing. */
 const TALLY_OF: Record<
   string,
-  (run: Run, artifact: Record<string, unknown>) => void
+  (
+    run: Run,
+    artifact: Record<string, unknown>,
+    fileId: string | undefined,
+  ) => void
 > = {
-  ingestDone: (run) => {
-    run.tally.closed += 1;
+  ingestDone: (run, _artifact, fileId) => {
+    if (fileId !== undefined && run.own.has(fileId)) {
+      run.tally.closed.add(fileId);
+    }
   },
-  ingestFail: (run) => {
-    run.tally.discarded += 1;
+  ingestFail: (run, _artifact, fileId) => {
+    if (fileId !== undefined && run.own.has(fileId)) {
+      run.tally.discarded.add(fileId);
+    }
   },
-  ingestCommit: (run, artifact) => {
+  ingestCommit: (run, artifact, fileId) => {
+    if (fileId === undefined || !run.own.has(fileId)) return;
     const posted = asRecord(artifact.summary).posted;
     if (typeof posted === "number") run.tally.rows += posted;
   },
@@ -241,8 +257,10 @@ const TALLY_OF: Record<
 
 const tallySaid = (tally: Run["tally"]): string => {
   const said = runLine(
-    tally.closed > 0 ? `closed ${String(tally.closed)}` : undefined,
-    tally.discarded > 0 ? `discarded ${String(tally.discarded)}` : undefined,
+    tally.closed.size > 0 ? `closed ${String(tally.closed.size)}` : undefined,
+    tally.discarded.size > 0
+      ? `discarded ${String(tally.discarded.size)}`
+      : undefined,
     tally.rows > 0 ? `posted ${countNoun(tally.rows, "row")}` : undefined,
   );
   return said.length === 0 ? "nothing changed" : said;
@@ -275,11 +293,6 @@ const message = (role: "user" | "assistant", text: string): UIMessage => ({
   parts: [{ type: "text", text }],
 });
 
-interface Target extends RunTarget {
-  /** Encrypted with nothing readable behind it: only a password moves it. */
-  readonly locked: boolean;
-}
-
 /**
  * A file id alone does not say whether a file is prepared — a locked prepare
  * registers it anyway, and closing deletes its text. This opens the artifact
@@ -296,22 +309,15 @@ const hasDocument = async (fileId: string): Promise<boolean> => {
   }
 };
 
-const targetOfRow = async (row: IngestFile): Promise<Target> => {
+const targetOfRow = async (row: IngestFile): Promise<RunTarget> => {
   const prepared = row.file_id !== null && (await hasDocument(row.file_id));
   return {
     relPath: row.rel_path,
     status: row.status,
     fileId: row.file_id,
     prepared,
-    locked: row.encrypted && !prepared,
   };
 };
-
-interface Selection {
-  readonly targets: Target[];
-  /** Encrypted with nothing behind it: the operator unlocks these, not the agent. */
-  readonly locked: Target[];
-}
 
 /**
  * The queue is a snapshot the operator worked from, so a name it no longer
@@ -321,7 +327,7 @@ interface Selection {
 const targetOfName = async (
   name: string,
   rows: IngestFile[],
-): Promise<Target> => {
+): Promise<RunTarget> => {
   const row = rows.find(
     (candidate) =>
       candidate.rel_path === name ||
@@ -329,36 +335,16 @@ const targetOfName = async (
       candidate.file_id === name,
   );
   if (row !== undefined) return targetOfRow(row);
-  return {
-    relPath: name,
-    status: "new",
-    fileId: null,
-    prepared: false,
-    locked: false,
-  };
+  return { relPath: name, status: "new", fileId: null, prepared: false };
 };
 
-/** Named files are worked whatever state they are in; only an all-scope run skips the locked. */
+/** Named files are worked whatever state they are in; a locked one parks the run. */
 const selectTargets = async (
   scope: RunScope,
   rows: IngestFile[],
-): Promise<Selection> => {
-  if ("pathOrId" in scope) {
-    return { targets: [await targetOfName(scope.pathOrId, rows)], locked: [] };
-  }
-
-  if ("pathOrIds" in scope) {
-    const targets = await Promise.all(
-      scope.pathOrIds.map((name) => targetOfName(name, rows)),
-    );
-    return { targets, locked: [] };
-  }
-
-  const targets = await Promise.all(
-    rows.filter((row) => WORKABLE.has(row.status)).map(targetOfRow),
-  );
-  const [locked, open] = partition(targets, (target) => target.locked);
-  return { targets: open, locked };
+): Promise<RunTarget[]> => {
+  if ("pathOrId" in scope) return [await targetOfName(scope.pathOrId, rows)];
+  return Promise.all(scope.pathOrIds.map((name) => targetOfName(name, rows)));
 };
 
 /**
@@ -428,12 +414,16 @@ const isTimeout = (cause: unknown): boolean =>
 
 const settleCancelled = (run: Run): void => {
   settle(run, "cancelled");
-  note("Run cancelled. Whatever it already closed stays closed.");
+  note(
+    "Run cancelled. Whatever it already closed stays closed.",
+    tallySaid(run.tally),
+  );
 };
 
 /**
- * Every way a turn can end badly, said plainly. The files themselves are
- * whatever `oled` last recorded, which stays true whatever happened here.
+ * Every way a turn can end badly, said plainly — and with the tally, because
+ * a stopped run is exactly when the operator needs to know what landed. The
+ * files themselves are whatever `oled` last recorded.
  */
 const settleFailure = (run: Run, cause: unknown): void => {
   if (run.abort.signal.aborted) {
@@ -442,18 +432,23 @@ const settleFailure = (run: Run, cause: unknown): void => {
   }
   if (cause instanceof Error && cause.name === "GraphRecursionError") {
     settle(run, "failed");
-    note("Run stopped — it reached its step limit with files still open.");
+    note(
+      "Run stopped — it reached its step limit. Select what is still open and press Ingest again.",
+      tallySaid(run.tally),
+    );
     return;
   }
   if (isTimeout(cause)) {
     settle(run, "failed");
     note(
-      `Run stopped — it passed its ${String(budgetFor(run.files) / 60_000)} minute limit.`,
+      `Run stopped — it passed its ${String(budgetFor(run.files) / 60_000)} minute limit. Select what is still open and press Ingest again.`,
+      tallySaid(run.tally),
     );
     return;
   }
   settle(run, "failed");
   note("Run failed.", messageOf(cause));
+  note("Run stopped", tallySaid(run.tally));
 };
 
 interface Unlocked {
@@ -671,7 +666,7 @@ const superviseClose = async (
     const out = await caller.ledger.ingest.done({ fileId });
     // A refusal here means the model's next fileId-only retry can still land.
     if (out.ok) {
-      run.tally.closed += 1;
+      if (run.own.has(fileId)) run.tally.closed.add(fileId);
       note(runLine("Closed", name), RECONCILE_SKIPPED);
     }
   } catch (cause) {
@@ -775,6 +770,10 @@ const runTurn = async (run: Run): Promise<void> => {
 
     const refusal = refusalOf(artifact);
     if (refusal !== undefined) {
+      // A partial commit still posted the rows it names; the tally keeps them.
+      if (artifact.reason === "partial") {
+        TALLY_OF.ingestCommit?.(run, artifact, fileId);
+      }
       updateEntry(id, {
         kind: "note",
         running: false,
@@ -799,7 +798,7 @@ const runTurn = async (run: Run): Promise<void> => {
     if (call.tool === "ingestDone" && fileId !== undefined) {
       run.refusedCloses.delete(fileId);
     }
-    TALLY_OF[call.tool]?.(run, artifact);
+    TALLY_OF[call.tool]?.(run, artifact, fileId);
     updateEntry(id, {
       kind: "tool",
       running: false,
@@ -882,18 +881,10 @@ const advance = (run: Run, text: string): void => {
   });
 };
 
-const lockedNote = (target: Target): void => {
-  note(
-    runLine(target.relPath, "is locked"),
-    "enter its password to prepare it",
-  );
-};
-
-const labelOf = (scope: RunScope): string => {
-  if ("pathOrId" in scope) return scope.pathOrId;
-  if ("pathOrIds" in scope) return `${String(scope.pathOrIds.length)} selected`;
-  return "all";
-};
+const labelOf = (scope: RunScope): string =>
+  "pathOrId" in scope
+    ? scope.pathOrId
+    : `${String(scope.pathOrIds.length)} selected`;
 
 /** Which way this run was asked to handle what the ledger asks back. */
 const MODE_NOTE: Record<RunMode, string> = {
@@ -931,7 +922,7 @@ export const startRun = async (
     own: new Set(),
     refusedCloses: new Map(),
     unlockAttempts: new Map(),
-    tally: { closed: 0, discarded: 0, rows: 0 },
+    tally: { closed: new Set(), discarded: new Set(), rows: 0 },
     status: "running",
     files: 0,
     transcript: [],
@@ -955,9 +946,9 @@ export const startRun = async (
     if (row.file_id !== null) run.names.set(row.file_id, row.rel_path);
   }
 
-  let selection: Selection;
+  let targets: RunTarget[];
   try {
-    selection = await selectTargets(scope, rows);
+    targets = await selectTargets(scope, rows);
   } catch (cause) {
     slot.run = previous;
     return err({
@@ -966,29 +957,16 @@ export const startRun = async (
         cause instanceof Error ? cause.message : "The ledger did not answer.",
     });
   }
-  const { targets, locked } = selection;
   run.files = targets.length;
   for (const target of targets) {
     run.own.add(target.relPath);
     if (target.fileId !== null) run.own.add(target.fileId);
   }
 
-  if (targets.length === 0) {
-    for (const target of locked) lockedNote(target);
-    note(
-      locked.length === 0
-        ? "Nothing to ingest — the queue is clear."
-        : "Nothing to ingest until those files are unlocked.",
-    );
-    settle(run, "done");
-    return ok({ runId: run.runId });
-  }
-
   note(
     `Run started — ${String(targets.length)} ${targets.length === 1 ? "file" : "files"}`,
     MODE_NOTE[mode],
   );
-  for (const target of locked) lockedNote(target);
   advance(run, objectiveOf(targets, mode));
   return ok({ runId: run.runId });
 };
