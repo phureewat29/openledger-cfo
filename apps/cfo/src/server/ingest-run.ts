@@ -82,6 +82,8 @@ interface Run {
   readonly refusedCloses: Map<string, number>;
   /** Prepares this run has spent trying its password on a file, per file. */
   readonly unlockAttempts: Map<string, number>;
+  /** What the run changed, counted as the steps land and said back at the end. */
+  readonly tally: { closed: number; discarded: number; rows: number };
   status: RunStatus;
   files: number;
   currentFile?: string;
@@ -219,6 +221,32 @@ const REFUSAL: Record<string, Refusal> = {
 
 const refusalOf = (artifact: Record<string, unknown>): Refusal | undefined =>
   typeof artifact.reason === "string" ? REFUSAL[artifact.reason] : undefined;
+
+/** What each landed step adds to the tally; a tool absent here changes nothing. */
+const TALLY_OF: Record<
+  string,
+  (run: Run, artifact: Record<string, unknown>) => void
+> = {
+  ingestDone: (run) => {
+    run.tally.closed += 1;
+  },
+  ingestFail: (run) => {
+    run.tally.discarded += 1;
+  },
+  ingestCommit: (run, artifact) => {
+    const posted = asRecord(artifact.summary).posted;
+    if (typeof posted === "number") run.tally.rows += posted;
+  },
+};
+
+const tallySaid = (tally: Run["tally"]): string => {
+  const said = runLine(
+    tally.closed > 0 ? `closed ${String(tally.closed)}` : undefined,
+    tally.discarded > 0 ? `discarded ${String(tally.discarded)}` : undefined,
+    tally.rows > 0 ? `posted ${countNoun(tally.rows, "row")}` : undefined,
+  );
+  return said.length === 0 ? "nothing changed" : said;
+};
 
 /**
  * Some models will not take the prompt's escape — closing on file id alone —
@@ -642,7 +670,10 @@ const superviseClose = async (
   try {
     const out = await caller.ledger.ingest.done({ fileId });
     // A refusal here means the model's next fileId-only retry can still land.
-    if (out.ok) note(runLine("Closed", name), RECONCILE_SKIPPED);
+    if (out.ok) {
+      run.tally.closed += 1;
+      note(runLine("Closed", name), RECONCILE_SKIPPED);
+    }
   } catch (cause) {
     note(
       runLine("Close failed", name),
@@ -768,6 +799,7 @@ const runTurn = async (run: Run): Promise<void> => {
     if (call.tool === "ingestDone" && fileId !== undefined) {
       run.refusedCloses.delete(fileId);
     }
+    TALLY_OF[call.tool]?.(run, artifact);
     updateEntry(id, {
       kind: "tool",
       running: false,
@@ -834,6 +866,7 @@ const runTurn = async (run: Run): Promise<void> => {
   if (run.mode === "normal") await noteClarifications();
 
   settle(run, "done");
+  note("Run finished", tallySaid(run.tally));
   appendEntry({
     id: crypto.randomUUID(),
     kind: "summary",
@@ -898,6 +931,7 @@ export const startRun = async (
     own: new Set(),
     refusedCloses: new Map(),
     unlockAttempts: new Map(),
+    tally: { closed: 0, discarded: 0, rows: 0 },
     status: "running",
     files: 0,
     transcript: [],
@@ -1060,6 +1094,7 @@ export const readRun = (): RunSnapshot | null => {
     runId: run.runId,
     status: run.status,
     scope: run.scope,
+    mode: run.mode,
     currentFile: run.currentFile,
     waiting:
       run.waiting === undefined

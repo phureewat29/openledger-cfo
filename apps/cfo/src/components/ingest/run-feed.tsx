@@ -14,6 +14,7 @@ import {
   useIngestRun,
 } from "~/components/ingest-run-provider";
 import { useSelection } from "~/components/ingest/selection";
+import { LoadingLine } from "~/components/loading-line";
 import { useHydrated } from "~/components/use-hydrated";
 import { isRunLive, NO_RUN_ENTRIES, runLine } from "~/domain/ingest-run";
 
@@ -177,6 +178,9 @@ export function RunFeed({
         </p>
       );
     }
+    // The provider may already hold a live run; claiming idle before the gate
+    // opens would be a lie for a frame.
+    if (!hydrated) return <LoadingLine />;
     if (entries.length === 0) {
       return (
         <p className="text-muted-foreground text-xs">
@@ -196,7 +200,15 @@ export function RunFeed({
   return (
     <Pane
       title="Run"
-      meta={run === null ? "idle" : STATUS_META[run.status]}
+      /* The mode rides along because it changes what "finished" means: an auto
+         run answered the questions, a normal run left them for the operator. */
+      meta={
+        !hydrated
+          ? undefined
+          : run === null
+            ? "idle"
+            : runLine(run.mode, STATUS_META[run.status])
+      }
       actions={
         !live ? null : (
           <span className="flex items-center gap-2">

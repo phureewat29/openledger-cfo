@@ -39,6 +39,8 @@ export interface RunSnapshot {
   readonly runId: string;
   readonly status: RunStatus;
   readonly scope: string;
+  /** Optional: a run started before this field shipped has none. */
+  readonly mode?: RunMode;
   readonly currentFile?: string;
   readonly waiting?: RunWaiting;
   readonly startedAt: number;
