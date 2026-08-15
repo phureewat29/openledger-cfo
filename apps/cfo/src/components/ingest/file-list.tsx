@@ -108,7 +108,7 @@ const countsOf = (summary: IngestCounts | null | undefined, rows: number) => {
 
 /** What the run route is asked for, held while the mode dialog is open. */
 type PendingRun =
-  | { readonly all: true }
+  | { readonly all: true; readonly count: number }
   | { readonly pathOrIds: readonly string[] };
 
 const removeFile = async (row: IngestFile): Promise<string | null> => {
@@ -215,7 +215,10 @@ export function FileList({
     const scope = pending;
     setPending(null);
     if (scope === null) return;
-    const result = await startIngestRun(scope, mode);
+    const result = await startIngestRun(
+      "pathOrIds" in scope ? scope : { all: true },
+      mode,
+    );
     setErrors(result.ok ? [] : [result.message]);
   };
 
@@ -223,7 +226,7 @@ export function FileList({
     FileActionKind,
     (targets: readonly IngestFile[]) => void
   > = {
-    "ingest-all": () => setPending({ all: true }),
+    "ingest-all": (targets) => setPending({ all: true, count: targets.length }),
     ingest: (targets) =>
       setPending({ pathOrIds: targets.map((row) => row.rel_path) }),
     done: (targets) => setConfirming({ kind: "close", targets }),
@@ -245,9 +248,11 @@ export function FileList({
   // picks, which the ingest action drops before they ever reach a run.
   const picked =
     pending !== null && "pathOrIds" in pending ? pending.pathOrIds : null;
-  const lockedBehind = rows.filter(
-    (row) => isLocked(row) && (picked === null || selected.has(row.rel_path)),
-  ).length;
+  const lockedBehind = rows
+    .filter(
+      (row) => isLocked(row) && (picked === null || selected.has(row.rel_path)),
+    )
+    .map((row) => row.rel_path);
 
   return (
     <Pane
@@ -380,7 +385,14 @@ export function FileList({
 
       <ModeDialog
         open={pending !== null}
-        files={picked === null ? null : picked.length}
+        all={picked === null}
+        files={
+          pending === null
+            ? 0
+            : "all" in pending
+              ? pending.count
+              : pending.pathOrIds.length
+        }
         locked={lockedBehind}
         onPick={(mode) => void start(mode)}
         onClose={() => setPending(null)}
