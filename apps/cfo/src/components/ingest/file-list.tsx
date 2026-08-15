@@ -74,6 +74,11 @@ const CONFIRM_VERB: Record<ConfirmKind, string> = {
   delete: "Delete",
 };
 
+const CONFIRM_BUSY: Record<ConfirmKind, string> = {
+  close: "Closing…",
+  delete: "Deleting…",
+};
+
 /** Without a key the agent cannot run; closing and removing by hand still can. */
 const NEEDS_AGENT: Record<FileActionKind, boolean> = {
   ingest: true,
@@ -232,15 +237,20 @@ export function FileList({
   );
 
   // The queue read's failure joins the strip; only the mutations' are dismissable.
-  const shownErrors = query.isError
-    ? [query.error.message, ...errors]
-    : errors;
+  const shownErrors = query.isError ? [query.error.message, ...errors] : errors;
 
   // The queue cannot move past these without a person; the pane says so where
   // it cannot be scrolled away, not just in a chip per row.
   const asking = rows.filter((row) => openCountOf(openQuestions, row) > 0);
   const openCount = sumBy(asking, (row) => openCountOf(openQuestions, row));
   const firstAsk = asking[0]?.file_id ?? null;
+  // An auto run answers its own questions; calling for the operator during one
+  // would be false, and its Answer press would race the agent for the row.
+  const agentAnswering = live && run.mode !== "normal";
+
+  const showSelectAll = rows.length > 0 && selected.size < rows.length;
+  const showClear = selected.size > 0;
+  const showActionBar = actions.length > 0 || showSelectAll || showClear;
 
   // What a run leaves behind, said before it starts rather than found
   // afterwards: the selection's locked files, which the ingest action drops
@@ -252,28 +262,30 @@ export function FileList({
   return (
     <Pane
       title="Files"
-      /* The header is the one action bar: the count while picking, the queue
-         totals otherwise, and every button the current selection can use. */
+      /* The header keeps only the count: the 32px slot cannot hold a wrapping
+         action bar, and a clipped button is a control that does not exist. */
       meta={
         selected.size > 0
           ? `${String(selected.size)} selected`
           : countsOf(query.data?.summary, rows.length)
       }
-      actions={
-        <span className="flex items-center gap-1">
+      className={className}
+      bodyClassName="flex min-h-0 flex-1 flex-col p-0"
+    >
+      {!showActionBar ? null : (
+        <div className="border-border flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-1.5">
           {actions.map((action) => (
             <Button
               key={action.kind}
               size="sm"
+              variant={action.kind === "delete" ? "outline" : "default"}
               disabled={live || busy || action.targets.length === 0}
-              /* A greyed button with no reason reads as broken. */
-              title={live ? "A run is working the queue" : undefined}
               onClick={() => perform[action.kind](action.targets)}
             >
               {ACTION_LABEL[action.kind](action.targets.length)}
             </Button>
           ))}
-          {rows.length === 0 || selected.size >= rows.length ? null : (
+          {!showSelectAll ? null : (
             <Button
               size="sm"
               variant="ghost"
@@ -283,16 +295,20 @@ export function FileList({
               Select all
             </Button>
           )}
-          {selected.size === 0 ? null : (
+          {!showClear ? null : (
             <Button size="sm" variant="ghost" disabled={busy} onClick={clear}>
               Clear
             </Button>
           )}
-        </span>
-      }
-      className={className}
-      bodyClassName="flex min-h-0 flex-1 flex-col p-0"
-    >
+          {/* Said where it renders: a disabled button swallows its tooltip. */}
+          {live && actions.length > 0 ? (
+            <span className="text-muted-foreground text-[10px]">
+              A run is working the queue — these come back when it finishes.
+            </span>
+          ) : null}
+        </div>
+      )}
+
       {confirming === null ? null : (
         <div className="border-border bg-secondary/40 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
           <p className="min-w-0 flex-1 text-[11px]">
@@ -308,7 +324,9 @@ export function FileList({
               )
             }
           >
-            {CONFIRM_VERB[confirming.kind]}
+            {busy
+              ? CONFIRM_BUSY[confirming.kind]
+              : CONFIRM_VERB[confirming.kind]}
           </Button>
           <Button
             size="sm"
@@ -332,7 +350,10 @@ export function FileList({
         <div className="border-border flex shrink-0 items-start gap-2 border-b px-3 py-1.5">
           <div className="min-w-0 flex-1">
             {shownErrors.slice(0, SHOWN_ERROR_LINES).map((line, index) => (
-              <p key={`${line}-${String(index)}`} className="text-destructive text-[10px]">
+              <p
+                key={`${line}-${String(index)}`}
+                className="text-destructive text-[10px]"
+              >
                 {line}
               </p>
             ))}
@@ -343,16 +364,27 @@ export function FileList({
               </p>
             )}
           </div>
-          <RemoveButton
-            label="Dismiss errors"
-            className="size-5 shrink-0"
-            disabled={false}
-            onClick={() => setErrors([])}
-          />
+          {/* The queue read's failure re-adds itself on the next poll; a
+              dismiss that cannot dismiss it would be a button doing nothing. */}
+          {errors.length === 0 ? null : (
+            <RemoveButton
+              label="Dismiss these failures"
+              className="size-5 shrink-0"
+              disabled={false}
+              onClick={() => setErrors([])}
+            />
+          )}
         </div>
       )}
 
-      {firstAsk === null ? null : (
+      {firstAsk === null ? null : agentAnswering ? (
+        <div className="border-border flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
+          <p className="text-muted-foreground min-w-0 flex-1 text-[11px]">
+            {countNoun(openCount, "question")} open — the run is answering these
+            itself.
+          </p>
+        </div>
+      ) : (
         <div className="border-border bg-accent/10 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
           <p className="text-accent min-w-0 flex-1 text-[11px]">
             {countNoun(openCount, "question")}{" "}
@@ -374,9 +406,9 @@ export function FileList({
           <p className="px-3 py-2">
             <LoadingLine />
           </p>
-        ) : rows.length === 0 ? (
+        ) : query.isError ? null : rows.length === 0 ? (
           <p className="text-muted-foreground px-3 py-2 text-xs">
-            Nothing in the data directory.
+            Nothing in the queue. Drop a file above to start.
           </p>
         ) : (
           <ul className="divide-border divide-y">

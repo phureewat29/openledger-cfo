@@ -140,28 +140,26 @@ function Row({
             type="button"
             onClick={() => view(fileId)}
             title="Open in Info"
-            className="min-w-0 flex-1 cursor-pointer text-left text-[11px] break-all"
+            className="hover:text-accent min-w-0 flex-1 cursor-pointer text-left text-[11px] break-all"
           >
             {row.rel_path}
           </button>
         )}
+        {/* A word, not a 12px glyph: blocked-on-the-operator states should
+            look alike, and the question chip set the shape. */}
         {row.encrypted && locked ? (
           <button
             type="button"
             onClick={() => setPanelOpen((open) => !open)}
             aria-expanded={panelOpen}
-            title="Locked — enter its password"
-            aria-label="Locked — enter its password"
-            className="shrink-0 cursor-pointer"
+            title="Enter its password to prepare it"
+            className={cn(
+              CHIP,
+              "border-accent text-accent cursor-pointer border",
+              panelOpen && "bg-accent/10",
+            )}
           >
-            <Lock
-              className={cn(
-                "size-3",
-                panelOpen
-                  ? "text-accent"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            />
+            Locked
           </button>
         ) : null}
         {row.encrypted && !locked ? (

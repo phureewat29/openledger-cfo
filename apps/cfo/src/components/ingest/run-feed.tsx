@@ -247,6 +247,19 @@ export function RunFeed({
       className={className}
       bodyClassName="flex min-h-0 flex-1 flex-col p-0"
     >
+      {/* Above the scroll region: the auto-follow would push a poll failure
+          out of sight within one entry. */}
+      {feed.error === null && cancelError === null ? null : (
+        <div className="border-border shrink-0 border-b px-3 py-1.5">
+          {feed.error === null ? null : (
+            <p className="text-destructive text-[10px]">{feed.error}</p>
+          )}
+          {cancelError === null ? null : (
+            <p className="text-destructive text-[10px]">{cancelError}</p>
+          )}
+        </div>
+      )}
+
       <div
         ref={scrollRef}
         onScroll={(event) => {
@@ -257,12 +270,6 @@ export function RunFeed({
         }}
         className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
       >
-        {feed.error === null ? null : (
-          <p className="text-destructive pb-1 text-[10px]">{feed.error}</p>
-        )}
-        {cancelError === null ? null : (
-          <p className="text-destructive pb-1 text-[10px]">{cancelError}</p>
-        )}
         {body()}
       </div>
 
