@@ -1,8 +1,11 @@
 "use client";
 
 import { useId, useState } from "react";
+import { partition } from "es-toolkit";
 
 import { cn } from "@openledger-fleet/ui";
+
+import { RemoveButton } from "~/components/plan/remove-button";
 
 type UploadReply =
   | { readonly ok: true }
@@ -12,6 +15,20 @@ interface UploadFailure {
   readonly name: string;
   readonly error: string;
 }
+
+/** What one batch left behind, kept until the operator waves it away. */
+interface Outcome {
+  readonly landed: number;
+  readonly total: number;
+  readonly failures: readonly UploadFailure[];
+}
+
+/** Mirrors the upload route's gate, so a wrong type fails before the wire. */
+const ALLOWED = new Set(["pdf", "png", "jpg", "jpeg", "webp"]);
+const TYPE_ERROR = "Only PDF, PNG, JPG and WEBP files can be ingested";
+
+const extensionOf = (name: string): string =>
+  name.split(".").pop()?.toLowerCase() ?? "";
 
 const messageOf = (cause: unknown): string =>
   cause instanceof Error ? cause.message : "Upload failed";
@@ -34,29 +51,40 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
   const inputId = useId();
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number }>();
-  const [failures, setFailures] = useState<readonly UploadFailure[]>([]);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const busy = progress !== undefined;
 
   const send = async (picked: FileList | null) => {
     const files = Array.from(picked ?? []);
     if (files.length === 0) return;
-    setProgress({ done: 0, total: files.length });
-    setFailures([]);
+    // The `accept` attribute only guards the picker; a drop bypasses it.
+    const [supported, rejected] = partition(files, (file) =>
+      ALLOWED.has(extensionOf(file.name)),
+    );
+    const failed: UploadFailure[] = rejected.map((file) => ({
+      name: file.name,
+      error: TYPE_ERROR,
+    }));
+    setOutcome(null);
+    if (supported.length === 0) {
+      setOutcome({ landed: 0, total: files.length, failures: failed });
+      return;
+    }
+    setProgress({ done: 0, total: supported.length });
 
     // One request per file: each failure keeps the route's own message, and
     // serial order keeps collision suffixes matching the order files were picked.
-    const failed: UploadFailure[] = [];
     let landed = 0;
-    for (const [index, file] of files.entries()) {
-      setProgress({ done: index, total: files.length });
+    for (const [index, file] of supported.entries()) {
+      setProgress({ done: index, total: supported.length });
       const reply = await upload(file);
       if (reply.ok) landed += 1;
       else failed.push({ name: file.name, error: reply.error });
     }
 
     setProgress(undefined);
-    setFailures(failed);
+    setOutcome({ landed, total: files.length, failures: failed });
     if (landed > 0) onUploaded();
   };
 
@@ -105,11 +133,33 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
           input.value = "";
         }}
       />
-      {failures.map((failure) => (
-        <p key={failure.name} className="text-destructive text-xs">
-          {failure.name} — {failure.error}
-        </p>
-      ))}
+      {outcome === null || outcome.failures.length === 0 ? null : (
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            {/* A mixed batch says both halves; two red lines alone read as
+                "nothing landed" when three files did. */}
+            {outcome.landed === 0 ? null : (
+              <p className="text-muted-foreground text-xs">
+                Uploaded {String(outcome.landed)} of {String(outcome.total)}.
+              </p>
+            )}
+            {outcome.failures.map((failure, index) => (
+              <p
+                key={`${failure.name}-${String(index)}`}
+                className="text-destructive text-xs"
+              >
+                {failure.name} — {failure.error}
+              </p>
+            ))}
+          </div>
+          <RemoveButton
+            label="Dismiss upload failures"
+            className="size-5 shrink-0"
+            disabled={false}
+            onClick={() => setOutcome(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }
