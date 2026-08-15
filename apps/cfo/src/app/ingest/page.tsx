@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { isAiEnabled } from "@openledger-fleet/agent";
 
+import { SetupCard } from "~/app/_components/setup-card";
 import { INGEST_GRID, INGEST_NARROW, INGEST_WIDE } from "~/app/ingest/grid";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { CliLog } from "~/components/ingest/cli-log";
@@ -9,6 +10,7 @@ import { FileList } from "~/components/ingest/file-list";
 import { InfoPane } from "~/components/ingest/info-pane";
 import { RunFeed } from "~/components/ingest/run-feed";
 import { SelectionProvider } from "~/components/ingest/selection";
+import { ledgerHead, toFailure } from "~/server/head";
 import { HydrateClient, prefetch, trpc } from "~/trpc/server";
 
 export const metadata: Metadata = { title: "Ingest · Corgi CFO" };
@@ -17,6 +19,21 @@ export const metadata: Metadata = { title: "Ingest · Corgi CFO" };
 export const dynamic = "force-dynamic";
 
 export default async function IngestPage() {
+  /**
+   * The head read the status bar already pays for (request-cached, so this
+   * costs no extra spawn) doubles as the health probe: a broken ledger is one
+   * setup screen, not four pane-local errors.
+   */
+  const probe = await ledgerHead().then(
+    () => null,
+    (cause: unknown) => toFailure(cause),
+  );
+  if (probe !== null && !probe.ok) {
+    return (
+      <SetupCard reason={probe.error.reason} message={probe.error.message} />
+    );
+  }
+
   /**
    * Awaited, so the panes render their rows in this pass and hydrate onto them.
    * Each read is the one the pane would otherwise issue on mount; the inputs

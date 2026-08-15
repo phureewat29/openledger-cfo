@@ -111,7 +111,6 @@ function LockPanel({ relPath }: { relPath: string }) {
         </Field>
         <Button
           size="sm"
-          className="h-7 px-2"
           disabled={password.length === 0 || busy}
           onClick={() => void submit({ password })}
         >
@@ -120,7 +119,6 @@ function LockPanel({ relPath }: { relPath: string }) {
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 px-2"
           disabled={busy}
           title="Skips this file; the run moves on without it."
           onClick={() => void submit({ skip: true })}
@@ -237,7 +235,7 @@ export function RunFeed({
             <Button
               size="sm"
               variant="ghost"
-              className="text-muted-foreground h-5 px-1.5 text-[10px]"
+              className="text-muted-foreground"
               disabled={cancelling}
               onClick={() => void cancel(run.runId)}
             >

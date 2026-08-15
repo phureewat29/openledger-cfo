@@ -22,6 +22,7 @@ import { Dropzone } from "~/components/ingest/dropzone";
 import { FileRow } from "~/components/ingest/file-row";
 import { ModeDialog } from "~/components/ingest/mode-dialog";
 import { useSelection } from "~/components/ingest/selection";
+import { LoadingLine } from "~/components/loading-line";
 import { RemoveButton } from "~/components/plan/remove-button";
 import { useHydrated } from "~/components/use-hydrated";
 import { countNoun } from "~/domain/format";
@@ -270,7 +271,6 @@ export function FileList({
             <Button
               key={action.kind}
               size="sm"
-              className="h-5 px-1.5 text-[10px]"
               disabled={live || busy || action.targets.length === 0}
               /* A greyed button with no reason reads as broken. */
               title={live ? "A run is working the queue" : undefined}
@@ -283,7 +283,6 @@ export function FileList({
             <Button
               size="sm"
               variant="ghost"
-              className="h-5 px-1.5 text-[10px]"
               disabled={busy}
               onClick={() => selectAll(rows.map((row) => row.rel_path))}
             >
@@ -291,13 +290,7 @@ export function FileList({
             </Button>
           )}
           {selected.size === 0 ? null : (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-5 px-1.5 text-[10px]"
-              disabled={busy}
-              onClick={clear}
-            >
+            <Button size="sm" variant="ghost" disabled={busy} onClick={clear}>
               Clear
             </Button>
           )}
@@ -313,7 +306,7 @@ export function FileList({
           </p>
           <Button
             size="sm"
-            className="h-6 shrink-0 px-2"
+            className="shrink-0"
             disabled={busy}
             onClick={() =>
               (confirming.kind === "close" ? closeFiles : removeFiles).mutate(
@@ -326,7 +319,7 @@ export function FileList({
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 shrink-0 px-2"
+            className="shrink-0"
             disabled={busy}
             onClick={() => setConfirming(null)}
           >
@@ -366,7 +359,11 @@ export function FileList({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {rows.length === 0 ? (
+        {query.isPending ? (
+          <p className="px-3 py-2">
+            <LoadingLine />
+          </p>
+        ) : rows.length === 0 ? (
           <p className="text-muted-foreground px-3 py-2 text-xs">
             Nothing in the data directory.
           </p>

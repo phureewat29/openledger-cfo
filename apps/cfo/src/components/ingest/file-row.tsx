@@ -218,7 +218,6 @@ function Row({
             </Field>
             <Button
               size="sm"
-              className="h-7 px-2"
               disabled={password.length === 0 || prepare.isPending}
               onClick={unlock}
             >

@@ -99,7 +99,6 @@ function QuestionRow({ row }: { row: IngestQuestion }) {
         />
         <Button
           size="sm"
-          className="h-7 px-2"
           disabled={response.trim().length === 0 || busy}
           onClick={() =>
             answer.mutate({ id: row.id, response: response.trim() })
@@ -122,7 +121,6 @@ function QuestionRow({ row }: { row: IngestQuestion }) {
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 px-2"
           disabled={busy}
           onClick={() => defer.mutate({ id: row.id, days: deferDays })}
         >
