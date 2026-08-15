@@ -144,8 +144,15 @@ export function RunFeed({
   const feed = useIngestRun();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stuckRef = useRef(true);
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState<string | null>(null);
+  /**
+   * Which run the Cancel press belongs to, so the pressed state cannot leak
+   * onto the next run: a cancel is settled by the poll flipping the status,
+   * not by its own response.
+   */
+  const [cancelState, setCancelState] = useState<{
+    runId: string;
+    error: string | null;
+  } | null>(null);
 
   /**
    * Gated on hydrated, not just on what the poll holds: the provider polls from
@@ -163,21 +170,18 @@ export function RunFeed({
     element.scrollTop = element.scrollHeight;
   }, [entries]);
 
-  // A cancel is settled by the next poll, not by its response; the pressed
-  // state holds until the run's status actually moves.
-  useEffect(() => {
-    setCancelling(false);
-    setCancelError(null);
-  }, [run?.runId, run?.status]);
-
-  const cancel = async () => {
-    setCancelling(true);
+  const cancel = async (runId: string) => {
+    setCancelState({ runId, error: null });
     const result = await cancelIngestRun();
-    if (!result.ok) {
-      setCancelling(false);
-      setCancelError(result.message);
-    }
+    if (!result.ok) setCancelState({ runId, error: result.message });
   };
+
+  const pressed =
+    run !== null && cancelState !== null && cancelState.runId === run.runId
+      ? cancelState
+      : null;
+  const cancelling = pressed !== null && pressed.error === null;
+  const cancelError = pressed === null ? null : pressed.error;
 
   const body = () => {
     if (!enabled) {
@@ -233,7 +237,7 @@ export function RunFeed({
               variant="ghost"
               className="text-muted-foreground h-5 px-1.5 text-[10px]"
               disabled={cancelling}
-              onClick={() => void cancel()}
+              onClick={() => void cancel(run.runId)}
             >
               {cancelling ? "Cancelling…" : "Cancel"}
             </Button>

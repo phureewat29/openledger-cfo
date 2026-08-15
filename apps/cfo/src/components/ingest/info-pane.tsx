@@ -8,16 +8,17 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { cn } from "@openledger-fleet/ui";
 import { Button } from "@openledger-fleet/ui/button";
-import { Input } from "@openledger-fleet/ui/input";
+import { Input, Select } from "@openledger-fleet/ui/input";
 import { Pane } from "@openledger-fleet/ui/pane";
 
 import type { FileImpact, IngestQuestion } from "~/domain/ingest-files";
 import { useSelection } from "~/components/ingest/selection";
 import { LoadingLine } from "~/components/loading-line";
+import { RemoveButton } from "~/components/plan/remove-button";
 import { countNoun, moneyOf } from "~/domain/format";
 import { fileImpactOf, SETTLED } from "~/domain/ingest-files";
-import { runLine } from "~/domain/ingest-run";
 import { useTRPC } from "~/trpc/react";
 
 /** `prepare` writes one of these between pages, whichever reader produced the text. */
@@ -40,10 +41,18 @@ const contextOf = (context: unknown): string | null => {
   return json.slice(0, CONTEXT_CHARS);
 };
 
+/** How long a deferred question sleeps; the ledger takes 1–365 days. */
+const DEFER_CHOICES = [
+  { days: 7, label: "1 week" },
+  { days: 14, label: "2 weeks" },
+  { days: 30, label: "1 month" },
+] as const;
+
 function QuestionRow({ row }: { row: IngestQuestion }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [response, setResponse] = useState("");
+  const [deferDays, setDeferDays] = useState<number>(DEFER_CHOICES[0].days);
 
   const settled = {
     onSuccess: () =>
@@ -98,12 +107,24 @@ function QuestionRow({ row }: { row: IngestQuestion }) {
         >
           Answer
         </Button>
+        <Select
+          value={deferDays}
+          onChange={(event) => setDeferDays(Number(event.target.value))}
+          aria-label="Defer for"
+          className="h-7 shrink-0 px-1.5 text-[10px]"
+        >
+          {DEFER_CHOICES.map((choice) => (
+            <option key={choice.days} value={choice.days}>
+              {choice.label}
+            </option>
+          ))}
+        </Select>
         <Button
           size="sm"
           variant="ghost"
           className="h-7 px-2"
           disabled={busy}
-          onClick={() => defer.mutate({ id: row.id })}
+          onClick={() => defer.mutate({ id: row.id, days: deferDays })}
         >
           Defer
         </Button>
@@ -121,9 +142,35 @@ function QuestionRow({ row }: { row: IngestQuestion }) {
  * the questions the ledger raised from it. Which one is the selection's to
  * decide — View opens the document, a row's question chip opens the queue.
  */
+function ModeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "shrink-0 cursor-pointer text-[10px] tracking-[0.14em] uppercase",
+        active
+          ? "text-foreground"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function InfoPane({ className }: { className?: string }) {
   const trpc = useTRPC();
-  const { viewerFileId, viewerMode } = useSelection();
+  const { viewerFileId, viewerMode, view } = useSelection();
   const [includeDeferred, setIncludeDeferred] = useState(false);
 
   // The name is the file list's read, already in cache; this rides it.
@@ -172,12 +219,20 @@ export function InfoPane({ className }: { className?: string }) {
           (row) => row.file_id === viewerFileId,
         );
 
-  const name =
-    viewed?.rel_path ??
-    (viewerFileId === null ? undefined : `…${viewerFileId.slice(-6)}`);
+  // The full id when the queue does not know the file: six trailing characters
+  // name nothing the operator can find or act on.
+  const name = viewed?.rel_path ?? viewerFileId ?? undefined;
 
   const documentBody = () => {
     if (document.isError) {
+      // The queue settled without the row and the read failed: it was deleted.
+      if (viewed === undefined && files.isSuccess) {
+        return (
+          <p className="text-muted-foreground text-xs">
+            This file is no longer in the queue.
+          </p>
+        );
+      }
       return (
         <p className="text-destructive text-xs">{document.error.message}</p>
       );
@@ -288,7 +343,9 @@ export function InfoPane({ className }: { className?: string }) {
     if (raised.length === 0) {
       return (
         <p className="text-muted-foreground text-xs">
-          Nothing to answer for this file.
+          {viewed?.status === "pending"
+            ? `Nothing left to answer. Close ${viewed.rel_path} from the Files pane when it is ready.`
+            : "Nothing left to answer."}
         </p>
       );
     }
@@ -327,21 +384,61 @@ export function InfoPane({ className }: { className?: string }) {
     return countNoun(extraction.page_count, "page");
   };
 
+  const detailText = detail();
+  // Kept visible while the mode sits on questions, or an answered last
+  // question would take the way back to the text with it.
+  const showQuestions = raised.length > 0 || viewerMode === "questions";
+
   return (
     <Pane
       title="Info"
-      meta={viewerFileId === null ? undefined : runLine(name, detail())}
+      /* The header's uppercase is presentation; a filename is data, and
+         SCB-2024-01.PDF is not the name on disk. */
+      meta={
+        viewerFileId === null ? undefined : (
+          <>
+            <span className="normal-case">{name}</span>
+            {detailText === undefined ? null : ` · ${detailText}`}
+          </>
+        )
+      }
       actions={
-        viewerMode !== "questions" ? undefined : (
-          <label className="label flex cursor-pointer items-center gap-1 select-none">
-            <input
-              type="checkbox"
-              checked={includeDeferred}
-              onChange={(event) => setIncludeDeferred(event.target.checked)}
-              className="accent-accent size-3"
+        viewerFileId === null ? undefined : (
+          <span className="flex items-center gap-2">
+            <ModeButton
+              active={viewerMode === "document"}
+              onClick={() => view(viewerFileId)}
+            >
+              {settled ? "Rows" : "Text"}
+            </ModeButton>
+            {showQuestions ? (
+              <ModeButton
+                active={viewerMode === "questions"}
+                onClick={() => view(viewerFileId, "questions")}
+              >
+                Questions ({raised.length})
+              </ModeButton>
+            ) : null}
+            {viewerMode !== "questions" ? null : (
+              <label className="label flex cursor-pointer items-center gap-1 select-none">
+                <input
+                  type="checkbox"
+                  checked={includeDeferred}
+                  onChange={(event) =>
+                    setIncludeDeferred(event.target.checked)
+                  }
+                  className="accent-accent size-3"
+                />
+                Deferred
+              </label>
+            )}
+            <RemoveButton
+              label="Close"
+              className="size-5 shrink-0"
+              disabled={false}
+              onClick={() => view(null)}
             />
-            Deferred
-          </label>
+          </span>
         )
       }
       scroll
