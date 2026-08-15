@@ -305,7 +305,9 @@ export function FileList({
           {/* Said where it renders: a disabled button swallows its tooltip. */}
           {live ? (
             <span className="text-muted-foreground text-[10px]">
-              A run is working the queue — these come back when it finishes.
+              {actions.length > 0
+                ? "A run is working the queue — these come back when it finishes."
+                : "A run is working the queue."}
             </span>
           ) : null}
         </div>
