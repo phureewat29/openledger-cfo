@@ -22,6 +22,7 @@ import { Dropzone } from "~/components/ingest/dropzone";
 import { FileRow } from "~/components/ingest/file-row";
 import { ModeDialog } from "~/components/ingest/mode-dialog";
 import { useSelection } from "~/components/ingest/selection";
+import { RemoveButton } from "~/components/plan/remove-button";
 import { useHydrated } from "~/components/use-hydrated";
 import { countNoun } from "~/domain/format";
 import {
@@ -62,6 +63,9 @@ const NEEDS_AGENT: Record<FileActionKind, boolean> = {
 
 const countPart = (value: number, label: string) =>
   value > 0 ? `${String(value)} ${label}` : undefined;
+
+/** Error lines shown in full before the strip folds into a count. */
+const SHOWN_ERROR_LINES = 3;
 
 /**
  * What is still work, which is what this pane is for. Closed files are left
@@ -122,7 +126,7 @@ export function FileList({
   const [confirming, setConfirming] = useState<readonly IngestFile[] | null>(
     null,
   );
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<readonly string[]>([]);
 
   // Every mutation this page can run rewrites one of these two reads.
   const working = useIsMutating() > 0;
@@ -165,9 +169,9 @@ export function FileList({
     onSuccess: (failures) => {
       refresh();
       clear();
-      setError(failures[0] ?? null);
+      setErrors(failures);
     },
-    onError: (cause: Error) => setError(cause.message),
+    onError: (cause: Error) => setErrors([cause.message]),
   });
 
   const removeFiles = useMutation({
@@ -183,9 +187,9 @@ export function FileList({
       refresh();
       clear();
       setConfirming(null);
-      setError(failures[0] ?? null);
+      setErrors(failures);
     },
-    onError: (cause: Error) => setError(cause.message),
+    onError: (cause: Error) => setErrors([cause.message]),
   });
 
   const start = async (mode: RunMode) => {
@@ -193,7 +197,7 @@ export function FileList({
     setPending(null);
     if (scope === null) return;
     const result = await startIngestRun(scope, mode);
-    setError(result.ok ? null : result.message);
+    setErrors(result.ok ? [] : [result.message]);
   };
 
   const perform: Record<
@@ -211,6 +215,11 @@ export function FileList({
   const actions = actionsFor(rows, selected, openQuestions).filter(
     (action) => enabled || !NEEDS_AGENT[action.kind],
   );
+
+  // The queue read's failure joins the strip; only the mutations' are dismissable.
+  const shownErrors = query.isError
+    ? [query.error.message, ...errors]
+    : errors;
 
   // What a run leaves behind, said before it starts rather than found afterwards:
   // the whole queue's locked files, or for a named run the operator's own locked
@@ -304,16 +313,33 @@ export function FileList({
         <Dropzone onUploaded={refresh} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {query.isError ? (
-          <p className="text-destructive px-3 py-2 text-xs">
-            {query.error.message}
-          </p>
-        ) : null}
-        {error === null ? null : (
-          <p className="text-destructive px-3 py-2 text-xs">{error}</p>
-        )}
+      {/* Outside the scroll region: a failure a long queue can push out of
+          sight was never reported. Three lines, then the count of the rest. */}
+      {shownErrors.length === 0 ? null : (
+        <div className="border-border flex shrink-0 items-start gap-2 border-b px-3 py-1.5">
+          <div className="min-w-0 flex-1">
+            {shownErrors.slice(0, SHOWN_ERROR_LINES).map((line, index) => (
+              <p key={`${line}-${String(index)}`} className="text-destructive text-[10px]">
+                {line}
+              </p>
+            ))}
+            {shownErrors.length <= SHOWN_ERROR_LINES ? null : (
+              <p className="text-muted-foreground text-[10px]">
+                …and {String(shownErrors.length - SHOWN_ERROR_LINES)} more
+                failed.
+              </p>
+            )}
+          </div>
+          <RemoveButton
+            label="Dismiss errors"
+            className="size-5 shrink-0"
+            disabled={false}
+            onClick={() => setErrors([])}
+          />
+        </div>
+      )}
 
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {rows.length === 0 ? (
           <p className="text-muted-foreground px-3 py-2 text-xs">
             Nothing in the data directory.
