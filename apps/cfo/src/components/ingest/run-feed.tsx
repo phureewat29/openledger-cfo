@@ -59,28 +59,23 @@ function EntryRow({ entry }: { entry: RunEntry }) {
     );
   }
 
-  if (fileId === undefined) {
-    return (
-      <li className={cn("flex items-baseline gap-1.5", ENTRY_TONE[entry.kind])}>
-        <span className="min-w-0 flex-1 text-[10px]">{text}</span>
-        {entry.running === true ? <Pulse label="Running" /> : null}
-      </li>
-    );
-  }
-
   return (
-    <li className="flex items-baseline gap-1.5">
-      <button
-        type="button"
-        onClick={() => view(fileId)}
-        title="Show this statement's text"
-        className={cn(
-          "hover:text-accent min-w-0 flex-1 cursor-pointer truncate text-left text-[10px]",
-          ENTRY_TONE[entry.kind],
-        )}
-      >
-        {runLine(text, "view text")}
-      </button>
+    <li className={cn("flex items-baseline gap-1.5", ENTRY_TONE[entry.kind])}>
+      <span className="min-w-0 flex-1 text-[10px]">{text}</span>
+      {fileId === undefined ? null : (
+        <button
+          type="button"
+          /* An ask is about something the ledger wants answered; the others
+             are about the file itself. Each opens the face it talks about. */
+          onClick={() =>
+            view(fileId, entry.kind === "ask" ? "questions" : "document")
+          }
+          title="Open in Info"
+          className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer text-[10px] underline decoration-dotted"
+        >
+          Open
+        </button>
+      )}
       {entry.running === true ? <Pulse label="Running" /> : null}
     </li>
   );
