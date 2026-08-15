@@ -29,7 +29,7 @@ const TOOL_NOTICE: Record<string, string> = {
   deleteTransaction: "Deleted a transaction",
   recategorizeTransactions: "Moved a whole account's transactions",
   mergeTransactions: "Merged duplicates",
-  dropFile: "Dropped a statement's rows",
+  dropFile: "Dropped a file's rows",
   startIngestRun: "Started an ingest run",
 };
 

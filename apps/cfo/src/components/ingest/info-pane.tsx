@@ -16,6 +16,7 @@ import { Pane } from "@openledger-fleet/ui/pane";
 import type { FileImpact, IngestQuestion } from "~/domain/ingest-files";
 import { useSelection } from "~/components/ingest/selection";
 import { LoadingLine } from "~/components/loading-line";
+import { Field } from "~/components/plan/field";
 import { RemoveButton } from "~/components/plan/remove-button";
 import { countNoun, moneyOf } from "~/domain/format";
 import { fileImpactOf, SETTLED } from "~/domain/ingest-files";
@@ -89,14 +90,14 @@ function QuestionRow({ row }: { row: IngestQuestion }) {
         </p>
       )}
 
-      <div className="flex gap-1">
-        <Input
-          value={response}
-          onChange={(event) => setResponse(event.target.value)}
-          placeholder="Answer"
-          aria-label="Answer"
-          className="h-7 min-w-0 flex-1"
-        />
+      <div className="flex items-end gap-1">
+        <Field label="Answer" className="min-w-0 flex-1">
+          <Input
+            value={response}
+            onChange={(event) => setResponse(event.target.value)}
+            className="h-7"
+          />
+        </Field>
         <Button
           size="sm"
           disabled={response.trim().length === 0 || busy}
@@ -106,18 +107,19 @@ function QuestionRow({ row }: { row: IngestQuestion }) {
         >
           Answer
         </Button>
-        <Select
-          value={deferDays}
-          onChange={(event) => setDeferDays(Number(event.target.value))}
-          aria-label="Defer for"
-          className="h-7 shrink-0 px-1.5 text-[10px]"
-        >
-          {DEFER_CHOICES.map((choice) => (
-            <option key={choice.days} value={choice.days}>
-              {choice.label}
-            </option>
-          ))}
-        </Select>
+        <Field label="Defer for" className="shrink-0">
+          <Select
+            value={deferDays}
+            onChange={(event) => setDeferDays(Number(event.target.value))}
+            className="h-7 px-1.5 text-[10px]"
+          >
+            {DEFER_CHOICES.map((choice) => (
+              <option key={choice.days} value={choice.days}>
+                {choice.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <Button
           size="sm"
           variant="ghost"
@@ -333,6 +335,15 @@ export function InfoPane({ className }: { className?: string }) {
   };
 
   const questionsBody = () => {
+    // Without this, a deleted file's questions view claims there is nothing
+    // left to answer, which sounds like the file is fine.
+    if (viewed === undefined && files.isSuccess) {
+      return (
+        <p className="text-muted-foreground text-xs">
+          This file is no longer in the queue.
+        </p>
+      );
+    }
     if (questions.isError) {
       return (
         <p className="text-destructive text-xs">{questions.error.message}</p>
@@ -370,10 +381,10 @@ export function InfoPane({ className }: { className?: string }) {
     return settled ? summaryBody() : documentBody();
   };
 
+  // No questions count here: the Questions button in the actions slot already
+  // says it, and the same number twice three characters apart reads as two.
   const detail = () => {
-    if (viewerMode === "questions") {
-      return countNoun(raised.length, "question");
-    }
+    if (viewerMode === "questions") return undefined;
     if (settled) {
       if (posted.data === undefined) return undefined;
       return `${countNoun(posted.data.length, "row")} posted`;
@@ -403,35 +414,39 @@ export function InfoPane({ className }: { className?: string }) {
       actions={
         viewerFileId === null ? undefined : (
           <span className="flex items-center gap-2">
-            <ModeButton
-              active={viewerMode === "document"}
-              onClick={() => view(viewerFileId)}
-            >
-              {settled ? "Rows" : "Text"}
-            </ModeButton>
+            {/* One face means no toggle: a lone active button is a no-op. */}
             {showQuestions ? (
-              <ModeButton
-                active={viewerMode === "questions"}
-                onClick={() => view(viewerFileId, "questions")}
-              >
-                Questions ({raised.length})
-              </ModeButton>
+              <span className="border-border flex items-center gap-2 border-r pr-2">
+                <ModeButton
+                  active={viewerMode === "document"}
+                  onClick={() => view(viewerFileId)}
+                >
+                  {settled ? "Rows" : "Text"}
+                </ModeButton>
+                <ModeButton
+                  active={viewerMode === "questions"}
+                  onClick={() => view(viewerFileId, "questions")}
+                >
+                  Questions ({raised.length})
+                </ModeButton>
+                {viewerMode !== "questions" ? null : (
+                  <label className="label flex cursor-pointer items-center gap-1 select-none">
+                    <input
+                      type="checkbox"
+                      checked={includeDeferred}
+                      onChange={(event) =>
+                        setIncludeDeferred(event.target.checked)
+                      }
+                      className="accent-accent size-3"
+                    />
+                    Deferred
+                  </label>
+                )}
+              </span>
             ) : null}
-            {viewerMode !== "questions" ? null : (
-              <label className="label flex cursor-pointer items-center gap-1 select-none">
-                <input
-                  type="checkbox"
-                  checked={includeDeferred}
-                  onChange={(event) =>
-                    setIncludeDeferred(event.target.checked)
-                  }
-                  className="accent-accent size-3"
-                />
-                Deferred
-              </label>
-            )}
+            {/* Not "Close": that word writes INGESTED one pane over. */}
             <RemoveButton
-              label="Close"
+              label="Stop reading this file"
               className="size-5 shrink-0"
               disabled={false}
               onClick={() => view(null)}

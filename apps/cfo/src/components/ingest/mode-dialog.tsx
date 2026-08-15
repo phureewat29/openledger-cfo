@@ -27,8 +27,16 @@ const CHOICES: readonly {
 
 const MODE_KEY = "cfo.ingest.mode";
 
-const rememberedMode = (): RunMode | null =>
-  RUN_MODES.find((mode) => mode === localStorage.getItem(MODE_KEY)) ?? null;
+const rememberedMode = (): RunMode | null => {
+  try {
+    return (
+      RUN_MODES.find((mode) => mode === localStorage.getItem(MODE_KEY)) ?? null
+    );
+  } catch {
+    // Storage refused the read (blocked in some embeds); nothing is remembered.
+    return null;
+  }
+};
 
 const remember = (mode: RunMode): void => {
   try {

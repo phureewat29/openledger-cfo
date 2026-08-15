@@ -23,7 +23,7 @@ const ENTRIES: readonly Entry[] = [
   { href: "/", label: "Everything — money vital", icon: Activity, exact: true },
   { href: "/accounts", label: "Accounts — every balance", icon: Wallet },
   { href: "/plan", label: "Plan — budgets, goals, reminders", icon: Target },
-  { href: "/ingest", label: "Ingest — statements and questions", icon: Inbox },
+  { href: "/ingest", label: "Ingest — files and questions", icon: Inbox },
 ];
 
 const BADGE: Record<string, keyof RailBadges> = {

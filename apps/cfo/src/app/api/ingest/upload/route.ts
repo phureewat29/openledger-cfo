@@ -72,23 +72,23 @@ export async function POST(request: Request) {
     const file = form.get("file");
 
     if (!(file instanceof File)) {
-      return fail(400, "No file was attached to this upload");
+      return fail(400, "No file was attached to this upload.");
     }
     if (file.size === 0) {
-      return fail(400, "That file is empty");
+      return fail(400, "That file is empty.");
     }
     if (file.size > MAX_BYTES) {
-      return fail(413, "That file is larger than the 30 MB limit");
+      return fail(413, "That file is larger than the 30 MB limit.");
     }
 
     const extension = extensionOf(file.name);
     if (extension === undefined || !EXTENSIONS.has(extension)) {
-      return fail(415, "Only PDF, PNG, JPG and WEBP files can be ingested");
+      return fail(415, "Only PDF, PNG, JPG and WEBP files can be ingested.");
     }
 
     const name = safeName(file.name);
     if (name === undefined) {
-      return fail(400, "That filename has nothing usable in it");
+      return fail(400, "That filename has nothing usable in it.");
     }
 
     const dir = await ledger.config.dataDir();

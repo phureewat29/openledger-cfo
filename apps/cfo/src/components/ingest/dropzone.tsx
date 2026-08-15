@@ -25,7 +25,7 @@ interface Outcome {
 
 /** Mirrors the upload route's gate, so a wrong type fails before the wire. */
 const ALLOWED = new Set(["pdf", "png", "jpg", "jpeg", "webp"]);
-const TYPE_ERROR = "Only PDF, PNG, JPG and WEBP files can be ingested";
+const TYPE_ERROR = "Only PDF, PNG, JPG and WEBP files can be ingested.";
 
 const extensionOf = (name: string): string =>
   name.split(".").pop()?.toLowerCase() ?? "";
@@ -133,11 +133,11 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
           input.value = "";
         }}
       />
-      {outcome === null || outcome.failures.length === 0 ? null : (
+      {outcome === null ? null : (
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            {/* A mixed batch says both halves; two red lines alone read as
-                "nothing landed" when three files did. */}
+            {/* Every batch says what landed; a clean upload's only other
+                feedback is rows appearing a poll later. */}
             {outcome.landed === 0 ? null : (
               <p className="text-muted-foreground text-xs">
                 Uploaded {String(outcome.landed)} of {String(outcome.total)}.
