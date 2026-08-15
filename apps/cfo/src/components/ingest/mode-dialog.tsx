@@ -45,9 +45,9 @@ const NAMED_LOCKED = 3;
  * A count, never a promise: the queue tells the app a file is encrypted and
  * untouched, and only `oled` finds out whether the password behind it works.
  */
-const lockedLine = (locked: number, all: boolean): string => {
+const lockedLine = (locked: number): string => {
   const them = locked === 1 ? "it" : "them";
-  return `${countNoun(locked, "locked file")}${all ? "" : " in this selection"} will be skipped — unlock ${them} in the list first to include ${them}.`;
+  return `${countNoun(locked, "locked file")} in this selection will be skipped — unlock ${them} in the list first to include ${them}.`;
 };
 
 /**
@@ -56,13 +56,11 @@ const lockedLine = (locked: number, all: boolean): string => {
  * `showModal` hands focus to — Enter starts the run the way it started last.
  */
 function Choices({
-  all,
   files,
   locked,
   onPick,
   onClose,
 }: {
-  all: boolean;
   files: number;
   locked: readonly string[];
   onPick: (mode: RunMode) => void;
@@ -75,20 +73,16 @@ function Choices({
     onPick(mode);
   };
 
-  const scope = all
-    ? `the whole queue — ${countNoun(files, "file")}`
-    : countNoun(files, "file");
-
   return (
     <>
       <p className="label">How should questions be handled?</p>
       <p className="text-muted-foreground pt-1 text-[11px]">
-        The run will work {scope}.
+        The run will work {countNoun(files, "file")}.
       </p>
       {locked.length === 0 ? null : (
         <>
           <p className="text-accent pt-1 text-[11px]">
-            {lockedLine(locked.length, all)}
+            {lockedLine(locked.length)}
           </p>
           {locked.slice(0, NAMED_LOCKED).map((relPath) => (
             <p
@@ -138,15 +132,12 @@ function Choices({
  */
 export function ModeDialog({
   open,
-  all,
   files,
   locked,
   onPick,
   onClose,
 }: {
   open: boolean;
-  /** Whether the choice is about the whole queue or a selection. */
-  all: boolean;
   /** How many files the choice is about, so the question names its scope. */
   files: number;
   /** The files no run can read until a password arrives, by name. */
@@ -176,7 +167,6 @@ export function ModeDialog({
     >
       {open ? (
         <Choices
-          all={all}
           files={files}
           locked={locked}
           onPick={onPick}

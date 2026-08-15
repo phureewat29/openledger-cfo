@@ -201,7 +201,7 @@ export function RunFeed({
     if (entries.length === 0) {
       return (
         <p className="text-muted-foreground text-xs">
-          Nothing has run yet. Drop a file and press Ingest all.
+          Nothing has run yet. Drop a file, select it, and press Ingest.
         </p>
       );
     }

@@ -48,9 +48,6 @@ const paceOf = (summary: IngestCounts | null | undefined, working: boolean) =>
     : IDLE_MS;
 
 const ACTION_LABEL: Record<FileActionKind, (count: number) => string> = {
-  // Two labels on purpose: the whole queue and a selection are different asks,
-  // and the number alone was the only thing telling them apart.
-  "ingest-all": (count) => `Ingest all (${String(count)})`,
   ingest: (count) => `Ingest (${String(count)})`,
   done: (count) => `Close (${String(count)})`,
   delete: (count) => `Delete (${String(count)})`,
@@ -78,7 +75,6 @@ const CONFIRM_VERB: Record<ConfirmKind, string> = {
 
 /** Without a key the agent cannot run; closing and removing by hand still can. */
 const NEEDS_AGENT: Record<FileActionKind, boolean> = {
-  "ingest-all": true,
   ingest: true,
   done: false,
   delete: false,
@@ -110,9 +106,7 @@ const countsOf = (summary: IngestCounts | null | undefined, rows: number) => {
 };
 
 /** What the run route is asked for, held while the mode dialog is open. */
-type PendingRun =
-  | { readonly all: true; readonly count: number }
-  | { readonly pathOrIds: readonly string[] };
+type PendingRun = readonly string[];
 
 const removeFile = async (row: IngestFile): Promise<string | null> => {
   const response = await fetch("/api/ingest/file", {
@@ -218,10 +212,7 @@ export function FileList({
     const scope = pending;
     setPending(null);
     if (scope === null) return;
-    const result = await startIngestRun(
-      "pathOrIds" in scope ? scope : { all: true },
-      mode,
-    );
+    const result = await startIngestRun({ pathOrIds: scope }, mode);
     setErrors(result.ok ? [] : [result.message]);
   };
 
@@ -229,9 +220,7 @@ export function FileList({
     FileActionKind,
     (targets: readonly IngestFile[]) => void
   > = {
-    "ingest-all": (targets) => setPending({ all: true, count: targets.length }),
-    ingest: (targets) =>
-      setPending({ pathOrIds: targets.map((row) => row.rel_path) }),
+    ingest: (targets) => setPending(targets.map((row) => row.rel_path)),
     done: (targets) => setConfirming({ kind: "close", targets }),
     delete: (targets) => setConfirming({ kind: "delete", targets }),
   };
@@ -246,15 +235,11 @@ export function FileList({
     ? [query.error.message, ...errors]
     : errors;
 
-  // What a run leaves behind, said before it starts rather than found afterwards:
-  // the whole queue's locked files, or for a named run the operator's own locked
-  // picks, which the ingest action drops before they ever reach a run.
-  const picked =
-    pending !== null && "pathOrIds" in pending ? pending.pathOrIds : null;
+  // What a run leaves behind, said before it starts rather than found
+  // afterwards: the selection's locked files, which the ingest action drops
+  // before they ever reach a run.
   const lockedBehind = rows
-    .filter(
-      (row) => isLocked(row) && (picked === null || selected.has(row.rel_path)),
-    )
+    .filter((row) => isLocked(row) && selected.has(row.rel_path))
     .map((row) => row.rel_path);
 
   return (
@@ -384,14 +369,7 @@ export function FileList({
 
       <ModeDialog
         open={pending !== null}
-        all={picked === null}
-        files={
-          pending === null
-            ? 0
-            : "all" in pending
-              ? pending.count
-              : pending.pathOrIds.length
-        }
+        files={pending?.length ?? 0}
         locked={lockedBehind}
         onPick={(mode) => void start(mode)}
         onClose={() => setPending(null)}

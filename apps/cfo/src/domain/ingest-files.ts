@@ -124,7 +124,7 @@ export const fileImpactOf = (
   );
 };
 
-export type FileActionKind = "ingest-all" | "ingest" | "delete" | "done";
+export type FileActionKind = "ingest" | "delete" | "done";
 
 export interface FileAction {
   readonly kind: FileActionKind;
@@ -138,7 +138,7 @@ export interface FileAction {
  * offers every action that has something to work on and none that has nothing.
  */
 const SELECTION_ACTIONS: readonly {
-  readonly kind: Exclude<FileActionKind, "ingest-all">;
+  readonly kind: FileActionKind;
   readonly applies: (row: IngestFile, openQuestions: number) => boolean;
 }[] = [
   { kind: "ingest", applies: (row) => isIngestable(row) },
@@ -147,9 +147,8 @@ const SELECTION_ACTIONS: readonly {
 ];
 
 /**
- * An empty selection means the whole queue, which is the one action that
- * offers itself with nothing picked; anything picked narrows the bar to what
- * those rows can do.
+ * Nothing selected, nothing offered: running the whole queue is Select all
+ * then Ingest, one verb with one meaning instead of a second button.
  */
 export const actionsFor = (
   rows: readonly IngestFile[],
@@ -157,9 +156,6 @@ export const actionsFor = (
   openQuestions: Readonly<Record<string, number>>,
 ): FileAction[] => {
   const picked = rows.filter((row) => selected.has(row.rel_path));
-  if (picked.length === 0) {
-    return [{ kind: "ingest-all", targets: rows.filter(isIngestable) }];
-  }
 
   return SELECTION_ACTIONS.flatMap(({ kind, applies }) => {
     const targets = picked.filter((row) =>

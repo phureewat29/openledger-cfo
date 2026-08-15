@@ -81,9 +81,10 @@ const asJson = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-export type RunScopeInput =
-  | { readonly all: true }
-  | { readonly pathOrIds: readonly string[] };
+/** The route still takes `{all:true}` for the chat tool; this page always names its files. */
+export interface RunScopeInput {
+  readonly pathOrIds: readonly string[];
+}
 
 export const startIngestRun = (
   scope: RunScopeInput,
