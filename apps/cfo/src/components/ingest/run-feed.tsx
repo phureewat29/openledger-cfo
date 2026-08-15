@@ -144,6 +144,8 @@ export function RunFeed({
   const feed = useIngestRun();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stuckRef = useRef(true);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   /**
    * Gated on hydrated, not just on what the poll holds: the provider polls from
@@ -160,6 +162,22 @@ export function RunFeed({
     if (element === null || !stuckRef.current) return;
     element.scrollTop = element.scrollHeight;
   }, [entries]);
+
+  // A cancel is settled by the next poll, not by its response; the pressed
+  // state holds until the run's status actually moves.
+  useEffect(() => {
+    setCancelling(false);
+    setCancelError(null);
+  }, [run?.runId, run?.status]);
+
+  const cancel = async () => {
+    setCancelling(true);
+    const result = await cancelIngestRun();
+    if (!result.ok) {
+      setCancelling(false);
+      setCancelError(result.message);
+    }
+  };
 
   const body = () => {
     if (!enabled) {
@@ -214,9 +232,10 @@ export function RunFeed({
               size="sm"
               variant="ghost"
               className="text-muted-foreground h-5 px-1.5 text-[10px]"
-              onClick={() => void cancelIngestRun()}
+              disabled={cancelling}
+              onClick={() => void cancel()}
             >
-              Cancel
+              {cancelling ? "Cancelling…" : "Cancel"}
             </Button>
           </span>
         )
@@ -236,6 +255,9 @@ export function RunFeed({
       >
         {feed.error === null ? null : (
           <p className="text-destructive pb-1 text-[10px]">{feed.error}</p>
+        )}
+        {cancelError === null ? null : (
+          <p className="text-destructive pb-1 text-[10px]">{cancelError}</p>
         )}
         {body()}
       </div>

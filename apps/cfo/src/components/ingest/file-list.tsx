@@ -49,8 +49,28 @@ const paceOf = (summary: IngestCounts | null | undefined, working: boolean) =>
 const ACTION_LABEL: Record<FileActionKind, (count: number) => string> = {
   "ingest-all": (count) => `Ingest (${String(count)})`,
   ingest: (count) => `Ingest (${String(count)})`,
-  done: (count) => `Done (${String(count)})`,
+  done: (count) => `Close (${String(count)})`,
   delete: (count) => `Delete (${String(count)})`,
+};
+
+/** Both write the ledger or the disk; neither moves without a second look. */
+type ConfirmKind = "close" | "delete";
+
+interface Confirming {
+  readonly kind: ConfirmKind;
+  readonly targets: readonly IngestFile[];
+}
+
+const CONFIRM_ASK: Record<ConfirmKind, (count: number) => string> = {
+  close: (count) =>
+    `Close ${countNoun(count, "file")}? Each is recorded in the ledger as ingested.`,
+  delete: (count) =>
+    `Delete ${countNoun(count, "file")}? Anything the ledger already registered is deregistered first — its rows and questions go with it.`,
+};
+
+const CONFIRM_VERB: Record<ConfirmKind, string> = {
+  close: "Close",
+  delete: "Delete",
 };
 
 /** Without a key the agent cannot run; closing and removing by hand still can. */
@@ -123,9 +143,7 @@ export function FileList({
   const { run } = useIngestRun();
   const { selected, selectAll, clear } = useSelection();
   const [pending, setPending] = useState<PendingRun | null>(null);
-  const [confirming, setConfirming] = useState<readonly IngestFile[] | null>(
-    null,
-  );
+  const [confirming, setConfirming] = useState<Confirming | null>(null);
   const [errors, setErrors] = useState<readonly string[]>([]);
 
   // Every mutation this page can run rewrites one of these two reads.
@@ -169,6 +187,7 @@ export function FileList({
     onSuccess: (failures) => {
       refresh();
       clear();
+      setConfirming(null);
       setErrors(failures);
     },
     onError: (cause: Error) => setErrors([cause.message]),
@@ -207,8 +226,8 @@ export function FileList({
     "ingest-all": () => setPending({ all: true }),
     ingest: (targets) =>
       setPending({ pathOrIds: targets.map((row) => row.rel_path) }),
-    done: (targets) => closeFiles.mutate(targets),
-    delete: (targets) => setConfirming(targets),
+    done: (targets) => setConfirming({ kind: "close", targets }),
+    delete: (targets) => setConfirming({ kind: "delete", targets }),
   };
 
   const busy = closeFiles.isPending || removeFiles.isPending;
@@ -248,14 +267,14 @@ export function FileList({
               size="sm"
               className="h-5 px-1.5 text-[10px]"
               disabled={live || busy || action.targets.length === 0}
+              /* A greyed button with no reason reads as broken. */
+              title={live ? "A run is working the queue" : undefined}
               onClick={() => perform[action.kind](action.targets)}
             >
               {ACTION_LABEL[action.kind](action.targets.length)}
             </Button>
           ))}
-          {/* Mutually exclusive with Clear: five buttons overflow the header
-              at the pane's own tiers, and a partial pick already has Clear. */}
-          {selected.size > 0 || rows.length === 0 ? null : (
+          {rows.length === 0 || selected.size >= rows.length ? null : (
             <Button
               size="sm"
               variant="ghost"
@@ -285,23 +304,25 @@ export function FileList({
       {confirming === null ? null : (
         <div className="border-border bg-secondary/40 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
           <p className="min-w-0 flex-1 text-[11px]">
-            Delete {countNoun(confirming.length, "file")}? Anything the ledger
-            already registered is deregistered first — its rows and questions go
-            with it.
+            {CONFIRM_ASK[confirming.kind](confirming.targets.length)}
           </p>
           <Button
             size="sm"
             className="h-6 shrink-0 px-2"
-            disabled={removeFiles.isPending}
-            onClick={() => removeFiles.mutate(confirming)}
+            disabled={busy}
+            onClick={() =>
+              (confirming.kind === "close" ? closeFiles : removeFiles).mutate(
+                confirming.targets,
+              )
+            }
           >
-            Delete
+            {CONFIRM_VERB[confirming.kind]}
           </Button>
           <Button
             size="sm"
             variant="ghost"
             className="h-6 shrink-0 px-2"
-            disabled={removeFiles.isPending}
+            disabled={busy}
             onClick={() => setConfirming(null)}
           >
             Cancel

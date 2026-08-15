@@ -116,24 +116,26 @@ function Row({
         <input
           type="checkbox"
           checked={picked}
-          onChange={() => {
-            toggle(row.rel_path);
-            // Picking pulls the info pane along, so a multi-select reads out
-            // whichever file was picked last.
-            if (!picked && fileId !== null) view(fileId);
-          }}
+          onChange={() => toggle(row.rel_path)}
           aria-label={`Select ${row.rel_path}`}
           className="accent-accent size-3 shrink-0 cursor-pointer"
         />
-        <button
-          type="button"
-          onClick={() =>
-            fileId === null ? toggle(row.rel_path) : view(fileId)
-          }
-          className="min-w-0 flex-1 cursor-pointer text-left text-[11px] break-all"
-        >
-          {row.rel_path}
-        </button>
+        {/* Only a registered file has anything to read; an unregistered name
+            is just a name, and a button on it would have to mean something else. */}
+        {fileId === null ? (
+          <span className="min-w-0 flex-1 text-[11px] break-all">
+            {row.rel_path}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => view(fileId)}
+            title="Open in Info"
+            className="min-w-0 flex-1 cursor-pointer text-left text-[11px] break-all"
+          >
+            {row.rel_path}
+          </button>
+        )}
         {row.encrypted ? (
           <Lock
             className="text-muted-foreground size-3 shrink-0"
