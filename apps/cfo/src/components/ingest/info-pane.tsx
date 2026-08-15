@@ -360,8 +360,8 @@ export function InfoPane({ className }: { className?: string }) {
     if (viewerFileId === null) {
       return (
         <p className="text-muted-foreground text-xs">
-          Pick a file to read it here — extracted text while it is open, what it
-          posted once it closed. A row&apos;s question chip opens what the
+          Open a file to read it here — its text while it is open, what it
+          posted once it closed. A row&apos;s question count opens what the
           ledger asked about it.
         </p>
       );

@@ -48,7 +48,9 @@ const paceOf = (summary: IngestCounts | null | undefined, working: boolean) =>
     : IDLE_MS;
 
 const ACTION_LABEL: Record<FileActionKind, (count: number) => string> = {
-  "ingest-all": (count) => `Ingest (${String(count)})`,
+  // Two labels on purpose: the whole queue and a selection are different asks,
+  // and the number alone was the only thing telling them apart.
+  "ingest-all": (count) => `Ingest all (${String(count)})`,
   ingest: (count) => `Ingest (${String(count)})`,
   done: (count) => `Close (${String(count)})`,
   delete: (count) => `Delete (${String(count)})`,
@@ -66,7 +68,7 @@ const CONFIRM_ASK: Record<ConfirmKind, (count: number) => string> = {
   close: (count) =>
     `Close ${countNoun(count, "file")}? Each is recorded in the ledger as ingested.`,
   delete: (count) =>
-    `Delete ${countNoun(count, "file")}? Anything the ledger already registered is deregistered first — its rows and questions go with it.`,
+    `Delete ${countNoun(count, "file")}? Rows and questions the ledger recorded for them go too.`,
 };
 
 const CONFIRM_VERB: Record<ConfirmKind, string> = {

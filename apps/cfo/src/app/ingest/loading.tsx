@@ -31,7 +31,7 @@ export default function IngestLoading() {
         >
           <div className="border-border shrink-0 border-b p-2">
             <div className="border-border text-muted-foreground flex h-7 items-center rounded-md border border-dashed px-2 text-xs">
-              Drop statements, or click — PDF, PNG, JPG, WEBP
+              Drop files, or click — PDF, PNG, JPG, WEBP
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">

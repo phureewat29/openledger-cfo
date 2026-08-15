@@ -17,6 +17,7 @@ import { Input } from "@openledger-fleet/ui/input";
 import type { IngestFile } from "~/domain/ingest-files";
 import { useSelection } from "~/components/ingest/selection";
 import { Field } from "~/components/plan/field";
+import { countNoun } from "~/domain/format";
 import { isLocked, SETTLED, STATUS_LABEL } from "~/domain/ingest-files";
 import { runLine } from "~/domain/ingest-run";
 import { useTRPC } from "~/trpc/react";
@@ -184,7 +185,7 @@ function Row({
               "border-accent text-accent hover:bg-secondary cursor-pointer border",
             )}
           >
-            {openQuestions} to clarify
+            {countNoun(openQuestions, "question")}
           </button>
         )}
         <span className={cn(CHIP, STATUS_CHIP[row.status])}>

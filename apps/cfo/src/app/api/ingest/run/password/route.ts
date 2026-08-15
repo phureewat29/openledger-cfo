@@ -18,7 +18,11 @@ export async function POST(request: Request) {
   const parsed = BodySchema.safeParse(body);
   if (!parsed.success) {
     return Response.json(
-      { ok: false, error: 'Send {"password":"…"} or {"skip":true}' },
+      {
+        ok: false,
+        error:
+          "The password request was malformed — type the password again and resubmit.",
+      },
       { status: 400 },
     );
   }

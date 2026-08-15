@@ -43,7 +43,7 @@ export async function DELETE(request: Request) {
     if (!body.success) {
       return fail(
         400,
-        'Send {"relPath":"…","status":"…"} and, once the ledger holds one, {"fileId":"sf-…"}',
+        "The delete request was malformed — reload the page and try again.",
       );
     }
 

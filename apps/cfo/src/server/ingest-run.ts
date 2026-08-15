@@ -392,7 +392,7 @@ const noteClarifications = async (): Promise<void> => {
 
   for (const file of waiting) {
     note(
-      runLine(file.relPath, "waiting for clarification"),
+      runLine(file.relPath, "has open questions"),
       countOf(file.open, "open question", "open questions"),
     );
   }
@@ -898,7 +898,7 @@ const labelOf = (scope: RunScope): string => {
 /** Which way this run was asked to handle what the ledger asks back. */
 const MODE_NOTE: Record<RunMode, string> = {
   auto: "auto — the agent answers the questions itself",
-  normal: "normal — ambiguous items wait for you",
+  normal: "normal — ambiguous questions wait for you",
 };
 
 export const startRun = async (
