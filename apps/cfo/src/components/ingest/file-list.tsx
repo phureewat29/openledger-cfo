@@ -246,7 +246,9 @@ export function FileList({
   const firstAsk = asking[0]?.file_id ?? null;
   // An auto run answers its own questions; calling for the operator during one
   // would be false, and its Answer press would race the agent for the row.
-  const agentAnswering = live && run.mode !== "normal";
+  // Strict equality: an unknown mode over-prompts, which beats telling the
+  // operator to ignore questions a normal run genuinely left for them.
+  const agentAnswering = live && run.mode === "auto";
 
   const showSelectAll = rows.length > 0 && selected.size < rows.length;
   const showClear = selected.size > 0;
@@ -301,7 +303,7 @@ export function FileList({
             </Button>
           )}
           {/* Said where it renders: a disabled button swallows its tooltip. */}
-          {live && actions.length > 0 ? (
+          {live ? (
             <span className="text-muted-foreground text-[10px]">
               A run is working the queue — these come back when it finishes.
             </span>
@@ -312,12 +314,16 @@ export function FileList({
       {confirming === null ? null : (
         <div className="border-border bg-secondary/40 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
           <p className="min-w-0 flex-1 text-[11px]">
-            {CONFIRM_ASK[confirming.kind](confirming.targets.length)}
+            {live
+              ? "A run is working the queue — wait for it to finish."
+              : CONFIRM_ASK[confirming.kind](confirming.targets.length)}
           </p>
           <Button
             size="sm"
             className="shrink-0"
-            disabled={busy}
+            /* The run lock holds here too: a confirm staged before a run must
+               not execute into it. Cancel stays open — a way out never locks. */
+            disabled={busy || live}
             onClick={() =>
               (confirming.kind === "close" ? closeFiles : removeFiles).mutate(
                 confirming.targets,

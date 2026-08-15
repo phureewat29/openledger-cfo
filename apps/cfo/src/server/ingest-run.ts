@@ -447,8 +447,7 @@ const settleFailure = (run: Run, cause: unknown): void => {
     return;
   }
   settle(run, "failed");
-  note("Run failed.", messageOf(cause));
-  note("Run stopped", tallySaid(run.tally));
+  note("Run failed.", runLine(messageOf(cause), tallySaid(run.tally)));
 };
 
 interface Unlocked {
