@@ -49,7 +49,6 @@ export function ChatPane({ enabled }: { enabled: boolean }) {
 
   const ask = (text: string) => {
     if (text.trim().length === 0) return;
-    setInput("");
     queue.ask(text, pathname, model);
   };
 
@@ -160,7 +159,10 @@ export function ChatPane({ enabled }: { enabled: boolean }) {
             <PromptInput
               value={input}
               onValueChange={setInput}
-              onSubmit={() => ask(input)}
+              onSubmit={() => {
+                ask(input);
+                setInput("");
+              }}
               busy={busy}
               onStop={stop}
               placeholder={PLACEHOLDER}
