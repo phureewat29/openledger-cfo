@@ -11,11 +11,17 @@ import { sanitizeLabel } from "./sanitize";
 const FollowUps = z.object({
   suggestions: z
     .array(z.string())
-    .describe("At most three follow-ups, each under six words"),
+    .describe("At most four follow-ups, each under six words"),
 });
 
 /** The answer is already on screen; nothing here is worth holding it open for. */
 const TIMEOUT_MS = 6_000;
+/**
+ * Three are shown, four are asked for. The length gate below drops a candidate
+ * outright, and this domain's nouns are long enough that a suggestion can keep
+ * to six words and still overrun it; the fourth is the spare that keeps such a
+ * drop from costing the strip a row.
+ */
 const MAX_COUNT = 3;
 /**
  * What the pane fits whole at its narrowest — a 320px column, which is every
@@ -44,9 +50,9 @@ const INSTRUCTIONS = `You write what a household asks its CFO next. The CFO work
 
 Suggest only work it can actually do: totals over a date range, individual transactions and merchants, account balances, which statement files were imported, goal progress from the briefing, and corrections to what the ledger recorded — a charge filed under the wrong account, a row imported twice, a balance that disagrees with the statement.
 
-- At most three, ordered by what the household would want first.
+- At most four, ordered by what the household would want first.
 - Under six words each, sentence case, no question mark.
-- Say them the way the household would say them: "Where should the freed cash go", not "Give freed cash a destination".
+- Household words, not consultant register: "how much did X cost", never "analyse X expenditure". The shape is the lesson; X is never a real suggestion.
 - No figure the answer did not already state.
 - Follow this answer: take up what it raised and left unfinished, and never repeat a question already asked.
 - When the answer names something the ledger has wrong, make one of them that correction.
@@ -128,10 +134,12 @@ export const suggestFollowUps = async (
 
     return clean(parsed.data.suggestions, input.asked);
   } catch (error) {
-    // A stopped run and a spent deadline are ordinary. Anything else is the
-    // gateway refusing the call, and chips that go quiet for good should not
-    // do it silently — nothing on screen would ever say they had stopped.
-    if (!signal.aborted) console.error("follow-up suggestions failed", error);
+    // A user who stopped the run explains itself. Everything else — a refused
+    // call, or a gateway grown slow enough to spend the deadline every time —
+    // ends the chips for good with nothing on screen ever saying so.
+    if (!input.signal?.aborted) {
+      console.error("follow-up suggestions failed", error);
+    }
     return NONE;
   }
 };
