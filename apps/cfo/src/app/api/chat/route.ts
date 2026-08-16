@@ -50,6 +50,7 @@ export async function POST(request: Request) {
         body.model !== undefined && MODEL_IDS.has(body.model)
           ? body.model
           : undefined,
+      followUps: true,
       // The runner lives in this app's module graph; the agent package takes
       // the tool ready-made rather than importing upward.
       extraTools: [

@@ -9,6 +9,7 @@ import {
   RECOMMENDED_MODELS,
 } from "@openledger-fleet/agent/catalog";
 
+import type { CfoChatMessage } from "./suggestions";
 import { OlLogo } from "~/components/logo";
 import { ChatMessage } from "./chat-message";
 import { Conversation } from "./conversation";
@@ -17,25 +18,34 @@ import { Greeting } from "./greeting";
 import { Thinking } from "./message";
 import { PromptInput } from "./prompt-input";
 import { QueuedPrompts, usePromptQueue } from "./prompt-queue";
-
-const SUGGESTIONS: readonly string[] = [
-  "How am I doing this month",
-  "Where is the money going",
-  "What should I cut",
-  "Am I on track for my goals",
-];
+import { useSuggestions } from "./suggestions";
 
 const PLACEHOLDER = "Talk to your money";
 
 export function ChatPane({ enabled }: { enabled: boolean }) {
   const [input, setInput] = useState("");
   const [model, setModel] = useState<string>(DEFAULT_MODEL);
+  const suggestions = useSuggestions();
   const pathname = usePathname();
   const dock = useChatDock();
-  const { messages, sendMessage, stop, status, error } = useChat();
+  const { messages, sendMessage, stop, status, error } =
+    useChat<CfoChatMessage>();
   const queue = usePromptQueue(sendMessage);
   const busy = status === "submitted" || status === "streaming";
   const turnKey = messages.findLast((message) => message.role === "user")?.id;
+
+  // Offer the next question only between turns. A prompt still queued means the
+  // user has already moved past whatever the last answer suggested, and the
+  // queue holds one past the run that settles it — hence both halves.
+  const idle = status === "ready" && queue.sending === undefined;
+  const last = messages.at(-1);
+  const followUps =
+    last?.role === "assistant"
+      ? (last.parts.find((part) => part.type === "data-suggestions")?.data ??
+        [])
+      : [];
+  const opening = messages.length === 0;
+  const offered = opening ? suggestions : followUps;
 
   const ask = (text: string) => {
     if (text.trim().length === 0) return;
@@ -126,10 +136,12 @@ export function ChatPane({ enabled }: { enabled: boolean }) {
           </p>
         ) : null}
 
-        {enabled && messages.length === 0 ? (
+        {enabled && idle && offered.length > 0 ? (
           <div className="border-border mt-auto flex shrink-0 flex-col items-stretch gap-0 border-t px-3 py-2">
-            <span className="label h-5 leading-5">Try</span>
-            {SUGGESTIONS.map((suggestion) => (
+            <span className="label h-5 leading-5">
+              {opening ? "Try" : "Ask next"}
+            </span>
+            {offered.map((suggestion) => (
               <button
                 key={suggestion}
                 type="button"

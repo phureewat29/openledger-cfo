@@ -1,7 +1,5 @@
 "use client";
 
-import type { UseChatHelpers } from "@ai-sdk/react";
-import type { UIMessage } from "ai";
 import { useEffect, useState } from "react";
 import { head, tail } from "es-toolkit";
 
@@ -15,6 +13,16 @@ export interface Prompt {
   /** Likewise the model picked when asking, not when the turn comes up. */
   readonly model: string;
 }
+
+/**
+ * All the queue asks of the chat, and narrower than `sendMessage`'s own
+ * signature on purpose: which message type the pane keeps its transcript in is
+ * none of the queue's business, and naming it here would tie the two together.
+ */
+type Send = (
+  message: { text: string },
+  options: { body: { context: { path: string }; model: string } },
+) => Promise<void>;
 
 interface Queue {
   /** Handed to the chat; the run it started has not settled yet. */
@@ -55,7 +63,7 @@ const advance = (state: Queue): Queue => ({
  * message list the second one now owns. So one prompt is out at a time and the
  * rest wait here, each still withdrawable, until the run settles.
  */
-export function usePromptQueue(send: UseChatHelpers<UIMessage>["sendMessage"]) {
+export function usePromptQueue(send: Send) {
   const [queue, setQueue] = useState(EMPTY);
   const { sending } = queue;
 
@@ -70,6 +78,7 @@ export function usePromptQueue(send: UseChatHelpers<UIMessage>["sendMessage"]) {
   }, [sending, send]);
 
   return {
+    sending,
     waiting: queue.waiting,
     ask: (text: string, path: string, model: string) =>
       setQueue((state) => enqueue(state, text, path, model)),
