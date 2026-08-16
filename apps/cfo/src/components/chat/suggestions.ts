@@ -1,7 +1,4 @@
-"use client";
-
 import type { UIMessage } from "ai";
-import { useSyncExternalStore } from "react";
 import { sampleSize } from "es-toolkit";
 
 /**
@@ -83,29 +80,11 @@ export const SUGGESTION_POOL: readonly string[] = [
   "Is now a good time to spend",
 ];
 
-/** The server and the hydration render must agree, so the opening four are fixed. */
-const OPENING: readonly string[] = SUGGESTION_POOL.slice(0, PICK_COUNT);
-
 /**
- * One draw per page load, held outside React. Drawing during a render would
- * give the server and the browser different answers and lose the hydration; a
- * store React subscribes to is the sanctioned way to hold something the server
- * cannot know. Both snapshots are stable references, which is what the hook
- * asks for.
+ * Drawn on the server, once per request, and handed down as a prop. The layout
+ * is already `force-dynamic`, so a fresh four cost nothing and arrive in the
+ * first paint — drawing in the browser instead would rewrite all four lines a
+ * beat after the reader's eyes had reached them.
  */
-let drawn: readonly string[] | null = null;
-
-const subscribe = (changed: () => void) => {
-  if (drawn === null) {
-    drawn = sampleSize(SUGGESTION_POOL, PICK_COUNT);
-    changed();
-  }
-  return () => undefined;
-};
-
-const drawnOrOpening = (): readonly string[] => drawn ?? OPENING;
-const opening = (): readonly string[] => OPENING;
-
-/** Four openers: the fixed set until the page is live, a random draw after. */
-export const useSuggestions = (): readonly string[] =>
-  useSyncExternalStore(subscribe, drawnOrOpening, opening);
+export const pickSuggestions = (): readonly string[] =>
+  sampleSize(SUGGESTION_POOL, PICK_COUNT);

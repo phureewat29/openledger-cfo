@@ -5,6 +5,7 @@ import { fontClassNames } from "@openledger-fleet/ui/fonts";
 
 import { ChatPane } from "~/components/chat/chat-pane";
 import { ChatDock } from "~/components/chat/dock";
+import { pickSuggestions } from "~/components/chat/suggestions";
 import { CliLogProvider } from "~/components/cli-log-provider";
 import { IngestRunProvider } from "~/components/ingest-run-provider";
 import { Rail } from "~/components/rail";
@@ -51,7 +52,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
                     >
                       {props.children}
                     </main>
-                    <ChatPane enabled={enabled} />
+                    <ChatPane enabled={enabled} openers={pickSuggestions()} />
                   </div>
                   <StatusBar chrome={chrome} aiEnabled={enabled} />
                 </div>

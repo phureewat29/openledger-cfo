@@ -18,14 +18,18 @@ import { Greeting } from "./greeting";
 import { Thinking } from "./message";
 import { PromptInput } from "./prompt-input";
 import { QueuedPrompts, usePromptQueue } from "./prompt-queue";
-import { useSuggestions } from "./suggestions";
 
 const PLACEHOLDER = "Talk to your money";
 
-export function ChatPane({ enabled }: { enabled: boolean }) {
+export function ChatPane({
+  enabled,
+  openers,
+}: {
+  enabled: boolean;
+  openers: readonly string[];
+}) {
   const [input, setInput] = useState("");
   const [model, setModel] = useState<string>(DEFAULT_MODEL);
-  const suggestions = useSuggestions();
   const pathname = usePathname();
   const dock = useChatDock();
   const { messages, sendMessage, stop, status, error } =
@@ -45,7 +49,7 @@ export function ChatPane({ enabled }: { enabled: boolean }) {
         [])
       : [];
   const opening = messages.length === 0;
-  const offered = opening ? suggestions : followUps;
+  const offered = opening ? openers : followUps;
 
   const ask = (text: string) => {
     if (text.trim().length === 0) return;
