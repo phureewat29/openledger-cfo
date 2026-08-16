@@ -11,11 +11,13 @@ export type CfoChatMessage = UIMessage<unknown, { suggestions: string[] }>;
 const PICK_COUNT = 4;
 
 /**
- * Openers for an empty pane. Every one has to be answerable from the briefing
- * or a tool the CFO agent actually holds — nothing about budgets or reminders,
- * which live in the control plane and not in its hands. Short enough to read
- * whole at the pane's narrowest, and phrased as an ask rather than a question
- * so the strip stays quiet.
+ * Openers for an empty pane. Every one asks about the household's own money —
+ * what it did, where it went, what it means — against figures the briefing or a
+ * tool can actually produce. Nothing administrative: tidying account names and
+ * hunting duplicate rows are chores, not questions worth putting to a CFO, and
+ * nothing about budgets or reminders, which live in the control plane and not
+ * in its hands. Short enough to read whole at the pane's narrowest, and phrased
+ * as an ask rather than a question so the strip stays quiet.
  */
 export const SUGGESTION_POOL: readonly string[] = [
   "How am I doing this month",
@@ -58,7 +60,7 @@ export const SUGGESTION_POOL: readonly string[] = [
   "What is my net worth",
   "Which account grew most this year",
   "How are my USD holdings doing",
-  "List all my accounts",
+  "Where is my money sitting",
   "Which account is bleeding money",
 
   "Project this month's spending",
@@ -67,11 +69,11 @@ export const SUGGESTION_POOL: readonly string[] = [
   "How does this month compare",
   "Where am I heading this quarter",
 
-  "Find duplicate transactions",
-  "Check for uncategorized spending",
-  "Reconcile my main bank balance",
-  "Which statements have I imported",
-  "Clean up my account names",
+  "Am I spending more than I earn",
+  "What are my fixed monthly costs",
+  "Which month cost me the most",
+  "How much have I spent this year",
+  "What is my largest monthly bill",
 
   "Can I afford a big trip",
   "Should I pay down debt first",
