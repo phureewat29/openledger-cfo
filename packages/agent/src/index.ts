@@ -10,6 +10,7 @@ import { backendFor, SKILLS_PATH } from "./memory";
 import { model } from "./model";
 import { AGENTS } from "./registry";
 import { toUIMessageStreamResponse } from "./stream";
+import { suggestFollowUps } from "./suggest";
 import { scopedQuestionTools } from "./tools/ingest";
 
 // The gateway key and a CLI-spawning connector both live behind this import.
@@ -42,6 +43,11 @@ export interface AgentOptions {
    * being imported from here.
    */
   extraTools?: readonly StructuredToolInterface[];
+  /**
+   * Offer the caller what to ask next once the answer is done. `stream` only:
+   * the suggestions ride out as a data part of the message they follow.
+   */
+  followUps?: boolean;
 }
 
 export interface Agent {
@@ -116,11 +122,27 @@ export const createAgent = (
 
   return {
     events,
-    stream: (messages, signal) =>
-      toUIMessageStreamResponse(events(messages, signal), {
+    stream: (messages, signal) => {
+      const asked = messages
+        .filter((message) => message.role === "user")
+        .map(textOf)
+        .filter((text) => text.length > 0);
+
+      return toUIMessageStreamResponse(events(messages, signal), {
         hiddenTools: spec.hiddenTools,
         secretInputs: spec.secretInputs,
-      }),
+        followUps: opts.followUps
+          ? (answer) =>
+              suggestFollowUps({
+                asked,
+                answer,
+                system: opts.system,
+                model: opts.model,
+                signal,
+              })
+          : undefined,
+      });
+    },
   };
 };
 
