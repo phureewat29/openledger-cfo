@@ -108,6 +108,12 @@ export interface BridgeOptions {
   hiddenTools?: readonly string[];
   /** Tool input fields, by tool name, whose values must never be echoed back. */
   secretInputs?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Given the answer just streamed, what the user might ask next. Called once
+   * the last token is out, and it holds the stream open while it runs, so it
+   * owns its own deadline. Returning nothing is the normal way to decline.
+   */
+  followUps?: (answer: string) => Promise<readonly string[]>;
 }
 
 const NONE: readonly string[] = [];
@@ -121,6 +127,8 @@ interface StreamState {
   pending: Map<number, ToolCallEntry>;
   /** Tool call ids we chose to hide, so their results stay hidden too. */
   hidden: Set<string>;
+  /** Every visible token of this run, for whatever reads the finished answer. */
+  answer: string;
 }
 
 const initialState = (): StreamState => ({
@@ -129,6 +137,7 @@ const initialState = (): StreamState => ({
   reasoningId: null,
   pending: new Map(),
   hidden: new Set(),
+  answer: "",
 });
 
 function* closeText(state: StreamState): Generator<UIMessageChunk> {
@@ -182,6 +191,7 @@ function* textDelta(
   const text = textOf(chunk.content);
   if (!text) return;
   yield* closeReasoning(state);
+  state.answer += text;
 
   const opening = state.textId === null;
   const id = state.textId ?? `t-${event.run_id ?? "0"}`;
@@ -322,6 +332,28 @@ function* toolOutput(
 }
 
 /**
+ * Rides out on the answer's own message as a data part, which is what keeps the
+ * chips attached to the turn that earned them once the transcript scrolls on.
+ * A run that said nothing has nothing to follow up, and a thrown or empty
+ * result is silence rather than an error: the answer is already delivered and
+ * garnish must not take it down.
+ */
+async function* followUpData(
+  state: StreamState,
+  followUps: BridgeOptions["followUps"],
+): AsyncGenerator<UIMessageChunk> {
+  if (followUps === undefined || state.answer.length === 0) return;
+
+  try {
+    const suggestions = await followUps(state.answer);
+    if (suggestions.length === 0) return;
+    yield { type: "data-suggestions", data: [...suggestions] };
+  } catch {
+    return;
+  }
+}
+
+/**
  * Converts LangGraph v2 events into AI SDK UI message chunks.
  *
  * Emits `start`/`finish` itself, so the output is byte-compatible with what
@@ -335,6 +367,7 @@ async function* toUIChunks(
     includeSubagents = false,
     hiddenTools = NONE,
     secretInputs = {},
+    followUps,
   } = options;
 
   const state = initialState();
@@ -371,6 +404,7 @@ async function* toUIChunks(
   }
 
   yield* closeStep(state);
+  yield* followUpData(state, followUps);
   yield { type: "finish" };
 }
 
