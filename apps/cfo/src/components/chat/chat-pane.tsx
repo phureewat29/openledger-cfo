@@ -140,8 +140,12 @@ export function ChatPane({
         ) : null}
 
         {enabled && idle && offered.length > 0 ? (
-          <div className="border-border mt-auto flex shrink-0 flex-col items-stretch gap-0 border-t px-3 py-2">
-            <span className="label h-5 leading-5">
+          <div
+            role="group"
+            aria-labelledby="offered-label"
+            className="border-border flex shrink-0 flex-col items-stretch gap-0 border-t px-3 py-2"
+          >
+            <span id="offered-label" className="label h-5 leading-5">
               {opening ? "Try" : "Ask next"}
             </span>
             {offered.map((suggestion) => (
@@ -149,9 +153,12 @@ export function ChatPane({
                 key={suggestion}
                 type="button"
                 onClick={() => ask(suggestion)}
-                className="hover:text-accent text-muted-foreground h-7 cursor-pointer truncate text-left text-xs"
+                className="hover:text-accent text-muted-foreground flex h-7 cursor-pointer items-center gap-1.5 text-left text-xs max-lg:h-9"
               >
-                › {suggestion}
+                <span aria-hidden className="shrink-0">
+                  ›
+                </span>
+                <span className="min-w-0 flex-1 truncate">{suggestion}</span>
               </button>
             ))}
           </div>
