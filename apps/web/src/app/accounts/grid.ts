@@ -24,5 +24,6 @@ export const GROUP_COL =
 
 export const GROUP_HALF = `${GROUP_COL} @2xl/main:col-span-6`;
 
+/** The wide-tier floor keeps the soft skeleton from collapsing to its header. */
 export const INVESTMENTS_COL =
-  "col-span-12 @2xl/main:h-[320px] @4xl/main:h-auto";
+  "col-span-12 @2xl/main:h-[320px] @4xl/main:h-auto @4xl/main:min-h-[320px]";
