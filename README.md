@@ -30,13 +30,12 @@ Every number on screen is derived, at request time, from [OpenLedger](https://ww
 
 ## Running Demo
 
-You need four things. Check each one:
+You need three things. Check each one:
 
 ```bash
 node --version     # ^22.21 or >=24 (Node 23 is not supported)
 pnpm --version     # pnpm package management
 oled --version     # npm install -g @aquartier/openledger
-psql --version     # any Postgres instance, reachable at POSTGRES_URL
 ```
 
 Then:
@@ -46,7 +45,7 @@ git clone https://github.com/phureewat29/openledger-cfo.git
 cd openledger-cfo
 pnpm install
 
-# set POSTGRES_URL; add OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY
+# optional: add OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY for the chat
 cp .env.example .env
 
 # pushes the control-plane schema, then loads the demo dataset
@@ -73,7 +72,7 @@ Two agents, both built on [deepagents](https://www.npmjs.com/package/deepagents)
 apps/web (Next.js 16)                    packages
 +--------------------------------+       +--------------------------------+
 | pages: server components,      | tRPC  | api: routers over the ledger   |
-| derived per request            +------>+ and the Postgres control plane |
+| derived per request            +------>+ and the SQLite control plane   |
 |                                |       +---------------+----------------+
 | chat + ingest runs:            |                       |
 | route handlers, SSE, abort     |       +---------------v----------------+
@@ -114,7 +113,7 @@ tooling/          shared toolchain
 ## Troubleshooting
 
 - **`oled` was not found**: `npm install -g @aquartier/openledger`, then `oled --version`.
-- **Postgres refused**: start it, or point `POSTGRES_URL` somewhere alive; then `pnpm db:push`.
+- **Tables missing or empty**: `pnpm db:push` recreates the schema in `cfo.db`, and `pnpm bootstrap` reseeds it.
 - **Node 23**: not in the support range. Use 22.21+ or 24+ (`.nvmrc` pins 22.21).
 - **Ingest cannot read a document**: image-only PDFs need OCR — set `ocrBaseUrl` and `ocrModel` in `.oled/config.json` to any OpenAI-compatible vision endpoint (the demo loader preserves both across resets); without them only text-layer PDFs work.
 - **Typecheck errors that make no sense**: a stale `dist/`; run `pnpm typecheck` from the root so the packages rebuild first.
