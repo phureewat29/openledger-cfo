@@ -2,7 +2,7 @@ import type {
   AccountCreateInput,
   AccountType,
   IngestRowInput,
-} from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";
 
 import { fromUnits, toUnits } from "./money";
 import { legsOf } from "./types";

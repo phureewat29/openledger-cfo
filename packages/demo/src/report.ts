@@ -1,4 +1,4 @@
-import type { OledError } from "@openledger-fleet/openledger";
+import type { OledError } from "@openledger-cfo/openledger";
 
 import type { Check } from "./invariants";
 

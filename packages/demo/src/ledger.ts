@@ -9,8 +9,8 @@ import type {
   OledError,
   OpenLedger,
   Result,
-} from "@openledger-fleet/openledger";
-import { err, ok } from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";
+import { err, ok } from "@openledger-cfo/openledger";
 
 import type { Life } from "./dataset";
 

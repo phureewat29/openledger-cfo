@@ -4,7 +4,7 @@ import type {
   OledError,
   OledErrorKind,
   Result,
-} from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";
 
 const ERROR_CODE: Record<OledErrorKind, TRPCError["code"]> = {
   not_configured: "PRECONDITION_FAILED",

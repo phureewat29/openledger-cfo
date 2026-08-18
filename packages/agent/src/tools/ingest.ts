@@ -2,12 +2,12 @@ import type { StructuredToolInterface } from "@langchain/core/tools";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod/v4";
 
-import type { IngestFileRow } from "@openledger-fleet/openledger";
+import type { IngestFileRow } from "@openledger-cfo/openledger";
 import {
   ACCOUNT_ID_PATTERN,
   FILE_ID_PATTERN,
   ingestRowInputSchema,
-} from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";
 
 import type { ToolFailure } from "./caller";
 import { caller, guardedRun, oledCommand, toolResult } from "./caller";

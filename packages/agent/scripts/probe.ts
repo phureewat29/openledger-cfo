@@ -5,7 +5,7 @@
  * so the run can assert that the skill actually loaded — a skill that fails to
  * load is silent, and the agent answers plausibly without it.
  *
- * Run with: pnpm -F @openledger-fleet/agent probe
+ * Run with: pnpm -F @openledger-cfo/agent probe
  */
 import type { UIMessage, UIMessageChunk } from "ai";
 

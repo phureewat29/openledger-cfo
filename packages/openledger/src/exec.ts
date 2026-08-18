@@ -10,7 +10,7 @@ import { createSerialQueue } from "./serial";
 // Spawning a CLI is impossible in a browser bundle; fail at import rather than at first call.
 if ("window" in globalThis) {
   throw new Error(
-    "@openledger-fleet/openledger is server-only: it spawns the `oled` CLI.",
+    "@openledger-cfo/openledger is server-only: it spawns the `oled` CLI.",
   );
 }
 

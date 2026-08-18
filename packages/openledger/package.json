@@ -1,5 +1,5 @@
 {
-  "name": "@openledger-fleet/openledger",
+  "name": "@openledger-cfo/openledger",
   "description": "Typed connector over the oled CLI with serialized exec lanes and Result unions",
   "private": true,
   "type": "module",
@@ -32,14 +32,14 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@openledger-fleet/eslint-config": "workspace:*",
-    "@openledger-fleet/prettier-config": "workspace:*",
-    "@openledger-fleet/tsconfig": "workspace:*",
+    "@openledger-cfo/eslint-config": "workspace:*",
+    "@openledger-cfo/prettier-config": "workspace:*",
+    "@openledger-cfo/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   },
-  "prettier": "@openledger-fleet/prettier-config"
+  "prettier": "@openledger-cfo/prettier-config"
 }

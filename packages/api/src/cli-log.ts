@@ -1,4 +1,4 @@
-import type { OledCommandEvent } from "@openledger-fleet/openledger";
+import type { OledCommandEvent } from "@openledger-cfo/openledger";
 
 /** Exported for declaration emit only: it prints inside `ledgerRouter`'s type. */
 export interface CliLogEntry {

@@ -1,5 +1,5 @@
 {
-  "name": "@openledger-fleet/demo",
+  "name": "@openledger-cfo/demo",
   "description": "The demo dataset generator, its invariants, and the committed dataset",
   "private": true,
   "type": "module",
@@ -15,20 +15,20 @@
     "with-env": "dotenv -e ../../.env --"
   },
   "dependencies": {
-    "@openledger-fleet/db": "workspace:*",
-    "@openledger-fleet/openledger": "workspace:*",
+    "@openledger-cfo/db": "workspace:*",
+    "@openledger-cfo/openledger": "workspace:*",
     "es-toolkit": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@openledger-fleet/eslint-config": "workspace:*",
-    "@openledger-fleet/prettier-config": "workspace:*",
-    "@openledger-fleet/tsconfig": "workspace:*",
+    "@openledger-cfo/eslint-config": "workspace:*",
+    "@openledger-cfo/prettier-config": "workspace:*",
+    "@openledger-cfo/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   },
-  "prettier": "@openledger-fleet/prettier-config"
+  "prettier": "@openledger-cfo/prettier-config"
 }

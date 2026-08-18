@@ -1,10 +1,7 @@
 import { z } from "zod/v4";
 
-import { eq } from "@openledger-fleet/db";
-import {
-  insightState,
-  SetInsightStateSchema,
-} from "@openledger-fleet/db/schema";
+import { eq } from "@openledger-cfo/db";
+import { insightState, SetInsightStateSchema } from "@openledger-cfo/db/schema";
 
 import { createTRPCRouter, publicProcedure } from "../trpc";
 

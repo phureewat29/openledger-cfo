@@ -1,5 +1,5 @@
 {
-  "name": "@openledger-fleet/api",
+  "name": "@openledger-cfo/api",
   "description": "tRPC routers over the ledger and the Postgres control plane",
   "private": true,
   "type": "module",
@@ -19,20 +19,20 @@
     "typecheck": "tsc --noEmit --emitDeclarationOnly false"
   },
   "dependencies": {
-    "@openledger-fleet/db": "workspace:*",
-    "@openledger-fleet/openledger": "workspace:*",
+    "@openledger-cfo/db": "workspace:*",
+    "@openledger-cfo/openledger": "workspace:*",
     "@trpc/server": "catalog:",
     "superjson": "2.2.3",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@openledger-fleet/eslint-config": "workspace:*",
-    "@openledger-fleet/prettier-config": "workspace:*",
-    "@openledger-fleet/tsconfig": "workspace:*",
+    "@openledger-cfo/eslint-config": "workspace:*",
+    "@openledger-cfo/prettier-config": "workspace:*",
+    "@openledger-cfo/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:"
   },
-  "prettier": "@openledger-fleet/prettier-config"
+  "prettier": "@openledger-cfo/prettier-config"
 }

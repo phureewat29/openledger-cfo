@@ -1,6 +1,6 @@
 import { difference } from "es-toolkit";
 
-import type { AccountCreateInput } from "@openledger-fleet/openledger";
+import type { AccountCreateInput } from "@openledger-cfo/openledger";
 
 import type { Life } from "../dataset";
 import type { Totals } from "../expected";

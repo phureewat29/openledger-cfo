@@ -1,5 +1,5 @@
 {
-  "name": "@openledger-fleet/db",
+  "name": "@openledger-cfo/db",
   "description": "Drizzle schema for budgets, goals, reminders, and insight state",
   "private": true,
   "type": "module",
@@ -35,14 +35,14 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@openledger-fleet/eslint-config": "workspace:*",
-    "@openledger-fleet/prettier-config": "workspace:*",
-    "@openledger-fleet/tsconfig": "workspace:*",
+    "@openledger-cfo/eslint-config": "workspace:*",
+    "@openledger-cfo/prettier-config": "workspace:*",
+    "@openledger-cfo/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "drizzle-kit": "^0.31.10",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:"
   },
-  "prettier": "@openledger-fleet/prettier-config"
+  "prettier": "@openledger-cfo/prettier-config"
 }

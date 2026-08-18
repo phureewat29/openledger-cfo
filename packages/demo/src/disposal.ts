@@ -1,4 +1,4 @@
-import type { LinkedLeg } from "@openledger-fleet/openledger";
+import type { LinkedLeg } from "@openledger-cfo/openledger";
 
 import { fromUnits } from "./money";
 import { leg } from "./types";

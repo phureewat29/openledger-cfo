@@ -5,8 +5,8 @@ import type {
   OledError,
   OpenLedger,
   Result,
-} from "@openledger-fleet/openledger";
-import { ok } from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";
+import { ok } from "@openledger-cfo/openledger";
 
 import type { DateWindow } from "./calendar";
 import type { Life } from "./dataset";

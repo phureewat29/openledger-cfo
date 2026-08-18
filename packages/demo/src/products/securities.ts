@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import { accountIdSchema } from "@openledger-fleet/openledger";
+import { accountIdSchema } from "@openledger-cfo/openledger";
 
 import { ACCOUNT } from "../accounts";
 import { satang } from "../money";

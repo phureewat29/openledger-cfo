@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 
-import { closeDb } from "@openledger-fleet/db/client";
-import { createOpenLedger } from "@openledger-fleet/openledger";
+import { closeDb } from "@openledger-cfo/db/client";
+import { createOpenLedger } from "@openledger-cfo/openledger";
 
 import { cliArgs } from "./argv";
 import { readLife } from "./dataset";

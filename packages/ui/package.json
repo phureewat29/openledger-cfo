@@ -1,5 +1,5 @@
 {
-  "name": "@openledger-fleet/ui",
+  "name": "@openledger-cfo/ui",
   "description": "Dark theme tokens, the Pane primitive, Geist Mono",
   "private": true,
   "type": "module",
@@ -27,9 +27,9 @@
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
-    "@openledger-fleet/eslint-config": "workspace:*",
-    "@openledger-fleet/prettier-config": "workspace:*",
-    "@openledger-fleet/tsconfig": "workspace:*",
+    "@openledger-cfo/eslint-config": "workspace:*",
+    "@openledger-cfo/prettier-config": "workspace:*",
+    "@openledger-cfo/tsconfig": "workspace:*",
     "@types/react": "catalog:react19",
     "eslint": "catalog:",
     "prettier": "catalog:",
@@ -45,5 +45,5 @@
       "optional": true
     }
   },
-  "prettier": "@openledger-fleet/prettier-config"
+  "prettier": "@openledger-cfo/prettier-config"
 }

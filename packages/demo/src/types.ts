@@ -3,7 +3,7 @@ import type {
   LinkedLeg,
   LinkedRowInput,
   SimpleRowInput,
-} from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";
 
 import type { DateWindow, Month } from "./calendar";
 import type { Merchant } from "./merchants";

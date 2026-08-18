@@ -1,5 +1,5 @@
 {
-  "name": "@openledger-fleet/agent",
+  "name": "@openledger-cfo/agent",
   "description": "The cfo and ingest agents: personas, ledger tools, and the stream bridge",
   "private": true,
   "type": "module",
@@ -28,8 +28,8 @@
     "@langchain/langgraph-checkpoint": "^1.1.3",
     "@langchain/langgraph-sdk": "^1.9.29",
     "@langchain/openai": "^1.5.6",
-    "@openledger-fleet/api": "workspace:*",
-    "@openledger-fleet/openledger": "workspace:*",
+    "@openledger-cfo/api": "workspace:*",
+    "@openledger-cfo/openledger": "workspace:*",
     "ai": "catalog:",
     "deepagents": "^1.12.2",
     "langchain": "^1.5.5",
@@ -37,14 +37,14 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@openledger-fleet/eslint-config": "workspace:*",
-    "@openledger-fleet/prettier-config": "workspace:*",
-    "@openledger-fleet/tsconfig": "workspace:*",
+    "@openledger-cfo/eslint-config": "workspace:*",
+    "@openledger-cfo/prettier-config": "workspace:*",
+    "@openledger-cfo/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   },
-  "prettier": "@openledger-fleet/prettier-config"
+  "prettier": "@openledger-cfo/prettier-config"
 }

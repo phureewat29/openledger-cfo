@@ -13,4 +13,4 @@ export { ledger } from "./trpc";
 export {
   ACCOUNT_ID_PATTERN,
   FILE_ID_PATTERN,
-} from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";

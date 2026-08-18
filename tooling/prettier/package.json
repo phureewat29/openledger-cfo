@@ -1,5 +1,5 @@
 {
-  "name": "@openledger-fleet/prettier-config",
+  "name": "@openledger-cfo/prettier-config",
   "private": true,
   "type": "module",
   "exports": {
@@ -16,9 +16,9 @@
     "prettier-plugin-tailwindcss": "^0.7.1"
   },
   "devDependencies": {
-    "@openledger-fleet/tsconfig": "workspace:*",
+    "@openledger-cfo/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   },
-  "prettier": "@openledger-fleet/prettier-config"
+  "prettier": "@openledger-cfo/prettier-config"
 }

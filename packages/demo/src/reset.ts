@@ -1,13 +1,13 @@
 import { mkdir } from "node:fs/promises";
 
-import { closeDb, db } from "@openledger-fleet/db/client";
+import { closeDb, db } from "@openledger-cfo/db/client";
 import {
   budget,
   goal,
   insightState,
   reminder,
-} from "@openledger-fleet/db/schema";
-import { createOpenLedger } from "@openledger-fleet/openledger";
+} from "@openledger-cfo/db/schema";
+import { createOpenLedger } from "@openledger-cfo/openledger";
 
 import { readLife } from "./dataset";
 import { bootstrapLedger, LEDGER } from "./ledger";

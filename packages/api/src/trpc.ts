@@ -2,9 +2,9 @@ import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
 import { z, ZodError } from "zod/v4";
 
-import type { OpenLedger } from "@openledger-fleet/openledger";
-import { db } from "@openledger-fleet/db/client";
-import { createOpenLedger } from "@openledger-fleet/openledger";
+import type { OpenLedger } from "@openledger-cfo/openledger";
+import { db } from "@openledger-cfo/db/client";
+import { createOpenLedger } from "@openledger-cfo/openledger";
 
 import { recordCliCommand } from "./cli-log";
 

@@ -84,7 +84,7 @@ export type { OledConfigFile } from "./config";
 /**
  * Re-exported for callers that already hold the client. Both modules are pure
  * and import nothing, so a caller that must stay off the server — a browser
- * bundle — imports `@openledger-fleet/openledger/ids` or `/calendar` directly
+ * bundle — imports `@openledger-cfo/openledger/ids` or `/calendar` directly
  * rather than this barrel, which reaches the CLI and `node:child_process`.
  */
 export { isoToday } from "./calendar";

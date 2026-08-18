@@ -15,7 +15,7 @@ import { scopedQuestionTools } from "./tools/ingest";
 
 // The gateway key and a CLI-spawning connector both live behind this import.
 if ("window" in globalThis) {
-  throw new Error("@openledger-fleet/agent is server-only");
+  throw new Error("@openledger-cfo/agent is server-only");
 }
 
 export interface AgentOptions {

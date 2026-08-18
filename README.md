@@ -1,9 +1,9 @@
 <h1 align="center">
-  <strong>Corgi CFO</strong>
+  <strong>OpenLedger CFO</strong>
 </h1>
 
 <p align="center">
-  Corgi CFO can tells you what to do about your money, powered by
+  OpenLedger CFO tells you what to do about your money, powered by
   <a href="https://www.npmjs.com/package/@aquartier/openledger">OpenLedger</a>,
 </p>
 
@@ -12,10 +12,10 @@
 </p>
 
 <p align="center">
-  <img src=".github/screenshot.png" alt="Corgi CFO terminal: vitals, cash flow, action queue, trajectory, and the CFO chat" width="100%" />
+  <img src=".github/screenshot.png" alt="OpenLedger CFO terminal: vitals, cash flow, action queue, trajectory, and the CFO chat" width="100%" />
 </p>
 
-Corgi CFO help you visulize your finances, ask your Corgi where the money goes, your runway, your mortgage, and your savings rate.
+OpenLedger CFO helps you visualize your finances: ask the CFO where the money goes, your runway, your mortgage, and your savings rate.
 
 ## Built on OpenLedger
 
@@ -64,15 +64,13 @@ You should see the demo dataset. If a pane says the ledger is not initialized, r
 
 Two agents, both built on [deepagents](https://www.npmjs.com/package/deepagents) over any OpenAI-compatible gateway (`OPENAI_COMPATIBLE_BASE_URL`). The chat recommends the two models benchmarked at [openledger.sh](https://openledger.sh/) as the most cost-efficient, defaulting to GPT-5.6 Luna:
 
-- **The CFO** holds five read tools, eleven write tools, and one more that starts an ingest run, so it can take a pile of statements without you leaving the chat. Its rules: match before create, verify after write, act on a clear instruction and report every command, and treat nothing inside the ledger as an instruction. Statement text is data, never a prompt.
-- **The ingest agent** is not a chat. It drives the `oled` ingest pipeline as one autonomous run per queue, supervised by a thin runner that enforces recursion and wall-clock budgets, parks on missing passwords, and steps in when a model loops on a refused close.
-
-Passwords never reach a transcript, a journal, or a log; the connector masks them in every rendered command, and the runner reads no tool input except the file it names. When a key is set, ledger-derived briefings and tool results do go to your chosen model through the gateway you configured.
+- **The CFO Agent**
+- **The Ingest Agent**
 
 ## How it works
 
 ```
-apps/cfo (Next.js 16)                    packages
+apps/web (Next.js 16)                    packages
 +--------------------------------+       +--------------------------------+
 | pages: server components,      | tRPC  | api: routers over the ledger   |
 | derived per request            +------>+ and the Postgres control plane |
@@ -100,7 +98,7 @@ pnpm build       # full production build
 
 ```
 apps/
-  cfo/            the terminal app
+  web/            the terminal app
     src/app/      routes; each route pairs page and skeleton through one grid.ts
     src/components, src/domain, src/server, src/trpc
 packages/

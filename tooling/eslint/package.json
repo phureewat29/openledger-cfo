@@ -1,5 +1,5 @@
 {
-  "name": "@openledger-fleet/eslint-config",
+  "name": "@openledger-cfo/eslint-config",
   "private": true,
   "type": "module",
   "exports": {
@@ -23,12 +23,12 @@
     "typescript-eslint": "^8.46.2"
   },
   "devDependencies": {
-    "@openledger-fleet/prettier-config": "workspace:*",
-    "@openledger-fleet/tsconfig": "workspace:*",
+    "@openledger-cfo/prettier-config": "workspace:*",
+    "@openledger-cfo/tsconfig": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:"
   },
-  "prettier": "@openledger-fleet/prettier-config"
+  "prettier": "@openledger-cfo/prettier-config"
 }

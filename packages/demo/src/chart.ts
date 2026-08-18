@@ -1,4 +1,4 @@
-import type { AccountCreateInput } from "@openledger-fleet/openledger";
+import type { AccountCreateInput } from "@openledger-cfo/openledger";
 
 import type { Instrument } from "./products/securities";
 import { ACCOUNT, unitAccountsOf } from "./accounts";

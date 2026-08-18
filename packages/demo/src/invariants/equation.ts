@@ -1,4 +1,4 @@
-import type { AccountType } from "@openledger-fleet/openledger";
+import type { AccountType } from "@openledger-cfo/openledger";
 
 import type { Life } from "../dataset";
 import type { Totals } from "../expected";

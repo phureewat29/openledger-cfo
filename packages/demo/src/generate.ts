@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import { z } from "zod/v4";
 
-import { createOpenLedger } from "@openledger-fleet/openledger";
+import { createOpenLedger } from "@openledger-cfo/openledger";
 
 import { cliArgs } from "./argv";
 import { buildLife } from "./build";

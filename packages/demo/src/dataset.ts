@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { z } from "zod/v4";
 
-import type { OledError, Result } from "@openledger-fleet/openledger";
+import type { OledError, Result } from "@openledger-cfo/openledger";
 import {
   accountCreateInputSchema,
   err,
@@ -10,7 +10,7 @@ import {
   isoDateSchema,
   merchantUpsertInputSchema,
   ok,
-} from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";
 
 import { bankSchema } from "./products/banks";
 import { cardSchema } from "./products/cards";

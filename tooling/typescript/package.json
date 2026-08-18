@@ -1,5 +1,5 @@
 {
-  "name": "@openledger-fleet/tsconfig",
+  "name": "@openledger-cfo/tsconfig",
   "private": true,
   "files": [
     "*.json"

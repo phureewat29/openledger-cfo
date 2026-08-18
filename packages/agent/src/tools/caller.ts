@@ -1,5 +1,5 @@
-import { appRouter, createTRPCContext } from "@openledger-fleet/api";
-import { quoteShellArg } from "@openledger-fleet/openledger";
+import { appRouter, createTRPCContext } from "@openledger-cfo/api";
+import { quoteShellArg } from "@openledger-cfo/openledger";
 
 /**
  * One caller per process, over the api package's own connector: every tool call

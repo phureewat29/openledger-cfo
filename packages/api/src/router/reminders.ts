@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 
-import { asc, eq } from "@openledger-fleet/db";
-import { CreateReminderSchema, reminder } from "@openledger-fleet/db/schema";
+import { asc, eq } from "@openledger-cfo/db";
+import { CreateReminderSchema, reminder } from "@openledger-cfo/db/schema";
 
 import { createTRPCRouter, publicProcedure } from "../trpc";
 

@@ -1,9 +1,5 @@
-import type {
-  OledError,
-  OpenLedger,
-  Result,
-} from "@openledger-fleet/openledger";
-import { ok } from "@openledger-fleet/openledger";
+import type { OledError, OpenLedger, Result } from "@openledger-cfo/openledger";
+import { ok } from "@openledger-cfo/openledger";
 
 import type { Life } from "./dataset";
 import { bootstrapLedger } from "./ledger";

@@ -1,4 +1,4 @@
-import type { MerchantUpsertInput } from "@openledger-fleet/openledger";
+import type { MerchantUpsertInput } from "@openledger-cfo/openledger";
 
 import { ACCOUNT } from "./accounts";
 

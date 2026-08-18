@@ -6,7 +6,7 @@ import {
   FILE_ID_PATTERN,
   ingestRowInputSchema,
   transactionAddInputSchema,
-} from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";
 
 import { listCliLog } from "../cli-log";
 import { DEMO_HINT, unwrapOrTrpc } from "../result";

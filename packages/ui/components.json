@@ -11,10 +11,10 @@
     "prefix": ""
   },
   "aliases": {
-    "components": "@openledger-fleet/ui",
-    "utils": "@openledger-fleet/ui",
-    "ui": "@openledger-fleet/ui",
-    "lib": "@openledger-fleet/ui",
-    "hooks": "@openledger-fleet/ui"
+    "components": "@openledger-cfo/ui",
+    "utils": "@openledger-cfo/ui",
+    "ui": "@openledger-cfo/ui",
+    "lib": "@openledger-cfo/ui",
+    "hooks": "@openledger-cfo/ui"
   }
 }

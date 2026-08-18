@@ -1,15 +1,15 @@
 import { countBy, maxBy, orderBy, sumBy } from "es-toolkit";
 
-import type { Result } from "@openledger-fleet/openledger";
-import { db } from "@openledger-fleet/db/client";
-import { budget, goal, reminder } from "@openledger-fleet/db/schema";
+import type { Result } from "@openledger-cfo/openledger";
+import { db } from "@openledger-cfo/db/client";
+import { budget, goal, reminder } from "@openledger-cfo/db/schema";
 import {
   categoryOf,
   err,
   isoToday,
   matchesPrefix,
   ok,
-} from "@openledger-fleet/openledger";
+} from "@openledger-cfo/openledger";
 
 import type { Month } from "./calendar";
 import type { Life } from "./dataset";

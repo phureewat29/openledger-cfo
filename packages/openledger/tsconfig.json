@@ -1,5 +1,5 @@
 {
-  "extends": "@openledger-fleet/tsconfig/compiled-package.json",
+  "extends": "@openledger-cfo/tsconfig/compiled-package.json",
   "include": ["src"],
   "exclude": ["node_modules"]
 }

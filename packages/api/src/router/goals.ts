@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 
-import { desc, eq } from "@openledger-fleet/db";
-import { CreateGoalSchema, goal } from "@openledger-fleet/db/schema";
+import { desc, eq } from "@openledger-cfo/db";
+import { CreateGoalSchema, goal } from "@openledger-cfo/db/schema";
 
 import { createTRPCRouter, publicProcedure } from "../trpc";
 
