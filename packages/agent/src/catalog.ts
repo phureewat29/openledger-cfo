@@ -9,7 +9,7 @@ export interface ModelChoice {
   readonly label: string;
 }
 
-export const DEFAULT_MODEL = "qwen/qwen-3.8";
+export const DEFAULT_MODEL = "qwen/qwen3.8-27b";
 
 /**
  * The models benchmarked against ledger work at openledger.sh, kept to the
