@@ -1,6 +1,5 @@
 import { parseArgs } from "node:util";
 
-import { closeDb } from "@openledger-cfo/db/client";
 import { createOpenLedger } from "@openledger-cfo/openledger";
 
 import { cliArgs } from "./argv";
@@ -52,7 +51,7 @@ const run = async (): Promise<number> => {
     return 1;
   }
 
-  const plans = await seedPlans(life);
+  const plans = seedPlans(life);
   if (!plans.ok) {
     log(plans.error);
     return 1;
@@ -80,6 +79,4 @@ try {
 } catch (cause) {
   console.error(cause);
   process.exitCode = 1;
-} finally {
-  await closeDb();
 }

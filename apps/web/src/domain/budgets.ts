@@ -17,7 +17,7 @@ export interface BudgetRow {
 
 interface BudgetLimit {
   readonly category: string;
-  /** Postgres numeric arrives as a string; the boundary is the only place to fix that. */
+  /** The control plane stores money as text on purpose (db schema); the boundary is the only place to widen it. */
   readonly monthlyLimit: string;
 }
 

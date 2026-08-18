@@ -43,7 +43,6 @@
     }
   },
   "globalEnv": [
-    "POSTGRES_URL",
     "OLED_CONFIG",
     "OPENAI_COMPATIBLE_BASE_URL",
     "OPENAI_COMPATIBLE_API_KEY",

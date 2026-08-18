@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 
 import { desc, eq } from "@openledger-cfo/db";
-import { CreateGoalSchema, goal } from "@openledger-cfo/db/schema";
+import { CreateGoalSchema, goal, money } from "@openledger-cfo/db/schema";
 
 import { createTRPCRouter, publicProcedure } from "../trpc";
 
@@ -14,7 +14,7 @@ export const goalsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
         .insert(goal)
-        .values({ ...input, targetAmount: input.targetAmount.toFixed(2) })
+        .values({ ...input, targetAmount: money(input.targetAmount) })
         .returning();
       return row;
     }),

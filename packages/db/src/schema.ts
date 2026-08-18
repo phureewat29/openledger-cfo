@@ -1,52 +1,62 @@
-import { pgTable } from "drizzle-orm/pg-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { z } from "zod/v4";
 
-export const budget = pgTable("budget", (t) => ({
+/**
+ * The one encoder for money at rest. The columns are TEXT, not NUMERIC:
+ * affinity would strip "19000.00" to 19000. Boundaries widen with Number().
+ */
+export const money = (amount: number): string => amount.toFixed(2);
+
+const uuidPk = () =>
+  text()
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID());
+
+const createdAt = () =>
+  integer({ mode: "timestamp_ms" })
+    .$defaultFn(() => new Date())
+    .notNull();
+
+// Also the insert default: drizzle falls through to `$onUpdateFn` when no default is set.
+const updatedAt = () =>
+  integer({ mode: "timestamp_ms" })
+    .notNull()
+    .$onUpdateFn(() => new Date());
+
+export const budget = sqliteTable("budget", {
   // full oled account id, e.g. "thb:expense:food"
-  category: t.varchar({ length: 120 }).primaryKey().notNull(),
-  monthlyLimit: t.numeric({ precision: 12, scale: 2 }).notNull(),
-  updatedAt: t
-    .timestamp({ withTimezone: true })
-    .defaultNow()
-    .notNull()
-    .$onUpdateFn(() => new Date()),
-}));
+  category: text().primaryKey(),
+  monthlyLimit: text().notNull(),
+  updatedAt: updatedAt(),
+});
 
-export const goal = pgTable("goal", (t) => ({
-  id: t.uuid().primaryKey().defaultRandom(),
-  name: t.varchar({ length: 120 }).notNull(),
-  targetAmount: t.numeric({ precision: 14, scale: 2 }).notNull(),
-  targetDate: t.date(),
+export const goal = sqliteTable("goal", {
+  id: uuidPk(),
+  name: text().notNull(),
+  targetAmount: text().notNull(),
+  targetDate: text(),
   // oled account id prefix whose balances measure progress
-  accountPrefix: t.varchar({ length: 120 }).notNull(),
-  createdAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
-  updatedAt: t
-    .timestamp({ withTimezone: true })
-    .defaultNow()
-    .notNull()
-    .$onUpdateFn(() => new Date()),
-}));
+  accountPrefix: text().notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
 
-export const insightState = pgTable("insight_state", (t) => ({
-  insightId: t.varchar({ length: 160 }).primaryKey().notNull(),
-  status: t.text({ enum: ["acknowledged", "dismissed"] }).notNull(),
-  note: t.text(),
-  updatedAt: t
-    .timestamp({ withTimezone: true })
-    .defaultNow()
-    .notNull()
-    .$onUpdateFn(() => new Date()),
-}));
+export const insightState = sqliteTable("insight_state", {
+  insightId: text().primaryKey(),
+  status: text({ enum: ["acknowledged", "dismissed"] }).notNull(),
+  note: text(),
+  updatedAt: updatedAt(),
+});
 
-export const reminder = pgTable("reminder", (t) => ({
-  id: t.uuid().primaryKey().defaultRandom(),
-  title: t.varchar({ length: 160 }).notNull(),
-  dueDate: t.date().notNull(),
-  monthly: t.boolean().default(false).notNull(),
-  note: t.text(),
-  doneAt: t.timestamp({ withTimezone: true }),
-  createdAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
-}));
+export const reminder = sqliteTable("reminder", {
+  id: uuidPk(),
+  title: text().notNull(),
+  dueDate: text().notNull(),
+  monthly: integer({ mode: "boolean" }).default(false).notNull(),
+  note: text(),
+  doneAt: integer({ mode: "timestamp_ms" }),
+  createdAt: createdAt(),
+});
 
 export const CreateGoalSchema = z.object({
   name: z.string().min(1).max(120),

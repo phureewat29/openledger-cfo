@@ -26,6 +26,7 @@
     "@trpc/server": "catalog:",
     "@trpc/tanstack-react-query": "catalog:",
     "ai": "catalog:",
+    "better-sqlite3": "catalog:",
     "d3-array": "^3.2.4",
     "d3-sankey": "^0.12.3",
     "d3-scale": "^4.0.2",
@@ -53,7 +54,6 @@
     "@types/react-dom": "catalog:react19",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "catalog:",
-    "jiti": "^2.5.1",
     "prettier": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:"

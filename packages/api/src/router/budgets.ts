@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 
 import { eq } from "@openledger-cfo/db";
-import { budget, UpsertBudgetSchema } from "@openledger-cfo/db/schema";
+import { budget, money, UpsertBudgetSchema } from "@openledger-cfo/db/schema";
 
 import { createTRPCRouter, publicProcedure } from "../trpc";
 
@@ -12,7 +12,7 @@ export const budgetsRouter = createTRPCRouter({
   upsert: publicProcedure
     .input(UpsertBudgetSchema)
     .mutation(async ({ ctx, input }) => {
-      const monthlyLimit = input.monthlyLimit.toFixed(2);
+      const monthlyLimit = money(input.monthlyLimit);
       await ctx.db
         .insert(budget)
         .values({ category: input.category, monthlyLimit })

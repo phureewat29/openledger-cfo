@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 
-import { closeDb, db } from "@openledger-cfo/db/client";
+import { db } from "@openledger-cfo/db/client";
 import {
   budget,
   goal,
@@ -62,11 +62,11 @@ const run = async (): Promise<number> => {
   // Uploads write straight into the data dir; init leaves it to be made lazily.
   await mkdir(LEDGER.dataDir, { recursive: true });
 
-  await db.transaction(async (tx) => {
-    await tx.delete(budget);
-    await tx.delete(goal);
-    await tx.delete(insightState);
-    await tx.delete(reminder);
+  db.transaction((tx) => {
+    tx.delete(budget).run();
+    tx.delete(goal).run();
+    tx.delete(insightState).run();
+    tx.delete(reminder).run();
   });
   log("plans   budgets, goals, reminders, insight state emptied");
   log(await clearServerState());
@@ -87,6 +87,4 @@ try {
 } catch (cause) {
   console.error(cause);
   process.exitCode = 1;
-} finally {
-  await closeDb();
 }

@@ -44,7 +44,7 @@ export const loadChrome = cache(async (): Promise<LedgerLoad<Chrome>> => {
 /**
  * The rail renders on every route, so it may only read what the chrome already
  * paid for: `ledgerHead` is shared with `loadChrome`, and reminders come from
- * Postgres rather than another `oled` process.
+ * the control plane rather than another `oled` process.
  */
 export const loadRailBadges = cache(
   async (): Promise<LedgerLoad<RailBadges>> => {

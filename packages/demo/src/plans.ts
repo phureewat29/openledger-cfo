@@ -2,7 +2,7 @@ import { countBy, maxBy, orderBy, sumBy } from "es-toolkit";
 
 import type { Result } from "@openledger-cfo/openledger";
 import { db } from "@openledger-cfo/db/client";
-import { budget, goal, reminder } from "@openledger-cfo/db/schema";
+import { budget, goal, money, reminder } from "@openledger-cfo/db/schema";
 import {
   categoryOf,
   err,
@@ -152,7 +152,7 @@ const buildBudgets = (life: Life): BudgetInsert[] => {
       ),
       BUDGET_ROUND_STEP,
     );
-    return { category, monthlyLimit: limit.toFixed(2) };
+    return { category, monthlyLimit: money(limit) };
   });
 };
 
@@ -195,31 +195,31 @@ const buildGoals = (life: Life): Result<GoalInsert[], string> => {
     {
       name: "Debt-free",
       accountPrefix: ACCOUNT.mortgageCondo,
-      targetAmount: mortgagePrincipal.toFixed(2),
+      targetAmount: money(mortgagePrincipal),
       targetDate: "2033-12-31",
     },
     {
       name: "Retirement fund",
       accountPrefix: fundPrefix,
-      targetAmount: RETIREMENT_TARGET.toFixed(2),
+      targetAmount: money(RETIREMENT_TARGET),
       targetDate: "2045-12-31",
     },
     {
       name: "12-month runway",
       accountPrefix: ACCOUNT.ttbMe,
-      targetAmount: runwayTarget.toFixed(2),
+      targetAmount: money(runwayTarget),
       targetDate: null,
     },
     {
       name: "Japan trip",
       accountPrefix: ACCOUNT.uob,
-      targetAmount: JAPAN_TRIP_TARGET.toFixed(2),
+      targetAmount: money(JAPAN_TRIP_TARGET),
       targetDate: "2027-04-30",
     },
     {
       name: "Parents' care fund",
       accountPrefix: ACCOUNT.bay,
-      targetAmount: PARENTS_CARE_TARGET.toFixed(2),
+      targetAmount: money(PARENTS_CARE_TARGET),
       targetDate: "2028-12-31",
     },
   ]);
@@ -376,9 +376,7 @@ const goalChecks = (life: Life, goals: GoalInsert[]): Check[] =>
  * be built is an error; one that does not line up is a failing check, not a
  * throw.
  */
-export const seedPlans = async (
-  life: Life,
-): Promise<Result<PlansReport, string>> => {
+export const seedPlans = (life: Life): Result<PlansReport, string> => {
   const today = isoToday();
   const budgets = buildBudgets(life);
   const goals = buildGoals(life);
@@ -387,14 +385,14 @@ export const seedPlans = async (
   if (!reminders.ok) return reminders;
 
   // One statement: a half-replaced control plane is worse than an untouched one.
-  await db.transaction(async (tx) => {
-    await tx.delete(budget);
-    await tx.delete(goal);
-    await tx.delete(reminder);
+  db.transaction((tx) => {
+    tx.delete(budget).run();
+    tx.delete(goal).run();
+    tx.delete(reminder).run();
 
-    await tx.insert(budget).values(budgets);
-    await tx.insert(goal).values(goals.value);
-    await tx.insert(reminder).values(reminders.value);
+    tx.insert(budget).values(budgets).run();
+    tx.insert(goal).values(goals.value).run();
+    tx.insert(reminder).values(reminders.value).run();
   });
 
   return ok({

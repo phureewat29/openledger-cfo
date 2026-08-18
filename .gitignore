@@ -46,3 +46,4 @@ dist/
 CLAUDE.md
 .claude/
 .cfo/
+cfo.db*

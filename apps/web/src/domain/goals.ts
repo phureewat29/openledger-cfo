@@ -74,7 +74,7 @@ interface MovementRow {
 interface GoalRow {
   readonly id: string;
   readonly name: string;
-  /** Postgres numeric arrives as a string; the boundary is the only place to fix that. */
+  /** The control plane stores money as text on purpose (db schema); the boundary is the only place to widen it. */
   readonly targetAmount: string;
   readonly targetDate: string | null;
   readonly accountPrefix: string;

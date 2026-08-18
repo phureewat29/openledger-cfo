@@ -1,6 +1,6 @@
 {
   "name": "@openledger-cfo/api",
-  "description": "tRPC routers over the ledger and the Postgres control plane",
+  "description": "tRPC routers over the ledger and the SQLite control plane",
   "private": true,
   "type": "module",
   "exports": {

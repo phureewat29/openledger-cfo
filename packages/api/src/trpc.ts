@@ -12,8 +12,8 @@ import { recordCliCommand } from "./cli-log";
  * One connector per process, not per module graph. Next bundles the server
  * components and the route handlers separately, so this module is instantiated
  * twice in one process — and the connector's queues only serialize the `oled`
- * spawns that share an instance. Two instances means two processes on one
- * SQLite file, which the ledger reports as a corrupt database on open.
+ * spawns that share an instance. Two instances means two processes on the
+ * ledger's own SQLite file, which `oled` reports as a corrupt database on open.
  */
 const forLedger = globalThis as unknown as { oledConnector?: OpenLedger };
 
