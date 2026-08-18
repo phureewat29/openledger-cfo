@@ -3,7 +3,15 @@
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Inbox, MessageSquare, Target, Wallet } from "lucide-react";
+import {
+  Activity,
+  Blocks,
+  Inbox,
+  MessageSquare,
+  Repeat,
+  Target,
+  Wallet,
+} from "lucide-react";
 
 import type { RailBadges } from "~/server/chrome";
 import { useChatDock } from "~/components/chat/dock";
@@ -16,14 +24,37 @@ interface Entry {
   readonly label: string;
   readonly icon: LucideIcon;
   readonly exact?: boolean;
+  /** Dimmed on the rail: the page only teases what the section will be. */
+  readonly soon?: boolean;
 }
 
 /** The whole picture first, then holdings, then intentions, then the machine-facing screen. */
 const ENTRIES: readonly Entry[] = [
-  { href: "/", label: "Everything — money vital", icon: Activity, exact: true },
-  { href: "/accounts", label: "Accounts — every balance", icon: Wallet },
+  {
+    href: "/",
+    label: "Everything — your money vital",
+    icon: Activity,
+    exact: true,
+  },
+  {
+    href: "/accounts",
+    label: "Accounts — every transactions and balances",
+    icon: Wallet,
+  },
   { href: "/plan", label: "Plan — budgets, goals, reminders", icon: Target },
-  { href: "/ingest", label: "Ingest — files and questions", icon: Inbox },
+  { href: "/ingest", label: "Ingest — turn statements to ledger", icon: Inbox },
+  {
+    href: "/loop",
+    label: "Loop — money optimizer, soon",
+    icon: Repeat,
+    soon: true,
+  },
+  {
+    href: "/marketplace",
+    label: "Marketplace — plugins for your money, soon",
+    icon: Blocks,
+    soon: true,
+  },
 ];
 
 const BADGE: Record<string, keyof RailBadges> = {
@@ -101,7 +132,11 @@ export function Rail({
               data-active={active}
               aria-label={entry.label}
               aria-current={active ? "page" : undefined}
-              className={TARGET}
+              className={
+                entry.soon
+                  ? `${TARGET} opacity-45 hover:opacity-100 data-[active=true]:opacity-100`
+                  : TARGET
+              }
             >
               {active ? (
                 <span
