@@ -1,5 +1,6 @@
 import type { AccountKind, AccountSeries } from "~/domain/series/types";
 import type { AccountView } from "~/server/account";
+import { VIZ_FULL, VIZ_NARROW, VIZ_WIDE } from "~/app/accounts/[id]/grid";
 import { MonthlyBars, peakOf } from "~/components/account/monthly-bars";
 import { ChartPane } from "~/components/charts/chart-pane";
 import { HBarList } from "~/components/charts/hbar-list";
@@ -9,15 +10,6 @@ import { Sankey } from "~/components/sankey";
 import { isPrimaryCurrency } from "~/domain/accounts";
 import { moneyOf } from "~/domain/format";
 import { hasMovement, payoffPoints } from "~/domain/series/account";
-
-/**
- * Every chart here — the sankey's absolutely-positioned svg included — has no
- * intrinsic height, so each slot holds one until the wide grid's fractional
- * rows take over.
- */
-const WIDE = "col-span-12 h-[300px] @4xl/main:col-span-8 @4xl/main:h-auto";
-const NARROW = "col-span-12 h-[300px] @4xl/main:col-span-4 @4xl/main:h-auto";
-const FULL = "col-span-12 h-[300px] @4xl/main:h-auto";
 
 const CHART = "flex min-h-0 flex-1 flex-col p-3";
 
@@ -34,7 +26,7 @@ function FlowPane({ account }: { account: AccountView }) {
       title="Flow"
       meta="avg / month"
       expandable={flow !== null}
-      className={WIDE}
+      className={VIZ_WIDE}
       bodyClassName="flex min-h-0 flex-1 flex-col p-1"
       expandedChildren={flow === null ? null : <Sankey graph={flow} expanded />}
     >
@@ -93,7 +85,7 @@ function CashViz({
         title="Balance"
         meta="52 weeks"
         expandable={hasMovement(series.balance)}
-        className={NARROW}
+        className={VIZ_NARROW}
         bodyClassName={CHART}
         expandedChildren={
           <LineChart
@@ -128,7 +120,7 @@ function CardViz({
         title="Spend"
         meta="by category"
         expandable={series.categories.length > 0}
-        className={WIDE}
+        className={VIZ_WIDE}
         bodyClassName={CHART}
         expandedChildren={
           <StackedBars
@@ -149,7 +141,7 @@ function CardViz({
         title="Cycle"
         meta="this statement"
         expandable={series.cycle.length > 0}
-        className={NARROW}
+        className={VIZ_NARROW}
         bodyClassName={CHART}
         expandedChildren={
           <HBarList rows={series.cycle} currency={account.currency} expanded />
@@ -191,7 +183,7 @@ function LoanViz({
         title="Payments"
         meta="interest share"
         expandable={series.months.length > 0}
-        className={WIDE}
+        className={VIZ_WIDE}
         bodyClassName={CHART}
         expandedChildren={
           <StackedBars
@@ -217,7 +209,7 @@ function LoanViz({
         title="Remaining"
         meta="12 mo"
         expandable={hasMovement(series.balance)}
-        className={NARROW}
+        className={VIZ_NARROW}
         bodyClassName={CHART}
         expandedChildren={
           <LineChart
@@ -254,7 +246,7 @@ function PositionViz({
         title="Cost basis"
         meta="cumulative"
         expandable={hasMovement(series.basis)}
-        className={WIDE}
+        className={VIZ_WIDE}
         bodyClassName={CHART}
         expandedChildren={
           <LineChart
@@ -277,13 +269,13 @@ function PositionViz({
           empty="No buys in this window."
         />
       </ChartPane>
-      <BarsPane account={account} className={NARROW} title="Buys" />
+      <BarsPane account={account} className={VIZ_NARROW} title="Buys" />
     </>
   );
 }
 
 function BasicViz({ account }: { account: AccountView }) {
-  return <BarsPane account={account} className={FULL} title="In and out" />;
+  return <BarsPane account={account} className={VIZ_FULL} title="In and out" />;
 }
 
 /**

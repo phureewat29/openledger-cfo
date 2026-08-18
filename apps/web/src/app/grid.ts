@@ -26,3 +26,15 @@ export const TAPE_COL =
  */
 export const SEGMENT_STRIP =
   "border-border flex min-h-7 flex-wrap items-center gap-x-4 border-t px-3 py-1 text-[11px]";
+
+/**
+ * The vitals band's fixed chrome, shared with monitor/vitals.tsx: the band is
+ * height-fixed only at the wide tier, so below it the cell grid is the height.
+ */
+export const VITALS_BAND = "@4xl/main:h-[116px]";
+
+export const VITALS_GRID =
+  "grid grid-cols-2 @2xl/main:grid-cols-3 @4xl/main:h-[88px] @4xl/main:grid-cols-6";
+
+export const VITALS_CELL =
+  "border-border flex min-w-0 flex-col justify-center gap-0.5 border-l px-3 py-2 first:border-l-0";

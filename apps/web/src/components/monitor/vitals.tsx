@@ -3,7 +3,12 @@ import Link from "next/link";
 import { cn } from "@openledger-cfo/ui";
 
 import type { Dashboard } from "~/server/dashboard";
-import { SEGMENT_STRIP } from "~/app/grid";
+import {
+  SEGMENT_STRIP,
+  VITALS_BAND,
+  VITALS_CELL,
+  VITALS_GRID,
+} from "~/app/grid";
 import { Sparkline } from "~/components/charts/sparkline";
 import {
   formatMonths,
@@ -15,9 +20,6 @@ import {
 } from "~/domain/format";
 import { headlineOf } from "~/domain/insights/headline";
 import { splitPortfolio, thbTotal } from "~/domain/portfolio";
-
-const CELL =
-  "border-border flex min-w-0 flex-col justify-center gap-0.5 border-l px-3 py-2 first:border-l-0";
 
 const FIGURE = "text-[20px] leading-6 font-medium tabular-nums";
 const HERO = "text-[28px] leading-8 font-medium";
@@ -71,11 +73,12 @@ function Cell({
     </>
   );
 
-  if (href === undefined) return <figure className={CELL}>{body}</figure>;
+  if (href === undefined)
+    return <figure className={VITALS_CELL}>{body}</figure>;
   return (
     <Link
       href={href}
-      className={cn(CELL, "hover:text-accent transition-colors")}
+      className={cn(VITALS_CELL, "hover:text-accent transition-colors")}
     >
       {body}
     </Link>
@@ -126,11 +129,11 @@ export function Vitals({
   return (
     <section
       className={cn(
-        "border-border bg-card overflow-hidden rounded-lg border @4xl/main:h-[116px]",
+        `border-border bg-card overflow-hidden rounded-lg border ${VITALS_BAND}`,
         className,
       )}
     >
-      <div className="grid grid-cols-2 @2xl/main:grid-cols-3 @4xl/main:h-[88px] @4xl/main:grid-cols-6">
+      <div className={VITALS_GRID}>
         <Cell
           label="Net worth"
           value={formatThbCompact(headline.netWorthThb)}

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cn } from "@openledger-cfo/ui";
 
 import type { AccountMeta, AccountView } from "~/server/account";
+import { HEAD_CELL, HEAD_GRID } from "~/app/accounts/[id]/grid";
 import {
   formatDayMonth,
   formatPercent,
@@ -145,12 +146,9 @@ export function AccountHead({
         </span>
       </div>
 
-      <div className="border-border grid h-[52px] grid-cols-2 border-t @2xl/main:grid-cols-4">
+      <div className={HEAD_GRID}>
         {cellsOf(account.meta, money, account.currency).map((cell) => (
-          <figure
-            key={cell.label}
-            className="border-border flex min-w-0 flex-col justify-center gap-0.5 border-l px-3 py-1.5 first:border-l-0"
-          >
+          <figure key={cell.label} className={HEAD_CELL}>
             <figcaption className="label truncate" title={cell.label}>
               {cell.label}
             </figcaption>
