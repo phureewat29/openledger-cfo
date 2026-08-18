@@ -31,7 +31,8 @@ export const SEGMENT_STRIP =
  * The vitals band's fixed chrome, shared with monitor/vitals.tsx: the band is
  * height-fixed only at the wide tier, so below it the cell grid is the height.
  */
-export const VITALS_BAND = "@4xl/main:h-[116px]";
+export const VITALS_BAND =
+  "border-border bg-card overflow-hidden rounded-lg border @4xl/main:h-[116px]";
 
 export const VITALS_GRID =
   "grid grid-cols-2 @2xl/main:grid-cols-3 @4xl/main:h-[88px] @4xl/main:grid-cols-6";

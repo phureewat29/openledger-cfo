@@ -2,8 +2,13 @@
  * One authority for the accounts grid: the loading skeleton renders first and
  * the page streams in over it, so a spans mismatch reads as a jump.
  */
+/**
+ * Four explicit rows at the wide tier — totals, strip, a 280px group row, and
+ * the fraction Investments takes — so the skeleton and the loaded page resolve
+ * the same geometry from the template, whatever the data holds.
+ */
 export const ACCOUNTS_GRID =
-  "grid min-h-0 flex-1 grid-cols-12 gap-3 p-3 @4xl/main:grid-rows-[auto_auto_minmax(280px,1fr)]";
+  "grid min-h-0 flex-1 grid-cols-12 gap-3 p-3 @4xl/main:grid-rows-[auto_auto_280px_minmax(0,1fr)]";
 
 export const TOTALS_ROW =
   "border-border bg-card col-span-12 grid h-[52px] grid-cols-3 overflow-hidden rounded-lg border";
@@ -16,14 +21,12 @@ export const STRIP_ROW = "col-span-12 h-[31px]";
 
 /**
  * Seven whole rows of the tallest group — banks — at the 46.5px a two-line row
- * takes. At the wide tier the row these share decides instead, since holdings
- * below them are content-sized and a fixed height here would run underneath.
+ * takes. At the wide tier the grid's 280px track decides instead.
  */
 export const GROUP_COL =
   "col-span-12 @2xl/main:h-[360px] @4xl/main:col-span-4 @4xl/main:h-auto";
 
 export const GROUP_HALF = `${GROUP_COL} @2xl/main:col-span-6`;
 
-/** The wide-tier floor keeps the soft skeleton from collapsing to its header. */
 export const INVESTMENTS_COL =
-  "col-span-12 @2xl/main:h-[320px] @4xl/main:h-auto @4xl/main:min-h-[320px]";
+  "col-span-12 @2xl/main:h-[320px] @4xl/main:h-auto";

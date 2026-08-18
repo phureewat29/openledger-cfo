@@ -37,9 +37,7 @@ export default function EverythingLoading() {
       <Breadcrumbs crumbs={[{ label: "Everything" }]} />
       <h1 className="sr-only">Everything</h1>
       <div className={EVERYTHING_GRID}>
-        <section
-          className={`border-border bg-card col-span-12 overflow-hidden rounded-lg border ${VITALS_BAND}`}
-        >
+        <section className={`${VITALS_BAND} col-span-12`}>
           <div className={VITALS_GRID}>
             {VITALS.map((label, rank) => (
               <figure key={label} className={VITALS_CELL}>

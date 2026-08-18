@@ -127,12 +127,7 @@ export function Vitals({
   );
 
   return (
-    <section
-      className={cn(
-        `border-border bg-card overflow-hidden rounded-lg border ${VITALS_BAND}`,
-        className,
-      )}
-    >
+    <section className={cn(VITALS_BAND, className)}>
       <div className={VITALS_GRID}>
         <Cell
           label="Net worth"
