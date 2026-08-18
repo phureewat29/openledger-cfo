@@ -62,7 +62,7 @@ You should see the demo dataset. If a pane says the ledger is not initialized, r
 
 ## The AI layer
 
-Two agents, both built on [deepagents](https://www.npmjs.com/package/deepagents) over any OpenAI-compatible gateway (`OPENAI_COMPATIBLE_BASE_URL`). The chat recommends the two models benchmarked at [openledger.sh](https://openledger.sh/) as the most cost-efficient, defaulting to GPT-5.6 Luna:
+Two agents, both built on [deepagents](https://www.npmjs.com/package/deepagents) over any OpenAI-compatible gateway (`OPENAI_COMPATIBLE_BASE_URL`). The chat recommends the models benchmarked at [openledger.sh](https://openledger.sh/) as the most cost-efficient, defaulting to Qwen 3.8:
 
 - **The CFO Agent**
 - **The Ingest Agent**

@@ -9,14 +9,15 @@ export interface ModelChoice {
   readonly label: string;
 }
 
-export const DEFAULT_MODEL = "openai/gpt-5.6-luna";
+export const DEFAULT_MODEL = "qwen/qwen-3.8";
 
 /**
- * The two models benchmarked against ledger work at openledger.sh, kept to
- * the ones that answered best per token spent. A model earns its row here by
+ * The models benchmarked against ledger work at openledger.sh, kept to the
+ * ones that answered best per token spent. A model earns its row here by
  * benchmark, not by novelty.
  */
 export const RECOMMENDED_MODELS: readonly ModelChoice[] = [
-  { id: DEFAULT_MODEL, label: "GPT-5.6 Luna" },
+  { id: DEFAULT_MODEL, label: "Qwen 3.8" },
+  { id: "openai/gpt-5.6-luna", label: "GPT-5.6 Luna" },
   { id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash" },
 ];

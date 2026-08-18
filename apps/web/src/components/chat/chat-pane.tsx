@@ -16,6 +16,7 @@ import { Conversation } from "./conversation";
 import { useChatDock } from "./dock";
 import { Greeting } from "./greeting";
 import { Thinking } from "./message";
+import { ModelDialog } from "./model-dialog";
 import { PromptInput } from "./prompt-input";
 import { QueuedPrompts, usePromptQueue } from "./prompt-queue";
 
@@ -30,6 +31,7 @@ export function ChatPane({
 }) {
   const [input, setInput] = useState("");
   const [model, setModel] = useState<string>(DEFAULT_MODEL);
+  const [picking, setPicking] = useState(false);
   const pathname = usePathname();
   const dock = useChatDock();
   const { messages, sendMessage, stop, status, error } =
@@ -77,28 +79,31 @@ export function ChatPane({
             <span className="label">CFO</span>
           </span>
           {enabled ? (
-            <select
-              value={model}
-              onChange={(event) => setModel(event.target.value)}
+            <button
+              type="button"
               aria-label="Model"
+              onClick={() => setPicking(true)}
               className="text-muted-foreground hover:text-foreground focus-visible:outline-ring max-w-[45%] shrink cursor-pointer truncate bg-transparent text-right text-[10px] tracking-[0.12em] uppercase outline-none focus-visible:outline-2"
             >
-              {RECOMMENDED_MODELS.map((choice) => (
-                <option
-                  key={choice.id}
-                  value={choice.id}
-                  className="bg-card text-foreground"
-                >
-                  {choice.label}
-                </option>
-              ))}
-            </select>
+              {RECOMMENDED_MODELS.find((choice) => choice.id === model)
+                ?.label ?? model}
+            </button>
           ) : (
             <span className="border-border text-muted-foreground shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px] tracking-[0.12em] uppercase">
               No key
             </span>
           )}
         </header>
+
+        <ModelDialog
+          open={picking}
+          current={model}
+          onPick={(id) => {
+            setModel(id);
+            setPicking(false);
+          }}
+          onClose={() => setPicking(false)}
+        />
 
         {!enabled ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
