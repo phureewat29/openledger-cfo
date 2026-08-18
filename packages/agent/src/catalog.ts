@@ -18,6 +18,6 @@ export const DEFAULT_MODEL = "openai/gpt-5.6-luna";
  */
 export const RECOMMENDED_MODELS: readonly ModelChoice[] = [
   { id: DEFAULT_MODEL, label: "GPT-5.6 Luna" },
-  { id: "qwen/qwen3.8-27b", label: "Qwen 3.8" },
+  { id: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B" },
   { id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash" },
 ];
