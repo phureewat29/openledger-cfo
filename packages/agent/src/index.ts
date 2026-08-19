@@ -3,11 +3,12 @@ import type { UIMessage } from "ai";
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import { createDeepAgent } from "deepagents";
 
+import type { GatewayConfig } from "./model";
 import type { AgentKind } from "./registry";
 import type { LangGraphEvent } from "./stream";
 import type { QuestionScope } from "./tools/ingest";
 import { backendFor, SKILLS_PATH } from "./memory";
-import { model } from "./model";
+import { chatModel } from "./model";
 import { AGENTS } from "./registry";
 import { toUIMessageStreamResponse } from "./stream";
 import { suggestFollowUps } from "./suggest";
@@ -19,10 +20,10 @@ if ("window" in globalThis) {
 }
 
 export interface AgentOptions {
+  /** The saved AI gateway this run speaks through; the caller resolves it. */
+  gateway: GatewayConfig;
   /** Appended to the kind's system prompt: what the app already put on screen. */
   system?: string;
-  /** Overrides `OPENAI_COMPATIBLE_MODEL` for this run; the id the gateway routes on. */
-  model?: string;
   /** Raises the kind's ceiling for a caller whose one turn spans several files. */
   recursionLimit?: number;
   /**
@@ -81,10 +82,7 @@ const toChatMessages = (messages: UIMessage[]): ChatMessage[] =>
   });
 
 /** Stateless: the client's transcript is the whole history every run. */
-export const createAgent = (
-  kind: AgentKind,
-  opts: AgentOptions = {},
-): Agent => {
+export const createAgent = (kind: AgentKind, opts: AgentOptions): Agent => {
   const spec = AGENTS[kind];
   const excluded = new Set(opts.excludeTools ?? []);
   const scoped =
@@ -94,7 +92,7 @@ export const createAgent = (
   const replacement = new Map(scoped.map((tool) => [tool.name, tool]));
 
   const agent = createDeepAgent({
-    model: model(opts.model),
+    model: chatModel(opts.gateway),
     tools: [
       ...spec.tools
         .filter((tool) => !excluded.has(tool.name))
@@ -137,7 +135,7 @@ export const createAgent = (
                 asked,
                 answer,
                 system: opts.system,
-                model: opts.model,
+                gateway: opts.gateway,
                 signal,
               })
           : undefined,
@@ -146,7 +144,7 @@ export const createAgent = (
   };
 };
 
-export { isAiEnabled } from "./model";
+export type { GatewayConfig } from "./model";
 export type { AgentKind } from "./registry";
 export { nsDepth, textOf, unwrap } from "./stream";
 export type { LangGraphEvent } from "./stream";

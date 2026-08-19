@@ -1,7 +1,8 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod/v4";
 
-import { model } from "./model";
+import type { GatewayConfig } from "./model";
+import { chatModel } from "./model";
 import { sanitizeLabel } from "./sanitize";
 
 /**
@@ -41,8 +42,8 @@ export interface SuggestInput {
   answer: string;
   /** The briefing the turn ran with, so a suggestion cannot outrun the page. */
   system?: string;
-  /** The turn's model — the one id this session has already proven routable. */
-  model?: string;
+  /** The gateway the turn ran through; suggestions ride the same one. */
+  gateway: GatewayConfig;
   signal?: AbortSignal;
 }
 
@@ -111,7 +112,7 @@ export const suggestFollowUps = async (
     : deadline;
 
   try {
-    const result: unknown = await model(input.model)
+    const result: unknown = await chatModel(input.gateway)
       // Function calling by name: left alone, the client picks a json_schema
       // response format for any id that is not a gpt-3 or gpt-4, and gateways
       // route that unevenly. Anything that can run this agent can call a tool.

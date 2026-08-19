@@ -9,10 +9,12 @@
  */
 import type { UIMessage, UIMessageChunk } from "ai";
 
+import { readGateway } from "@openledger-cfo/api";
+
+import type { GatewayConfig } from "../src/model";
 import type { AgentKind } from "../src/registry";
 import type { LangGraphEvent } from "../src/stream";
-import { DEFAULT_MODEL } from "../src/catalog";
-import { createAgent, isAiEnabled } from "../src/index";
+import { createAgent } from "../src/index";
 import { AGENTS } from "../src/registry";
 import { toUIMessageStreamResponse } from "../src/stream";
 
@@ -53,8 +55,12 @@ interface Run {
   tools: { name: string; command?: string }[];
 }
 
-const runAgent = async (kind: AgentKind, prompt: string): Promise<Run> => {
-  const agent = createAgent(kind);
+const runAgent = async (
+  kind: AgentKind,
+  prompt: string,
+  gateway: GatewayConfig,
+): Promise<Run> => {
+  const agent = createAgent(kind, { gateway });
   const spec = AGENTS[kind];
   let skills: { name?: string }[] = [];
 
@@ -111,19 +117,21 @@ const assert = (label: string, ok: boolean, detail = "") => {
   );
 };
 
-if (!isAiEnabled()) {
+const gateway = await readGateway();
+if (gateway === undefined) {
   console.error(
-    "OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY are not set",
+    "AI gateway not configured — save base URL, API key, and model in the app settings first.",
   );
   process.exit(1);
 }
 
-console.log(`model: ${process.env.OPENAI_COMPATIBLE_MODEL ?? DEFAULT_MODEL}\n`);
+console.log(`model: ${gateway.model}\n`);
 
 console.log("=== cfo ===");
 const cfo = await runAgent(
   "cfo",
   "Between 2026-07-01 and 2026-07-31, what were my total income and expenses? One sentence.",
+  gateway,
 );
 console.log(`  reply: ${cfo.text.replace(/\s+/g, " ").trim()}`);
 console.log(
@@ -155,6 +163,7 @@ console.log("\n=== ingest ===");
 const ingest = await runAgent(
   "ingest",
   "What is waiting in the ingest queue right now? Just report the queue, do not prepare or commit anything.",
+  gateway,
 );
 console.log(`  reply: ${ingest.text.replace(/\s+/g, " ").trim()}`);
 console.log(

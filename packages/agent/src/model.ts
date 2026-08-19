@@ -1,33 +1,27 @@
 import { ChatOpenAI } from "@langchain/openai";
 
-import { DEFAULT_MODEL } from "./catalog";
-
-export const isAiEnabled = (): boolean =>
-  Boolean(
-    process.env.OPENAI_COMPATIBLE_BASE_URL &&
-      process.env.OPENAI_COMPATIBLE_API_KEY,
-  );
+/**
+ * What this runtime needs to speak; the caller resolves and injects it. The
+ * api's config store declares the same shape — structural on purpose, since
+ * importing it here would invert the dependency direction.
+ */
+export interface GatewayConfig {
+  readonly baseUrl: string;
+  readonly apiKey: string;
+  readonly model: string;
+}
 
 /**
  * Any endpoint speaking the OpenAI wire protocol: the OpenAI chat model class
- * is the client, and the gateway is whatever `OPENAI_COMPATIBLE_BASE_URL`
- * names. Keyless local endpoints still want a non-empty
- * `OPENAI_COMPATIBLE_API_KEY`; any string satisfies them.
+ * is the client, and the gateway is whatever the saved configuration names.
+ * The caller resolves and injects it — this package holds no credentials.
  */
-export const model = (id?: string): ChatOpenAI => {
-  const baseURL = process.env.OPENAI_COMPATIBLE_BASE_URL;
-  const apiKey = process.env.OPENAI_COMPATIBLE_API_KEY;
-  if (!baseURL || !apiKey) {
-    throw new Error(
-      "OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY are not set; gate calls with isAiEnabled()",
-    );
-  }
-
-  return new ChatOpenAI({
-    model: id ?? process.env.OPENAI_COMPATIBLE_MODEL ?? DEFAULT_MODEL,
-    apiKey,
+export const chatModel = (gateway: GatewayConfig): ChatOpenAI =>
+  new ChatOpenAI({
+    model: gateway.model,
+    // The client refuses to construct without one; keyless endpoints ignore it.
+    apiKey: gateway.apiKey === "" ? "none" : gateway.apiKey,
     // Figures are read from the ledger, never sampled.
     temperature: 0,
-    configuration: { baseURL },
+    configuration: { baseURL: gateway.baseUrl },
   });
-};
