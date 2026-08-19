@@ -4,12 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
 
-/**
- * The saved gateway, probed. No polling interval on purpose: every probe is a
- * real request to the gateway, and the dot answers "is the saved config
- * right", not "is the internet up this second" — focus refetch and the
- * post-save invalidation keep it honest when it matters.
- */
+/** No polling on purpose — every probe is a real gateway request; focus refetch and post-save invalidation keep it honest. */
 export function useAiStatus(configured: boolean) {
   const trpc = useTRPC();
   return useQuery(

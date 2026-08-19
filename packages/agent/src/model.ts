@@ -1,9 +1,9 @@
 import { ChatOpenAI } from "@langchain/openai";
 
 /**
- * What this runtime needs to speak; the caller resolves and injects it. The
- * api's config store declares the same shape — structural on purpose, since
- * importing it here would invert the dependency direction.
+ * The runtime's own port; the caller injects it. The api store declares the
+ * same shape structurally — core stays out of the persistence context, which
+ * only the `tools/caller` adapter reaches.
  */
 export interface GatewayConfig {
   readonly baseUrl: string;
@@ -11,11 +11,7 @@ export interface GatewayConfig {
   readonly model: string;
 }
 
-/**
- * Any endpoint speaking the OpenAI wire protocol: the OpenAI chat model class
- * is the client, and the gateway is whatever the saved configuration names.
- * The caller resolves and injects it — this package holds no credentials.
- */
+/** Any OpenAI-wire endpoint; the config is injected — this package holds no credentials. */
 export const chatModel = (gateway: GatewayConfig): ChatOpenAI =>
   new ChatOpenAI({
     model: gateway.model,

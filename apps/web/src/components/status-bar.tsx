@@ -6,17 +6,14 @@ import type { CliEntry } from "~/domain/cli-log";
 import type { Chrome } from "~/server/chrome";
 import type { LedgerLoad } from "~/server/head";
 import { useCliLog } from "~/components/cli-log-provider";
-import { AiWord } from "~/components/config/ai-word";
+import { useConfigDialog } from "~/components/config/config-dialog-provider";
+import { useAiStatus, verdictOf } from "~/components/config/use-ai-status";
 import { formatStamp } from "~/domain/format";
 
-/**
- * Transport plumbing every invocation carries. It says nothing about the work
- * and at this width it crowds out what does, so the bar speaks the command and
- * the title keeps the full argv.
- */
+/** Transport flags say nothing about the work; the title keeps the full argv. */
 const TRANSPORT_FLAGS = /\s--(?:json|no-color|no-redact)\b|\s--config\s+\S+/g;
 
-/** The reads the pollers issue, which are this bar's own pulse rather than work. */
+/** The pollers' own reads — this bar's pulse, not work. */
 const POLL_ARGV = ["questions list", "ingest list"];
 
 const isPoll = (entry: CliEntry) =>
@@ -25,6 +22,43 @@ const isPoll = (entry: CliEntry) =>
 /** The newest command that is somebody's work, else the newest of any kind. */
 const newestUseful = (entries: readonly CliEntry[]) =>
   entries.findLast((entry) => !isPoll(entry)) ?? entries.at(-1);
+
+/** One clickable word when the gateway is off or down; silent while the ledger is down. */
+function AiWord({
+  configured,
+  ledgerOk,
+}: {
+  configured: boolean;
+  ledgerOk: boolean;
+}) {
+  const config = useConfigDialog();
+  const status = useAiStatus(configured && ledgerOk);
+
+  if (!ledgerOk) return null;
+  // A vanished row is "off", not "down" — only a probed failure earns the red.
+  const down =
+    configured &&
+    verdictOf(status) === "down" &&
+    status.data?.configured === true;
+  if (configured && !down) return null;
+
+  const word = down ? "AI DOWN" : "AI OFF";
+  return (
+    <button
+      type="button"
+      aria-label={`${word} — open the AI Gateway Config`}
+      onClick={config.open}
+      className={cn(
+        "shrink-0 cursor-pointer",
+        down
+          ? "text-destructive"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {word}
+    </button>
+  );
+}
 
 const asOfText = (chrome: LedgerLoad<Chrome>) => {
   if (!chrome.ok) return "LEDGER UNAVAILABLE";
