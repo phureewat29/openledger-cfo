@@ -42,12 +42,7 @@
       "cache": false
     }
   },
-  "globalEnv": [
-    "OLED_CONFIG",
-    "OPENAI_COMPATIBLE_BASE_URL",
-    "OPENAI_COMPATIBLE_API_KEY",
-    "OPENAI_COMPATIBLE_MODEL"
-  ],
+  "globalEnv": ["OLED_CONFIG"],
   "globalPassThroughEnv": [
     "NODE_ENV",
     "CI",
