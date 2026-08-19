@@ -41,21 +41,22 @@ oled --version     # npm install -g @aquartier/openledger
 Then:
 
 ```bash
+# clone this project
 git clone https://github.com/phureewat29/openledger-cfo.git
 cd openledger-cfo
-pnpm install
 
 # install the OpenLedger CLI
 npm install -g @aquartier/openledger
 
+# install dependencies
+pnpm install
+
 # load the demo dataset
 pnpm bootstrap
 
-# http://localhost:3001
-pnpm dev
-
-# or serve the production build
+# serve the production build
 pnpm build && pnpm serve
+
 ```
 
 You should see the demo dataset. If a pane says the ledger is not initialized, run `pnpm bootstrap` again and watch its checks print.
@@ -92,6 +93,7 @@ apps/web (Next.js 16)                    packages
 ## Development
 
 ```bash
+pnpm dev         # start local development
 pnpm typecheck   # builds the dist-publishing packages first, then checks everything
 pnpm lint        # eslint across the workspace
 pnpm format      # prettier check
