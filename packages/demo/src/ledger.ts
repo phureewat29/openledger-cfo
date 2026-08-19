@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -26,30 +26,6 @@ export const LEDGER = {
   dataDir: join(LEDGER_ROOT, "data"),
   cacheDir: join(LEDGER_ROOT, "cache"),
 } as const;
-
-const readOcrConfig = (
-  path: string,
-  log: (line: string) => void,
-): { ocrBaseUrl?: string; ocrModel?: string } => {
-  if (!existsSync(path)) return {};
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<
-      string,
-      unknown
-    >;
-    const ocrBaseUrl = parsed.ocrBaseUrl;
-    const ocrModel = parsed.ocrModel;
-    return {
-      ...(typeof ocrBaseUrl === "string" && ocrBaseUrl !== ""
-        ? { ocrBaseUrl }
-        : {}),
-      ...(typeof ocrModel === "string" && ocrModel !== "" ? { ocrModel } : {}),
-    };
-  } catch (cause) {
-    log(`ocr config unreadable, continuing without it: ${String(cause)}`);
-    return {};
-  }
-};
 
 const guardDemoLedger = (): Result<true, OledError> => {
   if (!existsSync(join(REPO_ROOT, "pnpm-workspace.yaml"))) {
@@ -90,8 +66,15 @@ export const bootstrapLedger = async (
   if (!guard.ok) return guard;
 
   // The OCR endpoint is a machine setting, not a dataset fact: carry it across
-  // the reset so a reseed never turns image ingest off.
-  const ocr = readOcrConfig(LEDGER.configPath, options.log);
+  // the reset so a reseed never turns image ingest off. Raw key included —
+  // only the file holds it, and re-init must replay it.
+  const view = await oled.config.read();
+  if (!view.ok && view.error.kind !== "not_configured") {
+    options.log(
+      `ocr config unreadable, continuing without it: ${view.error.message}`,
+    );
+  }
+  const { ocrBaseUrl, ocrModel, ocrApiKey } = view.ok ? view.value : {};
 
   if (!options.keep) {
     await rm(LEDGER.root, { recursive: true, force: true });
@@ -109,7 +92,9 @@ export const bootstrapLedger = async (
       currency: options.config.currency,
       locale: options.config.locale,
       userName: options.config.userName,
-      ...ocr,
+      ocrBaseUrl,
+      ocrModel,
+      ocrApiKey,
     });
     if (!init.ok) return init;
     options.log(`config  ${init.value.config_path}`);

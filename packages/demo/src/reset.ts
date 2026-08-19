@@ -62,6 +62,8 @@ const run = async (): Promise<number> => {
   // Uploads write straight into the data dir; init leaves it to be made lazily.
   await mkdir(LEDGER.dataDir, { recursive: true });
 
+  // The configuration table stays: the AI gateway is a machine setting, not a
+  // dataset fact, the same doctrine that carries the OCR endpoint across.
   db.transaction((tx) => {
     tx.delete(budget).run();
     tx.delete(goal).run();
