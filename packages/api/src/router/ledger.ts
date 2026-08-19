@@ -9,7 +9,7 @@ import {
 } from "@openledger-cfo/openledger";
 
 import { listCliLog } from "../cli-log";
-import { DEMO_HINT, unwrapOrTrpc } from "../result";
+import { unwrapOrTrpc } from "../result";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 
 const isoDate = z.iso.date();
@@ -34,9 +34,7 @@ const accountPair = z.object({ from: accountId, to: accountId });
 
 export const ledgerRouter = createTRPCRouter({
   status: publicProcedure.query(async ({ ctx }) =>
-    unwrapOrTrpc(await ctx.ledger.status(), {
-      notConfiguredMessage: DEMO_HINT,
-    }),
+    unwrapOrTrpc(await ctx.ledger.status()),
   ),
   report: publicProcedure
     .input(z.object({ from: isoDate, to: isoDate }))

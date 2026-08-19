@@ -18,29 +18,29 @@ const ERROR_CODE: Record<OledErrorKind, TRPCError["code"]> = {
   parse_failed: "INTERNAL_SERVER_ERROR",
 };
 
-/**
- * The one place connector Results become transport errors. The demo hint is
- * opt-in: prepare can exit not_configured for an unreachable OCR endpoint,
- * which reloading the demo ledger would not fix.
- */
-export const unwrapOrTrpc = <T>(
-  result: Result<T, OledError>,
-  opts?: { notConfiguredMessage?: string },
-): T => {
+/** The one place connector Results become transport errors. */
+export const unwrapOrTrpc = <T>(result: Result<T, OledError>): T => {
   if (result.ok) return result.value;
 
   const { error } = result;
-  if (error.kind === "not_configured" && opts?.notConfiguredMessage) {
-    throw new TRPCError({
-      code: ERROR_CODE.not_configured,
-      message: opts.notConfiguredMessage,
-    });
-  }
   throw new TRPCError({
     code: ERROR_CODE[error.kind],
     message: error.hint ? `${error.message} (${error.hint})` : error.message,
+    cause: error,
   });
 };
 
-export const DEMO_HINT =
-  "Demo ledger not initialized — run `pnpm bootstrap` first";
+const isOledError = (value: unknown): value is OledError =>
+  typeof value === "object" &&
+  value !== null &&
+  Object.hasOwn(ERROR_CODE, (value as { kind?: string }).kind ?? "");
+
+/**
+ * The connector error back off a thrown transport error, for callers that
+ * need a finer split than the code — a missing binary and a crashed CLI both
+ * ride INTERNAL_SERVER_ERROR. The code table stays the one authority.
+ */
+export const oledCauseOf = (error: unknown): OledError | undefined =>
+  error instanceof TRPCError && isOledError(error.cause)
+    ? error.cause
+    : undefined;
