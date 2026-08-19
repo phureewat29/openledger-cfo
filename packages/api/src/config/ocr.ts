@@ -8,11 +8,11 @@ import type {
 import { err, ok } from "@openledger-cfo/openledger";
 
 import type { GatewayConfig } from "./store";
-import { HttpUrlSchema } from "./store";
+import { HttpUrlSchema, ModelIdSchema } from "./store";
 
-export const DEFAULT_OCR_MODEL = "typhoon-ocr1.6-2b";
+export const DEFAULT_OCR_MODEL = "typhoon-ocr1.5-2b";
 
-const ocrModelSchema = z.string().min(1).max(120).default(DEFAULT_OCR_MODEL);
+const ocrModelSchema = ModelIdSchema.default(DEFAULT_OCR_MODEL);
 
 export const OcrSaveSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("off") }),
@@ -78,9 +78,8 @@ const OCR_FORWARD: {
   }),
 };
 
-// Sound despite the cast: each handler's parameter is pinned to its own union
-// member at the table, so drift is caught there — the cast only defeats the
-// parameter intersection TypeScript builds when indexing with a union key.
+// The cast only defeats the parameter intersection from union-key indexing;
+// each handler stays pinned to its member at the table, so drift is caught there.
 const forwardFor = (ocr: OcrSave, gateway: GatewayConfig): ConfigSetInput =>
   OCR_FORWARD[ocr.mode](ocr as never, gateway);
 

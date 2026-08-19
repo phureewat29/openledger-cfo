@@ -5,12 +5,15 @@ import { usePathname } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { Settings } from "lucide-react";
 
+import type { ProbeReason } from "@openledger-cfo/api";
+import { cn } from "@openledger-cfo/ui";
 import { Button } from "@openledger-cfo/ui/button";
 
 import type { CfoChatMessage } from "./suggestions";
+import type { GatewayVerdict } from "~/components/config/use-ai-status";
 import { useConfigDialog } from "~/components/config/config-dialog-provider";
 import { SETTINGS_TRIGGER_ID } from "~/components/config/focus";
-import { ModelChip } from "~/components/config/model-chip";
+import { useAiStatus, verdictOf } from "~/components/config/use-ai-status";
 import { OlLogo } from "~/components/logo";
 import { ChatMessage } from "./chat-message";
 import { Conversation } from "./conversation";
@@ -21,6 +24,132 @@ import { PromptInput } from "./prompt-input";
 import { QueuedPrompts, usePromptQueue } from "./prompt-queue";
 
 const PLACEHOLDER = "Talk to your money";
+
+interface ChipView {
+  readonly dot: string;
+  readonly text: string;
+  /** Uppercase is for the call to action; a model id renders verbatim. */
+  readonly caps: boolean;
+  readonly state: string;
+  readonly title?: string;
+}
+
+const FAILURE_STATE: Record<ProbeReason, string> = {
+  unauthorized: "AI gateway authentication failed",
+  unreachable: "AI gateway unreachable",
+  rejected: "AI gateway refused the request",
+};
+
+const chipView = (input: {
+  ledgerOk: boolean;
+  configured: boolean;
+  model: string;
+  verdict: GatewayVerdict;
+  down?: { reason: ProbeReason; message: string } | undefined;
+}): ChipView => {
+  const { ledgerOk, configured, model, verdict, down } = input;
+  // The main area owns the nag while the ledger is broken; stay quiet here.
+  if (!ledgerOk) {
+    return {
+      dot: "bg-muted-foreground",
+      text: configured ? model : "Setup",
+      caps: !configured,
+      state: "waiting for the ledger",
+      title: configured ? model : undefined,
+    };
+  }
+  if (!configured) {
+    return {
+      dot: "bg-destructive",
+      text: "AI Gateway Config",
+      caps: true,
+      state: "AI gateway not configured",
+    };
+  }
+  if (verdict === "pending") {
+    return {
+      dot: "bg-muted-foreground animate-pulse",
+      text: model,
+      caps: false,
+      state: "checking the AI gateway",
+      title: model,
+    };
+  }
+  if (verdict === "unknown") {
+    return {
+      dot: "bg-muted-foreground",
+      text: model,
+      caps: false,
+      state: "AI gateway status unknown",
+      title: `${model} — the status check failed`,
+    };
+  }
+  if (verdict === "up") {
+    return {
+      dot: "bg-accent",
+      text: model,
+      caps: false,
+      state: "AI gateway connected",
+      title: model,
+    };
+  }
+  return {
+    dot: "bg-destructive",
+    text: model,
+    caps: false,
+    state:
+      down === undefined
+        ? "AI gateway not configured"
+        : FAILURE_STATE[down.reason],
+    title: down === undefined ? model : `${model} — ${down.message}`,
+  };
+};
+
+/** The header chip: which model answers, and whether it actually does. */
+function ModelChip({
+  configured,
+  model,
+  ledgerOk,
+}: {
+  configured: boolean;
+  model: string;
+  ledgerOk: boolean;
+}) {
+  const dialog = useConfigDialog();
+  const status = useAiStatus(configured && ledgerOk);
+  const live = status.data;
+  const view = chipView({
+    ledgerOk,
+    configured,
+    // The probe's answer is fresher than the server prop after a save.
+    model: live?.configured ? live.model : model,
+    verdict: verdictOf(status),
+    down: live?.configured && !live.ok ? live : undefined,
+  });
+
+  return (
+    <button
+      type="button"
+      aria-label={`${view.text} — ${view.state}`}
+      title={view.title}
+      onClick={dialog.open}
+      className="text-muted-foreground hover:text-foreground focus-visible:outline-ring flex min-w-0 shrink cursor-pointer items-center gap-1.5 bg-transparent text-[10px] outline-none focus-visible:outline-2"
+    >
+      <span
+        className={cn(
+          "min-w-0 truncate",
+          view.caps && "tracking-[0.12em] uppercase",
+        )}
+      >
+        {view.text}
+      </span>
+      <span
+        aria-hidden
+        className={cn("size-1.5 shrink-0 rounded-full", view.dot)}
+      />
+    </button>
+  );
+}
 
 export function ChatPane({
   ledgerOk,
@@ -44,9 +173,7 @@ export function ChatPane({
   const aiConfigured = ai !== undefined;
   const enabled = ledgerOk && aiConfigured;
 
-  // Offer the next question only between turns. A prompt still queued means the
-  // user has already moved past whatever the last answer suggested, and the
-  // queue holds one past the run that settles it — hence both halves.
+  // Offer follow-ups only between turns; a queued prompt means the user moved past them.
   const idle = status === "ready" && queue.sending === undefined;
   const last = messages.at(-1);
   const followUps =
@@ -78,11 +205,10 @@ export function ChatPane({
           <div className="flex max-w-[16rem] flex-col items-center gap-3 text-center">
             <p className="text-[13px]">CFO is asleep.</p>
             <p className="text-muted-foreground text-xs">
-              Configure an AI gateway to wake it up. Everything else works
-              without one.
+              Configure AI gateway to wake it up.
             </p>
-            <Button variant="outline" size="sm" onClick={config.open}>
-              AI Gateway Configuration
+            <Button size="sm" onClick={config.open}>
+              Config
             </Button>
           </div>
         </div>
@@ -140,7 +266,7 @@ export function ChatPane({
             <button
               type="button"
               id={SETTINGS_TRIGGER_ID}
-              aria-label="Setup"
+              aria-label="AI gateway setup"
               onClick={config.open}
               className="text-muted-foreground hover:text-foreground focus-visible:outline-ring shrink-0 cursor-pointer outline-none focus-visible:outline-2"
             >

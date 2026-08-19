@@ -6,10 +6,11 @@ import {
   OcrSaveSchema,
   readOcrView,
 } from "../config/ocr";
-import { probeModels } from "../config/probe";
+import { probeChat, probeModels } from "../config/probe";
 import {
   DEFAULT_AI_MODEL,
   HttpUrlSchema,
+  ModelIdSchema,
   readConfigurationRow,
   readGateway,
   saveConfiguration,
@@ -33,8 +34,9 @@ export const configurationRouter = createTRPCRouter({
         ? {
             ...ocr,
             model: ocr.model ?? DEFAULT_OCR_MODEL,
-            // Shared only reads as a sensible default over an OCR that does not exist yet.
-            sharesGateway: saved?.ocrSharesGateway ?? !ocr.enabled,
+            // Custom by default: sharing would hide the URL field and pit
+            // the local Typhoon model against the gateway.
+            sharesGateway: saved?.ocrSharesGateway ?? false,
           }
         : ocr,
     };
@@ -76,25 +78,28 @@ export const configurationRouter = createTRPCRouter({
       return { ok: true as const };
     }),
 
-  // One `GET /models` answers the Test button and the status dot alike.
   test: publicProcedure
     .input(
       z.object({
         baseUrl: HttpUrlSchema,
         apiKey: z.string().min(1).max(400).optional(),
+        model: ModelIdSchema,
+        kind: z.enum(["gateway", "ocr"]),
       }),
     )
-    .mutation(({ input }) => probeModels(input)),
+    .mutation(({ input }) => probeChat(input)),
 
   status: publicProcedure.query(async () => {
     const gateway = await readGateway();
     if (gateway === undefined) return { configured: false as const };
-    // The model rides along: it is the chip's live text after a save, when
-    // the layout's server prop can lag the open tab.
+    // The model rides for the chip's live text after a save.
     return {
       configured: true as const,
       model: gateway.model,
-      ...(await probeModels(gateway)),
+      ...(await probeModels({
+        baseUrl: gateway.baseUrl,
+        apiKey: gateway.apiKey,
+      })),
     };
   }),
 });

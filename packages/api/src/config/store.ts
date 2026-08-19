@@ -9,14 +9,16 @@ export const DEFAULT_AI_MODEL = "qwen/qwen3.8-27b";
 
 export const HttpUrlSchema = z.url({ protocol: /^https?$/ }).max(400);
 
+/** One length rule for every model-id field, so a value cannot test green and then fail to save. */
+export const ModelIdSchema = z.string().min(1).max(120);
+
 // Plain overwrite: the form always sends the key field, "" meaning keyless.
 export const SaveGatewaySchema = z.object({
   baseUrl: HttpUrlSchema,
   apiKey: z.string().max(400).default(""),
-  model: z.string().min(1).max(120).default(DEFAULT_AI_MODEL),
+  model: ModelIdSchema.default(DEFAULT_AI_MODEL),
 });
 
-/** The singleton row's fixed primary key. */
 const CONFIG_ROW_ID = "app";
 
 /** The agent package declares this shape too; they stay structurally equal. */
@@ -33,7 +35,7 @@ export interface ConfigReadError {
 
 type ConfigurationRow = typeof configuration.$inferSelect;
 
-/** A database that predates `pnpm db:push` answers "no such table" — a setup state with its own words. */
+/** "no such table" = the db predates `pnpm db:push`: a setup state, not an outage. */
 const toStoreError = (cause: unknown): ConfigReadError => {
   const message = cause instanceof Error ? cause.message : String(cause);
   return message.includes("no such table")
@@ -58,11 +60,7 @@ export const readConfigurationRow = async (): Promise<
   }
 };
 
-/**
- * Every caller only asks "is there a gateway", and the root layout and chat
- * route sit on this — a control-plane hiccup must read as "not configured",
- * never become a 500.
- */
+/** A control-plane hiccup reads as "not configured", never a 500 — the layout and chat route sit on this. */
 export const readGateway = async (): Promise<GatewayConfig | undefined> => {
   const row = await readConfigurationRow();
   if (!row.ok || row.value === undefined) return undefined;
