@@ -140,7 +140,7 @@ export function ChatPane({
             <button
               type="button"
               id={SETTINGS_TRIGGER_ID}
-              aria-label="AI Gateway Configuration"
+              aria-label="Setup"
               onClick={config.open}
               className="text-muted-foreground hover:text-foreground focus-visible:outline-ring shrink-0 cursor-pointer outline-none focus-visible:outline-2"
             >

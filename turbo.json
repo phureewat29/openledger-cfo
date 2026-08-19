@@ -38,6 +38,9 @@
     "demo:generate": {
       "cache": false
     },
+    "empty": {
+      "cache": false
+    },
     "reset": {
       "cache": false
     }

@@ -6,10 +6,11 @@
   "license": "AGPL-3.0-only",
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path .prettierignore",
-    "lint": "eslint --flag unstable_native_nodejs_ts_config",
     "demo": "pnpm with-env tsx src/main.ts",
     "demo:generate": "pnpm with-env tsx src/generate.ts",
+    "empty": "pnpm with-env tsx src/empty.ts",
+    "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path .prettierignore",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config",
     "reset": "pnpm with-env tsx src/reset.ts",
     "typecheck": "tsc --noEmit",
     "with-env": "dotenv -e ../../.env --"

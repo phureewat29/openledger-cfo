@@ -13,6 +13,7 @@
     "clean": "git clean -xdf node_modules",
     "clean:workspaces": "turbo run clean",
     "bootstrap": "pnpm db:push && pnpm demo",
+    "bootstrap:empty": "pnpm db:push && turbo run empty -F @openledger-cfo/demo",
     "db:push": "pnpm -F @openledger-cfo/db push",
     "demo": "turbo run demo -F @openledger-cfo/demo --",
     "demo:generate": "turbo run demo:generate -F @openledger-cfo/demo --",

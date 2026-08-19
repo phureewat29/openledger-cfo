@@ -12,8 +12,6 @@ import type {
 } from "@openledger-cfo/openledger";
 import { err, ok } from "@openledger-cfo/openledger";
 
-import type { Life } from "./dataset";
-
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..", "..");
 
 const LEDGER_ROOT = join(REPO_ROOT, ".oled");
@@ -43,8 +41,16 @@ const guardDemoLedger = (): Result<true, OledError> => {
   return ok(true);
 };
 
+/** The four facts `oled config --init` needs; the dataset and the persona both satisfy it. */
+export interface LedgerConfig {
+  readonly country: string;
+  readonly currency: string;
+  readonly locale: string;
+  readonly userName: string;
+}
+
 interface BootstrapOptions {
-  config: Life["meta"]["config"];
+  config: LedgerConfig;
   accounts: AccountCreateInput[];
   merchants: MerchantUpsertInput[];
   keep: boolean;
@@ -57,7 +63,7 @@ interface BootstrapReport {
   merchants: number;
 }
 
-/** Everything the ledger is given comes from the dataset, so no persona module is consulted. */
+/** The config, chart and merchants all arrive as arguments; this module reads no dataset and no persona of its own. */
 export const bootstrapLedger = async (
   oled: OpenLedger,
   options: BootstrapOptions,
@@ -65,9 +71,8 @@ export const bootstrapLedger = async (
   const guard = guardDemoLedger();
   if (!guard.ok) return guard;
 
-  // The OCR endpoint is a machine setting, not a dataset fact: carry it across
-  // the reset so a reseed never turns image ingest off. Raw key included —
-  // only the file holds it, and re-init must replay it.
+  // OCR is a machine setting: carried across the reset so a reseed never
+  // turns image ingest off. Raw key included — re-init must replay it.
   const view = await oled.config.read();
   if (!view.ok && view.error.kind !== "not_configured") {
     options.log(
@@ -100,8 +105,7 @@ export const bootstrapLedger = async (
     options.log(`config  ${init.value.config_path}`);
   }
 
-  // No chart is a legal ask — reset-to-empty — and the CLI refuses an empty
-  // batch, so zero accounts skips the call instead of sending it.
+  // The CLI refuses an empty batch; zero accounts skips the call.
   const summary = { created: 0, duplicates: 0 };
   if (options.accounts.length > 0) {
     const chart = await oled.bootstrap.accountsCreateBatch(options.accounts);

@@ -2,7 +2,13 @@ import { countBy, maxBy, orderBy, sumBy } from "es-toolkit";
 
 import type { Result } from "@openledger-cfo/openledger";
 import { db } from "@openledger-cfo/db/client";
-import { budget, goal, money, reminder } from "@openledger-cfo/db/schema";
+import {
+  budget,
+  goal,
+  insightState,
+  money,
+  reminder,
+} from "@openledger-cfo/db/schema";
 import {
   categoryOf,
   err,
@@ -20,6 +26,18 @@ import { addMonths, dayIn } from "./calendar";
 import { allRows } from "./dataset";
 import { formatMoney } from "./money";
 import { legsOf } from "./types";
+
+/**
+ * Every wipe walks this list, so the entry points cannot drift.
+ * `configuration` stays out: a machine setting, not a dataset fact.
+ */
+const PLAN_TABLES = [budget, goal, insightState, reminder];
+
+export const clearPlans = (): void => {
+  db.transaction((tx) => {
+    for (const table of PLAN_TABLES) tx.delete(table).run();
+  });
+};
 
 interface PlansReport {
   budgets: number;
@@ -386,9 +404,7 @@ export const seedPlans = (life: Life): Result<PlansReport, string> => {
 
   // One statement: a half-replaced control plane is worse than an untouched one.
   db.transaction((tx) => {
-    tx.delete(budget).run();
-    tx.delete(goal).run();
-    tx.delete(reminder).run();
+    for (const table of PLAN_TABLES) tx.delete(table).run();
 
     tx.insert(budget).values(budgets).run();
     tx.insert(goal).values(goals.value).run();
