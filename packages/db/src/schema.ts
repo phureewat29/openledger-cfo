@@ -58,6 +58,22 @@ export const reminder = sqliteTable("reminder", {
   createdAt: createdAt(),
 });
 
+/**
+ * The AI gateway, a machine setting like the OCR endpoint in the oled config:
+ * demo loads and resets leave it alone. One row, present exactly when the
+ * gateway is configured — a half-filled gateway is not a state. The shared
+ * flag is nullable on purpose: null means the user never chose, which is a
+ * different fact from "chose custom".
+ */
+export const configuration = sqliteTable("configuration", {
+  id: text().primaryKey(),
+  aiBaseUrl: text().notNull(),
+  aiApiKey: text().notNull(),
+  aiModel: text().notNull(),
+  ocrSharesGateway: integer({ mode: "boolean" }),
+  updatedAt: updatedAt(),
+});
+
 export const CreateGoalSchema = z.object({
   name: z.string().min(1).max(120),
   targetAmount: z.number().positive(),
