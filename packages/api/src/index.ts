@@ -9,7 +9,6 @@ export { type AppRouter, appRouter } from "./root";
 export { createTRPCContext } from "./trpc";
 export type { RouterInputs, RouterOutputs };
 
-export { clearCliLog } from "./cli-log";
 export type { ProbeReason } from "./config/probe";
 export { readGateway } from "./config/store";
 export { oledCauseOf } from "./result";
