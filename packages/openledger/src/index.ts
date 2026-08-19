@@ -65,6 +65,8 @@ export const createOpenLedger = (opts: CreateOpenLedgerOptions = {}) => {
     },
     config: {
       dataDir: reads.configDataDir,
+      read: reads.configRead,
+      set: writes.configSet,
     },
     /** Standing up a ledger: provisioning and batch posting, not request-path mutations. */
     bootstrap: {
@@ -139,6 +141,8 @@ export type {
   AccountUpdateResult,
   ConfigInitInput,
   ConfigInitResult,
+  ConfigSetInput,
+  ConfigView,
   CountSummary,
   FileDropResult,
   IngestDoneResult,

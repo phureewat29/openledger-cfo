@@ -29,7 +29,7 @@ const LANES = { fast: createSerialQueue(), slow: createSerialQueue() };
 export type OledLane = keyof typeof LANES;
 
 /** Flags whose following argument must never reach a log, a UI, or an error. */
-const SECRET_FLAGS = new Set(["--password"]);
+const SECRET_FLAGS = new Set(["--password", "--ocr-api-key"]);
 
 const MASK = "•••";
 
@@ -139,7 +139,7 @@ const toSpawnError = (code: string): OledError => {
     return {
       kind: "spawn_failed",
       message: `\`${OLED_BIN}\` was not found on PATH.`,
-      hint: "Install the OpenLedger data plane: `pnpm add -g @aquartier/openledger`.",
+      hint: "Install the OpenLedger data plane: `npm install -g @aquartier/openledger`.",
     };
   }
   return {

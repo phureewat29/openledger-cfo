@@ -40,10 +40,21 @@ export const resolveOledConfig = (): string => {
   return join(root, ".oled/config.json");
 };
 
+/** The CLI writes "" to clear a key; to every reader that means unset. */
+const unsetIfEmpty = z
+  .string()
+  .optional()
+  .transform((value) =>
+    value === undefined || value === "" ? undefined : value,
+  );
+
 /** The config file is camelCase, unlike every command's output. */
 const oledConfigFileSchema = z.looseObject({
   dataDir: z.string(),
   cacheDir: z.string(),
+  ocrBaseUrl: unsetIfEmpty,
+  ocrModel: unsetIfEmpty,
+  ocrApiKey: unsetIfEmpty,
 });
 export type OledConfigFile = z.infer<typeof oledConfigFileSchema>;
 

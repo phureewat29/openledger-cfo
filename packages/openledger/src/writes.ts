@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,6 +20,8 @@ import type {
   AccountUpdateResult,
   ConfigInitInput,
   ConfigInitResult,
+  ConfigSetInput,
+  ConfigView,
   FileDropResult,
   IngestDoneResult,
   IngestFailResult,
@@ -54,6 +57,8 @@ import {
   accountUpdateResultSchema,
   configInitInputSchema,
   configInitResultSchema,
+  configSetInputSchema,
+  configViewSchema,
   FILE_ID_PATTERN,
   fileDropResultSchema,
   ingestDoneResultSchema,
@@ -135,6 +140,12 @@ const toBatchOutcome = <
   return ok({ rows, summary });
 };
 
+const CONFIG_SET_FLAGS = {
+  ocrBaseUrl: "--ocr-base-url",
+  ocrModel: "--ocr-model",
+  ocrApiKey: "--ocr-api-key",
+} as const satisfies Partial<Record<keyof ConfigSetInput, string>>;
+
 const CONFIG_FLAGS = {
   db: "--db",
   dataDir: "--data-dir",
@@ -143,8 +154,7 @@ const CONFIG_FLAGS = {
   currency: "--currency",
   locale: "--locale",
   userName: "--user-name",
-  ocrBaseUrl: "--ocr-base-url",
-  ocrModel: "--ocr-model",
+  ...CONFIG_SET_FLAGS,
 } as const satisfies Partial<Record<keyof ConfigInitInput, string>>;
 
 const MERCHANT_FLAGS = {
@@ -275,6 +285,41 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     );
     if (!out.ok) return out;
     return parseSingle(configInitResultSchema, out.value);
+  };
+
+  /**
+   * Changes settings on an existing ledger: `oled config` without `--init` is
+   * a partial upsert, so unnamed keys survive. The existence guard is
+   * load-bearing — a setting flag creates the file on first touch, and a bare
+   * config born that way makes a later `configInit --init` refuse (exit 6).
+   */
+  const configSet = async (
+    input: ConfigSetInput,
+  ): Promise<Result<ConfigView, OledError>> => {
+    const validated = configSetInputSchema.safeParse(input);
+    if (!validated.success)
+      return err(toInvalidInput(validated.error, "config set"));
+
+    const flags = toFlagArgs(CONFIG_SET_FLAGS, validated.data);
+    if (flags.length === 0) {
+      return err<OledError>({
+        kind: "invalid",
+        message: "config set: nothing to set",
+      });
+    }
+    if (!existsSync(configPath)) {
+      return err<OledError>({
+        kind: "not_configured",
+        message: `No oled config at ${configPath}`,
+        hint: "Initialize the ledger first: `oled config <path> --init`.",
+      });
+    }
+
+    const out = await runOledConfig(["config", configPath, ...flags], {
+      onCommand,
+    });
+    if (!out.ok) return out;
+    return parseSingle(configViewSchema, out.value);
   };
 
   const accountsCreateBatch = async (
@@ -715,6 +760,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
 
   return {
     configInit,
+    configSet,
     accountsCreateBatch,
     accountsCreate,
     accountsUpdate,

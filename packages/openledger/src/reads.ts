@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { OledConfigFile } from "./config";
 import type { OledError } from "./errors";
 import type { OledCommandListener } from "./exec";
 import type { Result } from "./result";
@@ -343,6 +344,13 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     return ok(config.value.dataDir);
   };
 
+  /**
+   * Off the file, raw key included: this is a local single-user app and the
+   * settings form shows what it will save. Writes still go through the CLI.
+   */
+  const configRead = (): Promise<Result<OledConfigFile, OledError>> =>
+    readOledConfigFile(configPath);
+
   return {
     status,
     report,
@@ -356,5 +364,6 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     ingestList,
     ingestDocument,
     configDataDir,
+    configRead,
   };
 };

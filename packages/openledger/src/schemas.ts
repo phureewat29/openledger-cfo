@@ -484,8 +484,29 @@ export const configInitInputSchema = z.object({
   userName: z.string().optional(),
   ocrBaseUrl: z.string().optional(),
   ocrModel: z.string().optional(),
+  ocrApiKey: z.string().optional(),
 });
 export type ConfigInitInput = z.infer<typeof configInitInputSchema>;
+
+/**
+ * Settings a live ledger may change — deliberately not `.partial()` of the
+ * init schema: paths on a running ledger are not a settings-save away. An
+ * empty string clears; `undefined` leaves the key untouched (partial upsert).
+ */
+export const configSetInputSchema = z.object({
+  ocrBaseUrl: z.string().optional(),
+  ocrModel: z.string().optional(),
+  ocrApiKey: z.string().optional(),
+});
+export type ConfigSetInput = z.infer<typeof configSetInputSchema>;
+
+/** What `oled config` (the CLI) reads back; the api key only as a fingerprint. */
+export const configViewSchema = z.looseObject({
+  ocrBaseUrl: z.string().optional(),
+  ocrModel: z.string().optional(),
+  ocrApiKey: z.object({ set: z.boolean() }).optional(),
+});
+export type ConfigView = z.infer<typeof configViewSchema>;
 
 /** `oled config` answers in camelCase, unlike every read command. */
 export const configInitResultSchema = z.looseObject({
