@@ -105,7 +105,8 @@ export function ModelChip({
   const view = chipView({
     ledgerOk,
     configured,
-    model,
+    // The probe's answer is fresher than the server prop after a save.
+    model: live?.configured ? live.model : model,
     verdict: verdictOf(status),
     down: live?.configured && !live.ok ? live : undefined,
   });

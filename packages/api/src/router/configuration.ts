@@ -89,6 +89,12 @@ export const configurationRouter = createTRPCRouter({
   status: publicProcedure.query(async () => {
     const gateway = await readGateway();
     if (gateway === undefined) return { configured: false as const };
-    return { configured: true as const, ...(await probeModels(gateway)) };
+    // The model rides along: it is the chip's live text after a save, when
+    // the layout's server prop can lag the open tab.
+    return {
+      configured: true as const,
+      model: gateway.model,
+      ...(await probeModels(gateway)),
+    };
   }),
 });
