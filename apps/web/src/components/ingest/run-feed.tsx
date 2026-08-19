@@ -184,13 +184,13 @@ export function RunFeed({
   const cancelError = pressed === null ? null : pressed.error;
 
   const body = () => {
+    // AI OFF in the footer is the remedy pointer on every viewport; the chat
+    // pane's own CTA joins it at `lg` — a button here would be the third.
     if (!enabled) {
       return (
         <p className="text-muted-foreground text-xs">
-          Set{" "}
-          <code className="text-foreground">OPENAI_COMPATIBLE_BASE_URL</code>{" "}
-          and <code className="text-foreground">OPENAI_COMPATIBLE_API_KEY</code>{" "}
-          to let the agent work the queue. Every file can still be prepared and
+          The AI gateway is not set up, so the agent cannot work the queue. Set
+          it up from AI OFF in the status bar. Files can still be prepared and
           closed by hand from the list.
         </p>
       );

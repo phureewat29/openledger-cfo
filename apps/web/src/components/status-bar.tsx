@@ -6,6 +6,7 @@ import type { CliEntry } from "~/domain/cli-log";
 import type { Chrome } from "~/server/chrome";
 import type { LedgerLoad } from "~/server/head";
 import { useCliLog } from "~/components/cli-log-provider";
+import { AiWord } from "~/components/config/ai-word";
 import { formatStamp } from "~/domain/format";
 
 /**
@@ -34,10 +35,10 @@ const asOfText = (chrome: LedgerLoad<Chrome>) => {
 
 export function StatusBar({
   chrome,
-  aiEnabled,
+  aiConfigured,
 }: {
   chrome: LedgerLoad<Chrome>;
-  aiEnabled: boolean;
+  aiConfigured: boolean;
 }) {
   const entry = newestUseful(useCliLog().entries);
   const exitCode = entry?.exitCode ?? null;
@@ -94,9 +95,7 @@ export function StatusBar({
         </span>
       )}
 
-      {aiEnabled ? null : (
-        <span className="text-muted-foreground shrink-0">AI OFF</span>
-      )}
+      <AiWord configured={aiConfigured} ledgerOk={chrome.ok} />
     </footer>
   );
 }

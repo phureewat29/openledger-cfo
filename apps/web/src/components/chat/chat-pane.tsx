@@ -3,42 +3,46 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
+import { Settings } from "lucide-react";
 
-import {
-  DEFAULT_MODEL,
-  RECOMMENDED_MODELS,
-} from "@openledger-cfo/agent/catalog";
+import { Button } from "@openledger-cfo/ui/button";
 
 import type { CfoChatMessage } from "./suggestions";
+import { useConfigDialog } from "~/components/config/config-dialog-provider";
+import { SETTINGS_TRIGGER_ID } from "~/components/config/focus";
+import { ModelChip } from "~/components/config/model-chip";
 import { OlLogo } from "~/components/logo";
 import { ChatMessage } from "./chat-message";
 import { Conversation } from "./conversation";
 import { useChatDock } from "./dock";
 import { Greeting } from "./greeting";
 import { Thinking } from "./message";
-import { ModelDialog } from "./model-dialog";
 import { PromptInput } from "./prompt-input";
 import { QueuedPrompts, usePromptQueue } from "./prompt-queue";
 
 const PLACEHOLDER = "Talk to your money";
 
 export function ChatPane({
-  enabled,
+  ledgerOk,
+  ai,
   openers,
 }: {
-  enabled: boolean;
+  ledgerOk: boolean;
+  /** Absent means no gateway is configured; only the model crosses to the client. */
+  ai?: { model: string };
   openers: readonly string[];
 }) {
   const [input, setInput] = useState("");
-  const [model, setModel] = useState<string>(DEFAULT_MODEL);
-  const [picking, setPicking] = useState(false);
   const pathname = usePathname();
   const dock = useChatDock();
+  const config = useConfigDialog();
   const { messages, sendMessage, stop, status, error } =
     useChat<CfoChatMessage>();
   const queue = usePromptQueue(sendMessage);
   const busy = status === "submitted" || status === "streaming";
   const turnKey = messages.findLast((message) => message.role === "user")?.id;
+  const aiConfigured = ai !== undefined;
+  const enabled = ledgerOk && aiConfigured;
 
   // Offer the next question only between turns. A prompt still queued means the
   // user has already moved past whatever the last answer suggested, and the
@@ -55,7 +59,56 @@ export function ChatPane({
 
   const ask = (text: string) => {
     if (text.trim().length === 0) return;
-    queue.ask(text, pathname, model);
+    queue.ask(text, pathname);
+  };
+
+  const body = () => {
+    if (!ledgerOk) {
+      return (
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          <p className="text-muted-foreground text-xs">
+            The ledger comes first. CFO wakes once it answers.
+          </p>
+        </div>
+      );
+    }
+    if (!aiConfigured) {
+      return (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-3">
+          <div className="flex max-w-[16rem] flex-col items-center gap-3 text-center">
+            <p className="text-[13px]">CFO is asleep.</p>
+            <p className="text-muted-foreground text-xs">
+              Configure an AI gateway to wake it up. Everything else works
+              without one.
+            </p>
+            <Button variant="outline" size="sm" onClick={config.open}>
+              AI Gateway Configuration
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    if (messages.length === 0) {
+      return (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-3">
+          <p className="text-muted-foreground text-center text-[13px] leading-8">
+            <Greeting />
+          </p>
+        </div>
+      );
+    }
+    return (
+      <Conversation turnKey={turnKey} className="min-h-0 flex-1 px-3 py-3">
+        {messages.map((message) => (
+          <ChatMessage
+            key={message.id}
+            message={message}
+            anchor={message.id === turnKey}
+          />
+        ))}
+        {status === "submitted" ? <Thinking /> : null}
+      </Conversation>
+    );
   };
 
   return (
@@ -78,65 +131,25 @@ export function ChatPane({
             <OlLogo size={14} className="shrink-0" />
             <span className="label">CFO</span>
           </span>
-          {enabled ? (
+          <span className="flex max-w-[55%] min-w-0 items-center gap-2">
+            <ModelChip
+              configured={aiConfigured}
+              model={ai?.model ?? ""}
+              ledgerOk={ledgerOk}
+            />
             <button
               type="button"
-              aria-label="Model"
-              onClick={() => setPicking(true)}
-              className="text-muted-foreground hover:text-foreground focus-visible:outline-ring max-w-[45%] shrink cursor-pointer truncate bg-transparent text-right text-[10px] tracking-[0.12em] uppercase outline-none focus-visible:outline-2"
+              id={SETTINGS_TRIGGER_ID}
+              aria-label="AI Gateway Configuration"
+              onClick={config.open}
+              className="text-muted-foreground hover:text-foreground focus-visible:outline-ring shrink-0 cursor-pointer outline-none focus-visible:outline-2"
             >
-              {RECOMMENDED_MODELS.find((choice) => choice.id === model)
-                ?.label ?? model}
+              <Settings size={13} strokeWidth={1.75} aria-hidden />
             </button>
-          ) : (
-            <span className="border-border text-muted-foreground shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px] tracking-[0.12em] uppercase">
-              No key
-            </span>
-          )}
+          </span>
         </header>
 
-        <ModelDialog
-          open={picking}
-          current={model}
-          onPick={(id) => {
-            setModel(id);
-            setPicking(false);
-          }}
-          onClose={() => setPicking(false)}
-        />
-
-        {!enabled ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            <p className="text-muted-foreground text-xs">
-              Set{" "}
-              <code className="text-foreground">
-                OPENAI_COMPATIBLE_BASE_URL
-              </code>{" "}
-              and{" "}
-              <code className="text-foreground">OPENAI_COMPATIBLE_API_KEY</code>{" "}
-              in <code className="text-foreground">.env</code> to wake CFO.
-              Every pane is computed from the ledger by rules, so nothing else
-              waits on it.
-            </p>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-3">
-            <p className="text-muted-foreground text-center text-[13px] leading-8">
-              <Greeting />
-            </p>
-          </div>
-        ) : (
-          <Conversation turnKey={turnKey} className="min-h-0 flex-1 px-3 py-3">
-            {messages.map((message) => (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                anchor={message.id === turnKey}
-              />
-            ))}
-            {status === "submitted" ? <Thinking /> : null}
-          </Conversation>
-        )}
+        {body()}
 
         {error ? (
           <p className="text-destructive shrink-0 px-3 pb-2 text-xs">
