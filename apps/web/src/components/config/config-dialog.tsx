@@ -21,7 +21,7 @@ function Notice({
   onClose: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 p-4">
       <h2 className="text-base font-medium">AI Gateway Configuration</h2>
       <p className="text-muted-foreground text-sm">{headline}</p>
       {command === undefined ? null : (
@@ -71,7 +71,13 @@ function Body({
     trpc.configuration.get.queryOptions(undefined, { staleTime: 0, gcTime: 0 }),
   );
 
-  if (settings.isPending) return <LoadingLine />;
+  if (settings.isPending) {
+    return (
+      <div className="p-4">
+        <LoadingLine />
+      </div>
+    );
+  }
   if (settings.isError) {
     return (
       <Notice
@@ -132,7 +138,7 @@ export function ConfigDialog({
       onClick={(event) => {
         if (!saving && event.target === dialog.current) onClose();
       }}
-      className="bg-card text-foreground border-border m-auto max-h-[calc(100vh-2rem)] w-[min(44rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border p-4 backdrop:bg-black/60"
+      className="bg-card text-foreground border-border m-auto max-h-[calc(100vh-2rem)] w-[min(44rem,calc(100vw-2rem))] overflow-hidden rounded-lg border p-0 backdrop:bg-black/60"
     >
       {open ? <Body onClose={onClose} onSaving={setSaving} /> : null}
     </dialog>

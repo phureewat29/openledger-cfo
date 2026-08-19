@@ -265,119 +265,117 @@ export function ConfigForm({
   return (
     <form
       onSubmit={submit}
-      className="flex flex-col gap-4 [&_.label]:text-[11px] [&_input]:text-sm"
+      className="flex max-h-[calc(100vh-2rem)] min-h-0 flex-col [&_.label]:text-[11px] [&_input]:text-sm"
     >
-      <div className="flex flex-col gap-1">
-        <h2 className="text-base font-medium">AI Gateway Configuration</h2>
-        <p className="text-muted-foreground text-xs">
-          Keys stay on this machine.
-        </p>
+      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-base font-medium">AI Gateway Configuration</h2>
+          <p className="text-muted-foreground text-xs">
+            Keys stay on this machine.
+          </p>
+        </div>
+
+        <SectionBox title="Gateway" line={gatewayLine}>
+          <p className="text-muted-foreground text-xs">
+            Used by chat and the ingest agent.
+          </p>
+          <Field label="Base URL (OpenAI compatible)">
+            <Input
+              type="url"
+              value={baseUrl}
+              onChange={editGateway(setBaseUrl)}
+              placeholder="https://api.your-gateway.com/v1"
+              spellCheck={false}
+              autoFocus
+              required
+            />
+          </Field>
+          <Field label="API key">
+            <Input
+              value={apiKey}
+              onChange={editGateway(setApiKey)}
+              placeholder={KEY_PLACEHOLDER}
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="Model">
+            <Input
+              value={model}
+              onChange={editGateway(setModel)}
+              placeholder="vendor/model"
+              spellCheck={false}
+              required
+            />
+          </Field>
+        </SectionBox>
+
+        <SectionBox title="OCR" line={ocrView === undefined ? null : ocrLine}>
+          {ocrView === undefined ? (
+            <p className="text-muted-foreground text-xs">
+              The ledger did not answer, so OCR settings cannot be read right
+              now. Saving leaves them untouched.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-col gap-0.5">
+                <CheckRow
+                  label="Enable OCR"
+                  checked={ocrEnabled}
+                  onChange={editOcrFlag(setOcrEnabled)}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Reads scanned statements during ingest. Any OpenAI-compatible
+                  vision endpoint works.
+                </p>
+              </div>
+
+              {ocrEnabled ? (
+                <div className="flex flex-col gap-2">
+                  <CheckRow
+                    label="Use the gateway endpoint and key"
+                    checked={shares}
+                    onChange={editOcrFlag(setShares)}
+                  />
+                  {shares ? null : (
+                    <>
+                      <Field label="OCR base URL">
+                        <Input
+                          type="url"
+                          value={ocrBaseUrl}
+                          onChange={editOcr(setOcrBaseUrl)}
+                          placeholder="https://api.your-ocr.com/v1"
+                          spellCheck={false}
+                          required
+                        />
+                      </Field>
+                      <Field label="OCR API key">
+                        <Input
+                          value={ocrApiKey}
+                          onChange={editOcr(setOcrApiKey)}
+                          placeholder={KEY_PLACEHOLDER}
+                          spellCheck={false}
+                          autoComplete="off"
+                        />
+                      </Field>
+                    </>
+                  )}
+                  <Field label="OCR model">
+                    <Input
+                      value={ocrModel}
+                      onChange={editOcr(setOcrModel)}
+                      spellCheck={false}
+                      required
+                    />
+                  </Field>
+                </div>
+              ) : null}
+            </>
+          )}
+        </SectionBox>
       </div>
 
-      <SectionBox title="Gateway" line={gatewayLine}>
-        <p className="text-muted-foreground text-xs">
-          Used by chat and the ingest agent.
-        </p>
-        <Field label="Base URL (OpenAI compatible)">
-          <Input
-            type="url"
-            value={baseUrl}
-            onChange={editGateway(setBaseUrl)}
-            placeholder="https://api.your-gateway.com/v1"
-            spellCheck={false}
-            autoFocus
-            required
-          />
-        </Field>
-        <Field label="API key">
-          <Input
-            value={apiKey}
-            onChange={editGateway(setApiKey)}
-            placeholder={KEY_PLACEHOLDER}
-            spellCheck={false}
-            autoComplete="off"
-          />
-        </Field>
-        <Field label="Model">
-          <Input
-            value={model}
-            onChange={editGateway(setModel)}
-            placeholder="vendor/model"
-            spellCheck={false}
-            required
-          />
-        </Field>
-      </SectionBox>
-
-      <SectionBox
-        title="OCR"
-        line={ocrView === undefined ? null : ocrLine}
-        className="mb-2"
-      >
-        {ocrView === undefined ? (
-          <p className="text-muted-foreground text-xs">
-            The ledger did not answer, so OCR settings cannot be read right now.
-            Saving leaves them untouched.
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-col gap-0.5">
-              <CheckRow
-                label="Enable OCR"
-                checked={ocrEnabled}
-                onChange={editOcrFlag(setOcrEnabled)}
-              />
-              <p className="text-muted-foreground text-xs">
-                Reads scanned statements during ingest. Any OpenAI-compatible
-                vision endpoint works.
-              </p>
-            </div>
-
-            {ocrEnabled ? (
-              <div className="flex flex-col gap-2">
-                <CheckRow
-                  label="Use the gateway endpoint and key"
-                  checked={shares}
-                  onChange={editOcrFlag(setShares)}
-                />
-                {shares ? null : (
-                  <>
-                    <Field label="OCR base URL">
-                      <Input
-                        type="url"
-                        value={ocrBaseUrl}
-                        onChange={editOcr(setOcrBaseUrl)}
-                        placeholder="https://api.your-ocr.com/v1"
-                        spellCheck={false}
-                        required
-                      />
-                    </Field>
-                    <Field label="OCR API key">
-                      <Input
-                        value={ocrApiKey}
-                        onChange={editOcr(setOcrApiKey)}
-                        placeholder={KEY_PLACEHOLDER}
-                        spellCheck={false}
-                        autoComplete="off"
-                      />
-                    </Field>
-                  </>
-                )}
-                <Field label="OCR model">
-                  <Input
-                    value={ocrModel}
-                    onChange={editOcr(setOcrModel)}
-                    spellCheck={false}
-                    required
-                  />
-                </Field>
-              </div>
-            ) : null}
-          </>
-        )}
-      </SectionBox>
-
-      <div className="border-border bg-card sticky bottom-0 -mx-4 -mb-4 flex flex-col gap-1.5 border-t px-4 py-3">
+      <div className="border-border bg-card flex shrink-0 flex-col gap-1.5 border-t px-4 py-3">
         <div className="flex items-center justify-end gap-2">
           <Button
             type="button"
