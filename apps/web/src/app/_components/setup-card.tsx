@@ -1,31 +1,57 @@
 import type { LedgerFailureReason } from "~/server/head";
 
-const LABEL: Record<LedgerFailureReason, string> = {
-  "not-installed": "No CLI",
-  "not-initialized": "No data",
-  unavailable: "Unavailable",
-};
+interface Remedy {
+  readonly caption: string;
+  readonly command: string;
+}
 
-const HEADLINE: Record<LedgerFailureReason, string> = {
-  "not-installed": "The data plane is not installed.",
-  "not-initialized": "No ledger to have an opinion about yet.",
-  unavailable: "The ledger did not answer.",
-};
+interface Copy {
+  readonly label: string;
+  readonly headline: string;
+  readonly body: string;
+  readonly remedies: readonly Remedy[];
+}
 
-const BODY: Record<LedgerFailureReason, string> = {
-  "not-installed":
-    "Every figure here is read from the OpenLedger CLI. Install it once, globally, then come back here.",
-  "not-initialized":
-    "Every figure here is computed from real postings. Initialize the demo ledger and the panes fill in.",
-  unavailable:
-    "Every figure here is read from the OpenLedger CLI at request time, so the page shows nothing rather than guessing. Reload; if it persists, check that `oled` runs.",
-};
-
-// No command for `unavailable`: it is the catch-all, and prescribing
-// `pnpm bootstrap` there would wipe a ledger that only failed to answer.
-const COMMAND: Partial<Record<LedgerFailureReason, string>> = {
-  "not-installed": "npm install -g @aquartier/openledger",
-  "not-initialized": "pnpm bootstrap",
+const COPY: Record<LedgerFailureReason, Copy> = {
+  "not-installed": {
+    label: "No CLI",
+    headline: "OpenLedger isn't installed.",
+    body: "This app reads everything from the OpenLedger CLI.",
+    remedies: [
+      {
+        caption: "Install it globally, then reload.",
+        command: "npm install -g @aquartier/openledger",
+      },
+    ],
+  },
+  "not-initialized": {
+    label: "No data",
+    headline: "There's no ledger yet.",
+    body: "Every number on screen comes from the ledger. Create one first.",
+    remedies: [
+      {
+        caption: "Load the demo dataset.",
+        command: "pnpm bootstrap",
+      },
+      {
+        caption: "Start empty instead.",
+        command: "pnpm bootstrap:empty",
+      },
+    ],
+  },
+  // A read-only probe, not `pnpm bootstrap`: the ledger may be intact and
+  // merely unreachable, and bootstrap would replace it.
+  unavailable: {
+    label: "No answer",
+    headline: "The ledger didn't respond.",
+    body: "Reload the page; the error is below.",
+    remedies: [
+      {
+        caption: "Check the CLI still runs.",
+        command: "oled --version",
+      },
+    ],
+  },
 };
 
 export function SetupCard({
@@ -35,22 +61,33 @@ export function SetupCard({
   reason: LedgerFailureReason;
   message: string;
 }) {
+  const copy = COPY[reason];
+  // Suppress only the message that restates the card; a corrupt database
+  // also lands under not-initialized and its diagnosis must stay visible.
+  const noise =
+    reason === "not-initialized" && message.startsWith("No oled config at ");
   return (
     <div className="flex min-h-full items-center justify-center p-3">
       <section className="border-border bg-card flex w-full max-w-2xl flex-col gap-3 rounded-lg border p-4">
-        <span className="label">{LABEL[reason]}</span>
-        <h1 className="text-base leading-tight font-medium">
-          {HEADLINE[reason]}
-        </h1>
-        <p className="text-muted-foreground text-xs">{BODY[reason]}</p>
-        {COMMAND[reason] === undefined ? null : (
-          <pre className="bg-secondary overflow-x-auto rounded-md p-3 text-xs">
-            {COMMAND[reason]}
-          </pre>
+        <span className="label">{copy.label}</span>
+        <h1 className="text-base leading-tight font-medium">{copy.headline}</h1>
+        <p className="text-muted-foreground text-xs">{copy.body}</p>
+        {copy.remedies.map((remedy) => (
+          <div key={remedy.command} className="flex flex-col gap-1">
+            <p className="text-muted-foreground text-xs">{remedy.caption}</p>
+            <pre className="bg-secondary overflow-x-auto rounded-md p-3 text-xs select-all">
+              {remedy.command}
+            </pre>
+          </div>
+        ))}
+        {noise ? null : (
+          <div className="border-border flex flex-col gap-1 border-t pt-3">
+            <span className="label">Details</span>
+            <p className="text-muted-foreground text-[10px] break-words">
+              {message}
+            </p>
+          </div>
         )}
-        <p className="text-muted-foreground text-[10px] break-words">
-          {message}
-        </p>
       </section>
     </div>
   );
