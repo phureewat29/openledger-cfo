@@ -1,14 +1,17 @@
 import { cache } from "react";
-import { TRPCError } from "@trpc/server";
 
 import type { RouterOutputs } from "@openledger-cfo/api";
-import type { Result } from "@openledger-cfo/openledger";
+import type { OledErrorKind, Result } from "@openledger-cfo/openledger";
+import { oledCauseOf } from "@openledger-cfo/api";
 import { err } from "@openledger-cfo/openledger";
 
 import { caller } from "~/trpc/server";
 
-/** An empty ledger and an unreachable one need different words on the page. */
-export type LedgerFailureReason = "not-initialized" | "unavailable";
+/** A missing CLI, an empty ledger and an unreachable one each need their own words. */
+export type LedgerFailureReason =
+  | "not-installed"
+  | "not-initialized"
+  | "unavailable";
 
 interface LedgerFailure {
   readonly reason: LedgerFailureReason;
@@ -22,14 +25,23 @@ interface LedgerFailure {
  */
 export type LedgerLoad<T> = Result<T, LedgerFailure>;
 
-export const toFailure = (error: unknown): LedgerLoad<never> =>
-  err({
-    reason:
-      error instanceof TRPCError && error.code === "PRECONDITION_FAILED"
-        ? "not-initialized"
-        : "unavailable",
-    message: error instanceof Error ? error.message : String(error),
+const REASON: Partial<Record<OledErrorKind, LedgerFailureReason>> = {
+  spawn_failed: "not-installed",
+  not_configured: "not-initialized",
+};
+
+/**
+ * The connector cause's bare message on purpose: the setup card owns the
+ * remedy, and the hint the transport folded in would say the command twice.
+ */
+export const toFailure = (error: unknown): LedgerLoad<never> => {
+  const oled = oledCauseOf(error);
+  return err({
+    reason: (oled && REASON[oled.kind]) ?? "unavailable",
+    message:
+      oled?.message ?? (error instanceof Error ? error.message : String(error)),
   });
+};
 
 interface LedgerHead {
   readonly status: RouterOutputs["ledger"]["status"];

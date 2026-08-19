@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { isAiEnabled } from "@openledger-cfo/agent";
+import { readGateway } from "@openledger-cfo/api";
 
 import { SetupCard } from "~/app/_components/setup-card";
 import { INGEST_GRID, INGEST_NARROW, INGEST_WIDE } from "~/app/ingest/grid";
@@ -44,8 +44,8 @@ export default async function IngestPage() {
     prefetch(trpc.ledger.questions.list.queryOptions({})),
   ]);
 
-  // Without a key the page keeps its manual actions and says so, as everywhere.
-  const enabled = isAiEnabled();
+  // Without a gateway the page keeps its manual actions and says so, as everywhere.
+  const enabled = (await readGateway()) !== undefined;
 
   return (
     <SelectionProvider>

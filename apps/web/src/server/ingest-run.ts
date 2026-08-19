@@ -2,16 +2,10 @@ import type { UIMessage } from "ai";
 import { TRPCError } from "@trpc/server";
 import { partition, uniqBy } from "es-toolkit";
 
-import type { LangGraphEvent } from "@openledger-cfo/agent";
+import type { GatewayConfig, LangGraphEvent } from "@openledger-cfo/agent";
 import type { Result } from "@openledger-cfo/openledger";
-import {
-  createAgent,
-  isAiEnabled,
-  nsDepth,
-  textOf,
-  unwrap,
-} from "@openledger-cfo/agent";
-import { appRouter, createTRPCContext } from "@openledger-cfo/api";
+import { createAgent, nsDepth, textOf, unwrap } from "@openledger-cfo/agent";
+import { appRouter, createTRPCContext, readGateway } from "@openledger-cfo/api";
 import { err, ok } from "@openledger-cfo/openledger";
 
 import type { IngestFile } from "~/domain/ingest-files";
@@ -67,6 +61,8 @@ interface Run {
   readonly runId: string;
   readonly scope: string;
   readonly mode: RunMode;
+  /** Captured at start: a live run keeps the credentials it began with. */
+  readonly gateway: GatewayConfig;
   readonly startedAt: number;
   readonly abort: AbortController;
   /** File id → the name the operator dropped, so later lines can say it back. */
@@ -687,6 +683,7 @@ const QUESTION_TOOLS = ["answerQuestion", "deferQuestion"];
 
 const runTurn = async (run: Run): Promise<void> => {
   const agent = createAgent("ingest", {
+    gateway: run.gateway,
     recursionLimit: recursionLimitFor(run.files),
     excludeTools: run.mode === "normal" ? QUESTION_TOOLS : undefined,
     // A question's file is an sf- id, so the paths in here never match one.
@@ -895,11 +892,13 @@ export const startRun = async (
   scope: RunScope,
   mode: RunMode,
 ): Promise<StartResult> => {
-  if (!isAiEnabled()) {
+  // Read before the busy check: the check-and-claim below must stay awaitless.
+  const gateway = await readGateway();
+  if (gateway === undefined) {
     return err({
       reason: "disabled",
       message:
-        "Set OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY to let the agent work the queue.",
+        "Configure the AI gateway in the app settings to let the agent work the queue.",
     });
   }
 
@@ -915,6 +914,7 @@ export const startRun = async (
     runId: crypto.randomUUID(),
     scope: labelOf(scope),
     mode,
+    gateway,
     startedAt: Date.now(),
     abort: new AbortController(),
     names: new Map(),

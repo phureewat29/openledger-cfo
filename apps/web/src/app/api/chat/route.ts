@@ -1,12 +1,8 @@
 import type { UIMessage } from "ai";
 import { z } from "zod/v4";
 
-import {
-  createAgent,
-  isAiEnabled,
-  startIngestRunTool,
-} from "@openledger-cfo/agent";
-import { RECOMMENDED_MODELS } from "@openledger-cfo/agent/catalog";
+import { createAgent, startIngestRunTool } from "@openledger-cfo/agent";
+import { readGateway } from "@openledger-cfo/api";
 
 import { accountViewBlock, buildBriefing } from "~/server/briefing";
 import { loadDashboard } from "~/server/dashboard";
@@ -17,21 +13,18 @@ export const maxDuration = 300;
 const BodySchema = z.object({
   messages: z.array(z.custom<UIMessage>()),
   context: z.object({ path: z.string().max(200) }).optional(),
-  model: z.string().max(80).optional(),
 });
 
 const PATH_PATTERN = /^\/(?:accounts\/[A-Za-z0-9:%._-]+)?$/;
 
-/** Off the list falls back to `OPENAI_COMPATIBLE_MODEL`, the same as not choosing. */
-const MODEL_IDS = new Set(RECOMMENDED_MODELS.map((choice) => choice.id));
-
 /** The one boundary that catches: every failure below becomes a JSON body. */
 export async function POST(request: Request) {
-  if (!isAiEnabled()) {
+  const gateway = await readGateway();
+  if (gateway === undefined) {
     return Response.json(
       {
         error: "AI gateway not configured",
-        hint: "Set OPENAI_COMPATIBLE_BASE_URL and OPENAI_COMPATIBLE_API_KEY in .env to enable the CFO chat. The rest of the terminal works without it.",
+        hint: "Open the AI settings in the app and save a base URL, API key, and model. The rest of the terminal works without it.",
       },
       { status: 503 },
     );
@@ -45,11 +38,8 @@ export async function POST(request: Request) {
     const system = await systemFor(path);
 
     const agent = createAgent("cfo", {
+      gateway,
       system,
-      model:
-        body.model !== undefined && MODEL_IDS.has(body.model)
-          ? body.model
-          : undefined,
       followUps: true,
       // The runner lives in this app's module graph; the agent package takes
       // the tool ready-made rather than importing upward.
