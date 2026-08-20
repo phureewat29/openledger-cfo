@@ -124,6 +124,7 @@ export function Rail({
         const slot = BADGE[entry.href];
         const badge = slot === undefined ? 0 : badges[slot];
         const Icon = entry.icon;
+        const ingestBadge = ingesting && entry.href === "/ingest";
 
         return (
           <RailTip key={entry.href} label={entry.label}>
@@ -145,15 +146,23 @@ export function Rail({
                 />
               ) : null}
               <Icon size={17} strokeWidth={1.75} />
-              {ingesting && entry.href === "/ingest" ? (
+              {ingestBadge && badge === 0 ? (
                 <span
                   role="status"
                   aria-label="Ingest running"
-                  className="bg-accent absolute -right-0.5 -bottom-0.5 size-1.5 animate-pulse rounded-full"
+                  className="bg-accent absolute -top-0.5 -right-0.5 size-1.5 animate-pulse rounded-full"
                 />
               ) : null}
               {badge > 0 ? (
-                <span className="bg-accent text-accent-foreground absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-[10px] leading-4 tabular-nums">
+                <span
+                  role={ingestBadge ? "status" : undefined}
+                  aria-label={
+                    ingestBadge
+                      ? `Ingest running — ${badge} to review`
+                      : undefined
+                  }
+                  className={`bg-accent text-accent-foreground absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-[10px] leading-4 tabular-nums ${ingestBadge ? "animate-pulse" : ""}`}
+                >
                   {badge > 99 ? "99+" : badge}
                 </span>
               ) : null}
