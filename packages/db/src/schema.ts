@@ -71,6 +71,7 @@ export const configuration = sqliteTable("configuration", {
   aiApiKey: text().notNull(),
   aiModel: text().notNull(),
   ocrSharesGateway: integer({ mode: "boolean" }),
+  aiRedact: integer({ mode: "boolean" }).default(true).notNull(),
   updatedAt: updatedAt(),
 });
 

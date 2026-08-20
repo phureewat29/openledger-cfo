@@ -62,7 +62,7 @@ export const readOcrView = async (ledger: OpenLedger): Promise<OcrView> => {
 const OCR_FORWARD: {
   [M in OcrSave["mode"]]: (
     ocr: Extract<OcrSave, { mode: M }>,
-    gateway: GatewayConfig,
+    gateway: Pick<GatewayConfig, "baseUrl" | "apiKey">,
   ) => ConfigSetInput;
 } = {
   off: () => ({ ocrBaseUrl: "", ocrApiKey: "" }),
@@ -80,14 +80,16 @@ const OCR_FORWARD: {
 
 // The cast only defeats the parameter intersection from union-key indexing;
 // each handler stays pinned to its member at the table, so drift is caught there.
-const forwardFor = (ocr: OcrSave, gateway: GatewayConfig): ConfigSetInput =>
-  OCR_FORWARD[ocr.mode](ocr as never, gateway);
+const forwardFor = (
+  ocr: OcrSave,
+  gateway: Pick<GatewayConfig, "baseUrl" | "apiKey">,
+): ConfigSetInput => OCR_FORWARD[ocr.mode](ocr as never, gateway);
 
 /** Writes the choice into the oled config; the gateway row is already saved. */
 export const forwardOcr = async (
   ledger: OpenLedger,
   ocr: OcrSave,
-  gateway: GatewayConfig,
+  gateway: Pick<GatewayConfig, "baseUrl" | "apiKey">,
 ): Promise<Result<void, string>> => {
   const forwarded = await ledger.config.set(forwardFor(ocr, gateway));
   if (forwarded.ok) return ok(undefined);

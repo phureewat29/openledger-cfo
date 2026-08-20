@@ -146,6 +146,7 @@ export function ConfigForm({
   );
   const [apiKey, setApiKey] = useState(initial.apiKey ?? "");
   const [model, setModel] = useState(initial.model);
+  const [redact, setRedact] = useState(initial.redact);
   const [ocrEnabled, setOcrEnabled] = useState(ocrView?.enabled ?? false);
   const [shares, setShares] = useState(ocrView?.sharesGateway ?? false);
   const [ocrBaseUrl, setOcrBaseUrl] = useState(
@@ -187,6 +188,10 @@ export function ConfigForm({
   const editOcrFlag = (set: (next: boolean) => void) => (next: boolean) => {
     set(next);
     setOcrLine(null);
+    setFormError(null);
+  };
+  const editRedact = (next: boolean) => {
+    setRedact(next);
     setFormError(null);
   };
 
@@ -319,6 +324,7 @@ export function ConfigForm({
     save.mutate(
       {
         ...gateway.value,
+        redact,
         ...(ocr.value === undefined ? {} : { ocr: ocr.value }),
       },
       {
@@ -391,6 +397,17 @@ export function ConfigForm({
               required
             />
           </Field>
+          <div className="flex flex-col gap-0.5">
+            <CheckRow
+              label="Redact personal details before sending"
+              checked={redact}
+              onChange={editRedact}
+            />
+            <p className="text-muted-foreground text-xs">
+              Your name and account numbers are masked before they reach the
+              gateway.
+            </p>
+          </div>
         </SectionBox>
 
         <SectionBox title="OCR" line={ocrView === undefined ? null : ocrLine}>

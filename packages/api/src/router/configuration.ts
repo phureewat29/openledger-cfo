@@ -30,6 +30,7 @@ export const configurationRouter = createTRPCRouter({
       // Raw on purpose: a local single-user app shows what it will save.
       apiKey: saved?.aiApiKey,
       model: saved?.aiModel ?? DEFAULT_AI_MODEL,
+      redact: saved?.aiRedact ?? true,
       ocr: ocr.readable
         ? {
             ...ocr,
@@ -44,7 +45,12 @@ export const configurationRouter = createTRPCRouter({
 
   save: publicProcedure
     // `ocr` absent leaves the ledger's OCR settings untouched entirely.
-    .input(SaveGatewaySchema.extend({ ocr: OcrSaveSchema.optional() }))
+    .input(
+      SaveGatewaySchema.extend({
+        ocr: OcrSaveSchema.optional(),
+        redact: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const gateway = {
         baseUrl: input.baseUrl,
@@ -54,6 +60,7 @@ export const configurationRouter = createTRPCRouter({
       // An absent `ocr` must not speak to the shared flag either.
       const saved = await saveConfiguration({
         ...gateway,
+        redact: input.redact,
         ...(input.ocr === undefined
           ? {}
           : { ocrSharesGateway: input.ocr.mode === "shared" }),

@@ -26,6 +26,7 @@ export interface GatewayConfig {
   readonly baseUrl: string;
   readonly apiKey: string;
   readonly model: string;
+  readonly redact: boolean;
 }
 
 export interface ConfigReadError {
@@ -68,6 +69,7 @@ export const readGateway = async (): Promise<GatewayConfig | undefined> => {
     baseUrl: row.value.aiBaseUrl,
     apiKey: row.value.aiApiKey,
     model: row.value.aiModel,
+    redact: row.value.aiRedact,
   };
 };
 
@@ -77,6 +79,7 @@ export const saveConfiguration = async (input: {
   apiKey: string;
   model: string;
   ocrSharesGateway?: boolean;
+  redact?: boolean;
 }): Promise<Result<void, ConfigReadError>> => {
   const row = {
     aiBaseUrl: input.baseUrl,
@@ -85,6 +88,7 @@ export const saveConfiguration = async (input: {
     ...(input.ocrSharesGateway === undefined
       ? {}
       : { ocrSharesGateway: input.ocrSharesGateway }),
+    ...(input.redact === undefined ? {} : { aiRedact: input.redact }),
   };
   try {
     await db
