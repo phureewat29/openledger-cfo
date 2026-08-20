@@ -19,6 +19,7 @@ catalog:
   tailwindcss: ^4.1.16
   tsx: ^4.20.0
   typescript: ^5.9.3
+  vitest: ^4.1.11
   zod: ^4.4.3
 
 catalogs:
