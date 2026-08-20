@@ -123,6 +123,7 @@ tooling/          shared toolchain
 - **Tables missing or empty**: `pnpm db:push` recreates the schema in `cfo.db`, and `pnpm bootstrap` reseeds it.
 - **Node 23**: not in the support range. Use 22.21+ or 24+ (`.nvmrc` pins 22.21).
 - **Ingest cannot read a document**: image-only PDFs need OCR — enable it under **AI Gateway Config** and point it at any OpenAI-compatible vision endpoint — share the gateway credentials, or run one locally (the form defaults to `typhoon-ocr1.5-2b` at `http://127.0.0.1:1234`). The settings are forwarded to `.oled/config.json`, and the demo loader preserves them across resets; without OCR only text-layer PDFs work.
+- **Ingest put a record in the wrong account**: tell the CFO in the chat pane on the right. The agent can move transactions, rename accounts, and correct balances in the ledger.
 - **Typecheck errors that make no sense**: a stale `dist/`; run `pnpm typecheck` from the root so the packages rebuild first.
 - **Worried about your real ledger**: this repo only ever runs `oled` with `--config` pointing at its own `.oled/`; your `~/.oled` is never read or written.
 
