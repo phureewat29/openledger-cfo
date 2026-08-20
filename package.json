@@ -24,6 +24,7 @@
     "lint:fix": "turbo run lint --continue -- --fix --cache --cache-location .cache/.eslintcache",
     "reset": "turbo run reset -F @openledger-cfo/demo",
     "serve": "pnpm -F @openledger-cfo/web start",
+    "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
