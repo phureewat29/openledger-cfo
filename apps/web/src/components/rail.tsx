@@ -45,7 +45,7 @@ const ENTRIES: readonly Entry[] = [
   { href: "/ingest", label: "Ingest — turn statements to ledger", icon: Inbox },
   {
     href: "/loop",
-    label: "Loop — money optimizer, soon",
+    label: "Automation — money optimizer, soon",
     icon: Repeat,
     soon: true,
   },
