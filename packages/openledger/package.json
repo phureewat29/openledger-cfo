@@ -29,6 +29,7 @@
     "typecheck": "tsc --noEmit --emitDeclarationOnly false"
   },
   "dependencies": {
+    "@aquartier/openledger": "catalog:",
     "es-toolkit": "catalog:",
     "zod": "catalog:"
   },
