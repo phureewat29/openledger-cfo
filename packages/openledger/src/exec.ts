@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { EXIT } from "@aquartier/openledger/contract";
 import { delay } from "es-toolkit";
 
 import type { OledError, OledErrorKind } from "./errors";
@@ -22,7 +23,7 @@ const MAX_BUFFER = 64 * 1024 * 1024;
 /**
  * Two lanes, not one: `ingest prepare` can hold a statement for minutes under
  * OCR, and a single queue would block every read behind it — overlaps can
- * still race at each database open (BUSY_OPEN).
+ * still contend for the ledger lock (exit 8, retried below).
  */
 const LANES = { fast: createSerialQueue(), slow: createSerialQueue() };
 
@@ -113,21 +114,17 @@ const spawnOled = (argv: string[], stdin?: string): Promise<SpawnOutcome> =>
     child.stdin?.end(stdin);
   });
 
-/**
- * A concurrent open is refused as a corrupt database on exit 3. Retrying is
- * safe: the process died before the open, so no part of the command ran.
- */
-const BUSY_OPEN = "is corrupt or is not a database";
+// E_BUSY: another process held the ledger past the CLI's own ~5s wait; the
+// command emitted nothing, so re-running is safe — writes included.
+const BUSY_RETRY_DELAYS_MS = [25, 75, 150];
 
-const OPEN_RETRY_DELAYS_MS = [25, 75, 150];
-
-const spawnRetryingBusyOpen = async (
+const spawnRetryingBusy = async (
   argv: string[],
   stdin?: string,
 ): Promise<SpawnOutcome> => {
   let outcome = await spawnOled(argv, stdin);
-  for (const ms of OPEN_RETRY_DELAYS_MS) {
-    if (outcome.exitCode !== 3 || !outcome.stderr.includes(BUSY_OPEN)) break;
+  for (const ms of BUSY_RETRY_DELAYS_MS) {
+    if (outcome.exitCode !== EXIT.BUSY) break;
     await delay(ms);
     outcome = await spawnOled(argv, stdin);
   }
@@ -178,7 +175,7 @@ const run = async (
   stdin: string | undefined,
   allowPartial: boolean,
 ): Promise<RunOutcome> => {
-  const outcome = await spawnRetryingBusyOpen(argv, stdin).catch(
+  const outcome = await spawnRetryingBusy(argv, stdin).catch(
     (cause: unknown) => ({
       stdout: "",
       stderr: cause instanceof Error ? cause.message : String(cause),
@@ -193,8 +190,8 @@ const run = async (
   if (outcome.exitCode === 0)
     return { result: ok(outcome.stdout), exitCode: 0 };
   // Exit 7 wrote its results to stdout; the caller decides what a partial run means.
-  if (outcome.exitCode === 7 && allowPartial) {
-    return { result: ok(outcome.stdout), exitCode: 7 };
+  if (outcome.exitCode === EXIT.PARTIAL && allowPartial) {
+    return { result: ok(outcome.stdout), exitCode: EXIT.PARTIAL };
   }
 
   return {

@@ -1,3 +1,4 @@
+import { EXIT } from "@aquartier/openledger/contract";
 import { z } from "zod/v4";
 
 export type OledErrorKind =
@@ -9,6 +10,8 @@ export type OledErrorKind =
   | "not_found"
   | "invalid"
   | "partial"
+  | "busy"
+  | "contract_mismatch"
   | "parse_failed";
 
 export interface OledError {
@@ -22,13 +25,14 @@ export interface OledError {
 
 /** oled's published exit contract; any code outside this table is a generic cli_error. */
 export const EXIT_KIND: Record<number, OledErrorKind> = {
-  1: "cli_error",
-  2: "usage",
-  3: "not_configured",
-  4: "input_required",
-  5: "not_found",
-  6: "invalid",
-  7: "partial",
+  [EXIT.GENERIC]: "cli_error",
+  [EXIT.USAGE]: "usage",
+  [EXIT.NOT_READY]: "not_configured",
+  [EXIT.INPUT_REQUIRED]: "input_required",
+  [EXIT.NOT_FOUND]: "not_found",
+  [EXIT.INVALID]: "invalid",
+  [EXIT.PARTIAL]: "partial",
+  [EXIT.BUSY]: "busy",
 };
 
 const cliErrorLineSchema = z.object({

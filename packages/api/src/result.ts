@@ -8,11 +8,13 @@ import type {
 
 const ERROR_CODE: Record<OledErrorKind, TRPCError["code"]> = {
   not_configured: "PRECONDITION_FAILED",
+  contract_mismatch: "PRECONDITION_FAILED",
   not_found: "NOT_FOUND",
   usage: "BAD_REQUEST",
   invalid: "BAD_REQUEST",
   input_required: "BAD_REQUEST",
   partial: "CONFLICT",
+  busy: "CONFLICT",
   spawn_failed: "INTERNAL_SERVER_ERROR",
   cli_error: "INTERNAL_SERVER_ERROR",
   parse_failed: "INTERNAL_SERVER_ERROR",
