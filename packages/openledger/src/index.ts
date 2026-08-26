@@ -120,6 +120,9 @@ export {
   merchantUpsertInputSchema,
   transactionAddInputSchema,
 } from "./schemas";
+// Consumers' inferred answer payloads print this by name, and they depend on
+// this package, not on @aquartier — without the re-export that's TS2742.
+export type { QuestionsAnswerSummary } from "@aquartier/openledger/contract";
 /**
  * Unused in this repo's own source, but load-bearing: consumers' inferred types print these by name,
  * and there's no subpath fallback for them — dropping one turns into TS2742 in a consumer's build.

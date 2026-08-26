@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { QuestionsAnswerSummary } from "@aquartier/openledger/contract";
 import { z } from "zod/v4";
 
 import type { OledError } from "./errors";
@@ -508,7 +509,15 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     id: string,
     response: string,
     opts: { also?: string[] } = {},
-  ): Promise<Result<WithCommand<{ rows: QuestionAnswerRow[] }>, OledError>> => {
+  ): Promise<
+    Result<
+      WithCommand<{
+        rows: QuestionAnswerRow[];
+        summary: QuestionsAnswerSummary | undefined;
+      }>,
+      OledError
+    >
+  > => {
     const also = opts.also ?? [];
     if (id.trim() === "") return err(emptyInput("questions answer", "id"));
     if (response.trim() === "") {
@@ -534,10 +543,17 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     const out = await exec(args);
     if (!out.ok) return out;
 
-    // One row per closed question, and no summary line to end them.
-    const page = parseNdjsonRows(questionAnswerRowSchema, out.value);
+    const page = parseNdjsonRows(
+      questionAnswerRowSchema,
+      out.value,
+      QuestionsAnswerSummary,
+    );
     if (!page.ok) return page;
-    return ok({ rows: page.value.rows, command: toCommand(args) });
+    return ok({
+      rows: page.value.rows,
+      summary: page.value.summary,
+      command: toCommand(args),
+    });
   };
 
   const questionDefer = async (

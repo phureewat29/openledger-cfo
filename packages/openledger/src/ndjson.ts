@@ -74,7 +74,7 @@ export const parseNdjsonRows = <TRow, TSummary = unknown>(
   return ok({ rows, summary });
 };
 
-/** `status`, `report` and the single-write commands emit exactly one JSON object. */
+/** First JSON object wins; trailing lines (a defer's summary row) are ignored. */
 export const parseSingle = <T>(
   schema: z.ZodType<T>,
   stdout: string,

@@ -158,7 +158,7 @@ export const questionRowSchema = z.object({
 });
 export type QuestionRow = z.infer<typeof questionRowSchema>;
 
-/** Answering closes one question per row and emits no summary line. */
+/** Answering closes one question per row, then a summary row ends the list. */
 export const questionAnswerRowSchema = z.object({
   id: z.string(),
   kind: z.string().nullable(),
