@@ -175,6 +175,10 @@ export type QuestionDeferRow = z.infer<typeof questionDeferRowSchema>;
 
 export const statusSchema = z.object({
   type: z.literal("status"),
+  // Optional so a pre-contract CLI reaches the gate's error, not parse_failed.
+  contract_version: z.number().optional(),
+  version: z.string().optional(),
+  config_problem: z.string().nullable().optional(),
   configured: z.boolean(),
   config_path: z.string(),
   data_dir: z.string(),

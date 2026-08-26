@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { CONTRACT_VERSION } from "@aquartier/openledger/contract";
 
 import type { OledConfigFile } from "./config";
 import type { OledError } from "./errors";
@@ -159,8 +160,20 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     const parsed = parseSingle(statusSchema, out.value);
     if (!parsed.ok) return parsed;
 
-    // `status` is the only command that survives a missing config: it exits 0
-    // and silently reports the default ~/.oled ledger. Refuse that answer.
+    // Gate first: a pre-contract CLI still falls back to the default profile,
+    // and blaming the config would send the operator to reseed a healthy ledger.
+    if (parsed.value.contract_version !== CONTRACT_VERSION) {
+      const found = parsed.value.contract_version ?? "pre-0.24";
+      const cli = parsed.value.version ?? "unknown version";
+      return err<OledError>({
+        kind: "contract_mismatch",
+        message: `oled (${cli}) speaks wire contract ${String(found)}; this app expects ${String(CONTRACT_VERSION)}.`,
+        hint: "Update the CLI (`npm install -g @aquartier/openledger`) or this app until the contract versions match.",
+      });
+    }
+
+    // `contract_version` pins shape, not semantics: a same-contract CLI may
+    // yet report `configured: false` instead of exiting 3 — refuse that answer.
     if (!parsed.value.configured) {
       return err<OledError>({
         kind: "not_configured",
