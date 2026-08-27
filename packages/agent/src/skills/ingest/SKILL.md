@@ -1,11 +1,11 @@
 ---
 name: ingest
-description: A local double-entry harness driven through the `oled` cli. Use for anything about the ledger, bank or credit-card statements, net worth, spending, accounts, transactions, or merchants.
+description: A local double-entry ledger driven through the `oled` cli. Use for anything about the ledger, bank or credit-card statements, net worth, spending, accounts, transactions, or merchants.
 compatibility: Requires Node.js >= 18 and the oled CLI (npm install -g @aquartier/openledger)
 ---
 
 <!--
-  Body vendored verbatim from @aquartier/openledger v0.23.0
+  Body vendored verbatim from @aquartier/openledger v0.24.0
   (skills/openledger/SKILL.md). Only the frontmatter `name` differs, because the
   Agent Skills spec requires it to match this directory.
 
@@ -15,9 +15,9 @@ compatibility: Requires Node.js >= 18 and the oled CLI (npm install -g @aquartie
 
 # OpenLedger
 
-`oled` is a deterministic CLI over a local, double-entry ledger; you supply the intelligence. The CLI is the manual: `oled --help` lists the commands and the output contract, `oled <noun> --help` gives each command's behavior, flow, and flags, and every error carries a code and a message, often a `hint`. When you do not understand something, ask the CLI: never invent flags, subcommands, or ids.
+`oled` is a deterministic CLI over a local, double-entry ledger; you supply the intelligence. The CLI is the manual: `oled --help` lists the commands and the output contract, `oled <noun> --help` gives each command's behavior, flow, and flags, and every error carries a code and a message, often a `hint`. Exit 8 (`E_BUSY`) means another process held the ledger; the same command is safe to re-run unchanged. When you do not understand something, ask the CLI: never invent flags, subcommands, or ids.
 
-Always pass `--json`. List output ends with a `{"type":"summary"}` row — page with `--offset` while it says `has_more`. Money totals are keyed by currency; never add two currencies together.
+Always pass `--json`. List output ends with a `{"type":"summary"}` row — page with `--offset` while it says `has_more`. Money totals are keyed by currency; never add two currencies together. `oled status --json` carries `contract_version` (currently 1); it bumps whenever any command's JSON shape changes, so pin against it if you parse output structurally.
 
 ## Setup
 
