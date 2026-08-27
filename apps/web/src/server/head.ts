@@ -7,9 +7,10 @@ import { err } from "@openledger-cfo/openledger";
 
 import { caller } from "~/trpc/server";
 
-/** A missing CLI, an empty ledger and an unreachable one each need their own words. */
+/** A missing CLI, an outdated one, an empty ledger and an unreachable one each need their own words. */
 export type LedgerFailureReason =
   | "not-installed"
+  | "outdated"
   | "not-initialized"
   | "unavailable";
 
@@ -27,6 +28,7 @@ export type LedgerLoad<T> = Result<T, LedgerFailure>;
 
 const REASON: Partial<Record<OledErrorKind, LedgerFailureReason>> = {
   spawn_failed: "not-installed",
+  contract_mismatch: "outdated",
   not_configured: "not-initialized",
 };
 

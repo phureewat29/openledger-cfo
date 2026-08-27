@@ -24,6 +24,17 @@ const COPY: Record<LedgerFailureReason, Copy> = {
       },
     ],
   },
+  outdated: {
+    label: "Old CLI",
+    headline: "The CLI speaks a different wire format.",
+    body: "This app and the installed OpenLedger CLI disagree about the output contract; the versions are below.",
+    remedies: [
+      {
+        caption: "Update it globally, then reload.",
+        command: "npm install -g @aquartier/openledger",
+      },
+    ],
+  },
   "not-initialized": {
     label: "No data",
     headline: "There's no ledger yet.",
@@ -54,6 +65,9 @@ const COPY: Record<LedgerFailureReason, Copy> = {
   },
 };
 
+// The connector's and the CLI's wordings for a missing config.
+const CONFIG_NOISE = /^(?:No oled config at |no config file at )/;
+
 export function SetupCard({
   reason,
   message,
@@ -62,10 +76,9 @@ export function SetupCard({
   message: string;
 }) {
   const copy = COPY[reason];
-  // Suppress only the message that restates the card; a corrupt database
-  // also lands under not-initialized and its diagnosis must stay visible.
-  const noise =
-    reason === "not-initialized" && message.startsWith("No oled config at ");
+  // Suppress only the message that restates the card; a corrupt database also
+  // lands under not-initialized and its diagnosis must stay visible.
+  const noise = reason === "not-initialized" && CONFIG_NOISE.test(message);
   return (
     <div className="flex min-h-full items-center justify-center p-3">
       <section className="border-border bg-card flex w-full max-w-2xl flex-col gap-3 rounded-lg border p-4">
