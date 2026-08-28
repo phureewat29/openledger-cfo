@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { OledCommandEvent, OledError, Result } from "../src/index";
-import { createOpenLedger, FILE_ID_PATTERN } from "../src/index";
+import { createOpenLedger, EXIT_KIND, FILE_ID_PATTERN } from "../src/index";
 import { textPdf } from "./pdf-fixture";
+
+// The dependency's bin link shadows a global `oled`: this runs the pinned CLI.
 
 /** Throwaway by construction: main() wipes this directory before every run. */
 const LEDGER_DIR = process.env.OLED_SMOKE_DIR ?? join(tmpdir(), "oled-smoke");
@@ -284,6 +286,14 @@ const main = async (): Promise<void> => {
 
   const status = expectOk("status", await oled.status());
   if (status) {
+    // Literal 1 on purpose: a bumped dependency must not silently move this pin.
+    expectEqual("status contract version", status.contract_version, 1);
+    record(
+      "status reports the CLI version",
+      typeof status.version === "string" && status.version.length > 0,
+      `got ${JSON.stringify(status.version)}`,
+    );
+    expectEqual("status config problem is null", status.config_problem, null);
     expectEqual("status transaction count", status.counts?.transactions, 5);
     expectEqual("status open questions", status.questions?.open, 0);
     expectEqual("status net worth USD", status.net_worth?.assets.USD, 1000);
@@ -468,6 +478,12 @@ const main = async (): Promise<void> => {
   );
   if (answered) {
     expectEqual("answer closes both ids", answered.rows.length, 2);
+    expectEqual("answer summary counts both", answered.summary?.answered, 2);
+    expectEqual(
+      "answer summary counts the sibling",
+      answered.summary?.closed_siblings,
+      1,
+    );
     expectEqual(
       "answer echoes its text",
       answered.rows.at(0)?.answer,
@@ -702,13 +718,21 @@ const main = async (): Promise<void> => {
   const bogus = createOpenLedger({
     configPath: join(LEDGER_DIR, "missing", "config.json"),
   });
-  // Deliberately not status(): status exits 0 against a missing config and would
-  // read the developer's default ~/.oled ledger instead of failing.
+  // An unresolvable named --config is refused (exit 3, empty stdout) —
+  // status() included, with no fallback to the developer's default ~/.oled.
+  expectErrorKind(
+    "status not_configured on missing config",
+    await bogus.status(),
+    ["not_configured"],
+  );
   expectErrorKind(
     "not_configured on missing config",
     await bogus.accounts.list(),
     ["not_configured"],
   );
+
+  // Live lock contention belongs to oled's own e2e; pin only the mapping here.
+  expectEqual("exit 8 maps to busy", EXIT_KIND[8], "busy");
 
   expectErrorKind(
     "unknown account rejected",
