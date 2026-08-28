@@ -35,7 +35,7 @@ You need three things. Check each one:
 ```bash
 node --version     # ^22.21 or >=24 (Node 23 is not supported)
 pnpm --version     # pnpm package management
-oled --version     # npm install -g @aquartier/openledger
+oled --version     # >= 0.24.0 — npm install -g @aquartier/openledger
 ```
 
 Then:
@@ -119,7 +119,7 @@ tooling/          shared toolchain
 
 ## Troubleshooting
 
-- **`oled` was not found**: `npm install -g @aquartier/openledger`, then `oled --version`.
+- **`oled` was not found or too old**: `npm install -g @aquartier/openledger` (0.24.0 or newer), then `oled --version`.
 - **Tables missing or empty**: `pnpm db:push` recreates the schema in `cfo.db`, and `pnpm bootstrap` reseeds it.
 - **Node 23**: not in the support range. Use 22.21+ or 24+ (`.nvmrc` pins 22.21).
 - **Ingest cannot read a document**: image-only PDFs need OCR — enable it under **AI Gateway Config** and point it at any OpenAI-compatible vision endpoint — share the gateway credentials, or run one locally (the form defaults to `typhoon-ocr1.5-2b` at `http://127.0.0.1:1234`). The settings are forwarded to `.oled/config.json`, and the demo loader preserves them across resets; without OCR only text-layer PDFs work.
