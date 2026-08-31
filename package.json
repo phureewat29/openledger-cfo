@@ -1,6 +1,7 @@
 {
   "name": "openledger-cfo",
   "description": "A personal CFO agent with terminal, powered by OpenLedger",
+  "version": "1.0.0",
   "license": "AGPL-3.0-only",
   "private": true,
   "engines": {

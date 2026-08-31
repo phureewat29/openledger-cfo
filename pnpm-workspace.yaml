@@ -13,7 +13,7 @@ catalog:
   "@trpc/tanstack-react-query": ^11.7.1
   "@types/node": ^22.18.12
   ai: ^5.0.0
-  better-sqlite3: ^12.2.0
+  better-sqlite3: ^12.11.1
   es-toolkit: ^1.39.0
   eslint: ^9.38.0
   prettier: ^3.6.2
