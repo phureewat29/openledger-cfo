@@ -15,6 +15,10 @@
     "./calendar": {
       "types": "./dist/calendar.d.ts",
       "default": "./src/calendar.ts"
+    },
+    "./result": {
+      "types": "./dist/result.d.ts",
+      "default": "./src/result.ts"
     }
   },
   "license": "AGPL-3.0-only",
