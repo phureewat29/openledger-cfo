@@ -1,4 +1,4 @@
-import { sumBy } from "es-toolkit";
+import { range, sumBy } from "es-toolkit";
 
 import { satang } from "./money";
 
@@ -56,16 +56,17 @@ export const pickDistinct = <T>(
   rng: Rng,
   items: readonly [T, ...T[]],
   count: number,
-): T[] => {
-  let pool: readonly T[] = items;
-  const drawn: T[] = [];
-  while (drawn.length < count && pool.length > 0) {
-    const index = int(rng, 0, pool.length - 1);
-    drawn.push(...pool.slice(index, index + 1));
-    pool = [...pool.slice(0, index), ...pool.slice(index + 1)];
-  }
-  return drawn;
-};
+): T[] =>
+  range(Math.min(count, items.length)).reduce<{ pool: T[]; drawn: T[] }>(
+    ({ pool, drawn }) => {
+      const index = int(rng, 0, pool.length - 1);
+      return {
+        pool: pool.filter((_, position) => position !== index),
+        drawn: [...drawn, ...pool.slice(index, index + 1)],
+      };
+    },
+    { pool: [...items], drawn: [] },
+  ).drawn;
 
 export const weighted = <T>(
   rng: Rng,
