@@ -1,3 +1,5 @@
+import { takeWhile } from "es-toolkit";
+
 import type { Bank } from "../products/banks";
 import type { SeedContext, SeedRow } from "../types";
 import { ACCOUNT } from "../accounts";
@@ -32,16 +34,19 @@ const applyRow = (balances: Map<string, number>, seedRow: SeedRow): void => {
  * raise a balance: no refill placed earlier can be invalidated by it.
  */
 export const applyInterest = (ctx: SeedContext, rows: SeedRow[]): SeedRow[] => {
-  const schedule = new Map<string, Bank[]>();
-  for (const month of ctx.months) {
-    const date = lastDayIn(month);
-    if (!within(date, ctx.window)) continue;
-    const due = BANKS.filter(
-      (bank) =>
-        bank.cadence === "monthly" || QUARTER_END_MONTHS.includes(month.month),
-    );
-    if (due.length > 0) schedule.set(date, due);
-  }
+  const schedule = new Map(
+    ctx.months
+      .map((month) => ({ month, date: lastDayIn(month) }))
+      .filter(({ date }) => within(date, ctx.window))
+      .map(({ month, date }) => [
+        date,
+        BANKS.filter(
+          (bank) =>
+            bank.cadence === "monthly" ||
+            QUARTER_END_MONTHS.includes(month.month),
+        ),
+      ]),
+  );
 
   const dates = [...schedule.keys()].sort();
   const balances = new Map<string, number>();
@@ -68,13 +73,12 @@ export const applyInterest = (ctx: SeedContext, rows: SeedRow[]): SeedRow[] => {
     });
 
   const flushBefore = (limit: string | undefined): void => {
-    while (cursor < dates.length) {
-      const due = dates[cursor];
-      if (due === undefined) break;
-      if (limit !== undefined && due >= limit) break;
-      out.push(...creditInterest(due));
-      cursor += 1;
-    }
+    const due = takeWhile(
+      dates.slice(cursor),
+      (date) => limit === undefined || date < limit,
+    );
+    out.push(...due.flatMap(creditInterest));
+    cursor += due.length;
   };
 
   for (const seedRow of rows) {
