@@ -1,4 +1,4 @@
-import { sumBy } from "es-toolkit";
+import { groupBy, mapValues, sumBy, uniq } from "es-toolkit";
 
 import type { Life } from "../dataset";
 import type { SeedRow } from "../types";
@@ -6,7 +6,7 @@ import type { Check } from "./shared";
 import { lastDayIn } from "../calendar";
 import { currencyOf } from "../expected";
 import { formatMoney, fromUnits, toUnits } from "../money";
-import { legsOf } from "../types";
+import { deltasOf, legsOf } from "../types";
 import { check, typeOf } from "./shared";
 
 const assetIds = (life: Life): Set<string> =>
@@ -27,30 +27,19 @@ export const solvencyCheck = (life: Life, rows: SeedRow[]): Check => {
   const balances = new Map<string, number>();
 
   for (const seedRow of rows) {
-    const touched = new Set<string>();
-    for (const entry of legsOf(seedRow)) {
-      const units = toUnits(entry.amount);
-      if (assets.has(entry.debit_account)) {
-        const account = entry.debit_account;
-        balances.set(account, (balances.get(account) ?? 0) + units);
-        touched.add(account);
-      }
-      if (assets.has(entry.credit_account)) {
-        const account = entry.credit_account;
-        balances.set(account, (balances.get(account) ?? 0) - units);
-        touched.add(account);
-      }
+    const deltas = deltasOf(seedRow, assets);
+    for (const [account, units] of deltas) {
+      balances.set(account, (balances.get(account) ?? 0) + units);
     }
-
-    for (const account of touched) {
-      const balanceUnits = balances.get(account) ?? 0;
-      if (balanceUnits < 0) {
-        return check(
-          name,
-          false,
-          `${account} hits ${formatMoney(fromUnits(balanceUnits))} on ${seedRow.date} at "${seedRow.description}"`,
-        );
-      }
+    const overdrawn = uniq(deltas.map(([account]) => account)).find(
+      (account) => (balances.get(account) ?? 0) < 0,
+    );
+    if (overdrawn !== undefined) {
+      return check(
+        name,
+        false,
+        `${overdrawn} hits ${formatMoney(fromUnits(balances.get(overdrawn) ?? 0))} on ${seedRow.date} at "${seedRow.description}"`,
+      );
     }
   }
 
@@ -64,31 +53,22 @@ export const solvencyCheck = (life: Life, rows: SeedRow[]): Check => {
 export const dailyCloseCheck = (life: Life, rows: SeedRow[]): Check => {
   const name = "no asset account closes a day below zero";
   const assets = assetIds(life);
-  const perDay = new Map<string, Map<string, number>>();
-
-  for (const seedRow of rows) {
-    const day = perDay.get(seedRow.date) ?? new Map<string, number>();
-    for (const entry of legsOf(seedRow)) {
-      const units = toUnits(entry.amount);
-      if (assets.has(entry.debit_account)) {
-        day.set(
-          entry.debit_account,
-          (day.get(entry.debit_account) ?? 0) + units,
-        );
+  const perDay = mapValues(
+    groupBy(rows, (seedRow) => seedRow.date),
+    (dayRows) => {
+      const day = new Map<string, number>();
+      for (const [account, units] of dayRows.flatMap((seedRow) =>
+        deltasOf(seedRow, assets),
+      )) {
+        day.set(account, (day.get(account) ?? 0) + units);
       }
-      if (assets.has(entry.credit_account)) {
-        day.set(
-          entry.credit_account,
-          (day.get(entry.credit_account) ?? 0) - units,
-        );
-      }
-    }
-    perDay.set(seedRow.date, day);
-  }
+      return day;
+    },
+  );
 
   const balances = new Map<string, number>();
-  for (const date of [...perDay.keys()].sort()) {
-    for (const [account, delta] of perDay.get(date) ?? []) {
+  for (const date of Object.keys(perDay).sort()) {
+    for (const [account, delta] of perDay[date] ?? []) {
       const closing = (balances.get(account) ?? 0) + delta;
       balances.set(account, closing);
       if (closing < 0) {

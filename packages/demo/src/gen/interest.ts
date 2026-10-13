@@ -4,28 +4,14 @@ import type { Bank } from "../products/banks";
 import type { SeedContext, SeedRow } from "../types";
 import { ACCOUNT } from "../accounts";
 import { lastDayIn, within } from "../calendar";
-import { fromUnits, toUnits } from "../money";
+import { fromUnits } from "../money";
 import { QUARTER_END_MONTHS } from "../persona";
 import { BANKS } from "../products/banks";
-import { legsOf, row } from "../types";
+import { deltasOf, row } from "../types";
 
 const BANK_IDS = new Set(BANKS.map((bank) => bank.account));
 
 const PERIODS: Record<Bank["cadence"], number> = { monthly: 12, quarterly: 4 };
-
-const applyRow = (balances: Map<string, number>, seedRow: SeedRow): void => {
-  for (const entry of legsOf(seedRow)) {
-    const units = toUnits(entry.amount);
-    if (BANK_IDS.has(entry.debit_account)) {
-      const account = entry.debit_account;
-      balances.set(account, (balances.get(account) ?? 0) + units);
-    }
-    if (BANK_IDS.has(entry.credit_account)) {
-      const account = entry.credit_account;
-      balances.set(account, (balances.get(account) ?? 0) - units);
-    }
-  }
-};
 
 /**
  * Interest is credited on the balance that was actually sitting there, so this
@@ -83,7 +69,9 @@ export const applyInterest = (ctx: SeedContext, rows: SeedRow[]): SeedRow[] => {
 
   for (const seedRow of rows) {
     flushBefore(seedRow.date);
-    applyRow(balances, seedRow);
+    for (const [account, units] of deltasOf(seedRow, BANK_IDS)) {
+      balances.set(account, (balances.get(account) ?? 0) + units);
+    }
     out.push(seedRow);
   }
   flushBefore(undefined);

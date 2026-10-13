@@ -8,6 +8,7 @@ import type {
 import type { DateWindow, Month } from "./calendar";
 import type { Merchant } from "./merchants";
 import type { Rng } from "./rng";
+import { toUnits } from "./money";
 
 export type SeedRow = IngestRowInput;
 
@@ -81,3 +82,17 @@ export const legsOf = (candidate: SeedRow): LinkedLeg[] =>
 
 export const byDate = (left: SeedRow, right: SeedRow): number =>
   left.date < right.date ? -1 : left.date > right.date ? 1 : 0;
+
+/** Signed integer-satang movements a row makes on the tracked accounts, in leg order, debits before credits. */
+export const deltasOf = (
+  seedRow: SeedRow,
+  tracked: ReadonlySet<string>,
+): [account: string, units: number][] =>
+  legsOf(seedRow).flatMap((entry) => {
+    const units = toUnits(entry.amount);
+    const moves: [string, number][] = [
+      [entry.debit_account, units],
+      [entry.credit_account, -units],
+    ];
+    return moves.filter(([account]) => tracked.has(account));
+  });
