@@ -1,5 +1,7 @@
 import { groupBy, mapValues, sumBy, uniq } from "es-toolkit";
 
+import type { AccountType } from "@openledger-cfo/openledger";
+
 import type { Life } from "../dataset";
 import type { SeedRow } from "../types";
 import type { Check } from "./shared";
@@ -102,22 +104,22 @@ export const monthlyNets = (life: Life): MonthNet[] => {
   const primary = life.meta.config.currency;
 
   return life.months.map((chunk) => {
-    let incomeUnits = 0;
-    let expenseUnits = 0;
-    for (const seedRow of chunk.rows) {
-      for (const entry of legsOf(seedRow)) {
+    const movements = chunk.rows
+      .flatMap(legsOf)
+      .flatMap((entry) => {
         const units = toUnits(entry.amount);
-        for (const [account, sign] of [
-          [entry.debit_account, -1],
-          [entry.credit_account, 1],
-        ] as const) {
-          if (currencyOf(account) !== primary) continue;
-          const type = types.get(account);
-          if (type === "income") incomeUnits += sign * units;
-          if (type === "expense") expenseUnits -= sign * units;
-        }
-      }
-    }
+        return [
+          { account: entry.debit_account, signed: -units },
+          { account: entry.credit_account, signed: units },
+        ];
+      })
+      .filter(({ account }) => currencyOf(account) === primary);
+    const unitsOf = (kind: AccountType): number =>
+      sumBy(movements, ({ account, signed }) =>
+        types.get(account) === kind ? signed : 0,
+      );
+    const incomeUnits = unitsOf("income");
+    const expenseUnits = -unitsOf("expense");
     const first = `${chunk.month}-01`;
     return {
       month: chunk.month,
