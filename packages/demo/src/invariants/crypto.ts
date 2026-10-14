@@ -1,8 +1,7 @@
 import type { Life } from "../dataset";
 import type { SeedRow } from "../types";
 import type { Check } from "./shared";
-import { toUnits } from "../money";
-import { legsOf } from "../types";
+import { deltasOf } from "../types";
 import { check, detail } from "./shared";
 
 export const cryptoBasisCheck = (life: Life, rows: SeedRow[]): Check => {
@@ -11,21 +10,14 @@ export const cryptoBasisCheck = (life: Life, rows: SeedRow[]): Check => {
   const faults: string[] = [];
 
   for (const seedRow of rows) {
-    for (const entry of legsOf(seedRow)) {
-      const units = toUnits(entry.amount);
-      if (coins.has(entry.debit_account)) {
-        const account = entry.debit_account;
-        basis.set(account, (basis.get(account) ?? 0) + units);
-      }
-      if (!coins.has(entry.credit_account)) continue;
-      const account = entry.credit_account;
+    for (const [account, units] of deltasOf(seedRow, coins)) {
       const held = basis.get(account) ?? 0;
-      if (units > held) {
+      basis.set(account, held + units);
+      if (units < 0 && -units > held) {
         faults.push(
           `${seedRow.date} ${account} sells more basis than it holds`,
         );
       }
-      basis.set(account, held - units);
     }
   }
 

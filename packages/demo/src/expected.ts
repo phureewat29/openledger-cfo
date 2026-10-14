@@ -9,7 +9,7 @@ import type {
 import { fromUnits, toUnits } from "./money";
 import { legsOf } from "./types";
 
-const DEBIT_NATURAL = new Set<AccountType>(["asset", "expense"]);
+export const DEBIT_NATURAL = new Set<AccountType>(["asset", "expense"]);
 
 export const currencyOf = (accountId: string): string =>
   accountId.slice(0, 3).toUpperCase();

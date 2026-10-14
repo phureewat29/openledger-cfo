@@ -1,13 +1,11 @@
-import type { AccountType } from "@openledger-cfo/openledger";
+import { groupBy, mapValues, sumBy } from "es-toolkit";
 
 import type { Life } from "../dataset";
 import type { Totals } from "../expected";
 import type { Check } from "./shared";
-import { currencyOf } from "../expected";
+import { currencyOf, DEBIT_NATURAL } from "../expected";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { check, typeOf } from "./shared";
-
-const DEBIT_NATURAL = new Set<AccountType>(["asset", "expense"]);
 
 /**
  * Assets and expenses on one side, everything else on the other. Every row is
@@ -16,19 +14,25 @@ const DEBIT_NATURAL = new Set<AccountType>(["asset", "expense"]);
  */
 export const equationChecks = (life: Life, totals: Totals): Check[] => {
   const types = typeOf(life);
-  const perCurrency = new Map<string, number>();
+  const signed = Object.entries(totals.balances).flatMap(
+    ([account, balance]) => {
+      const type = types.get(account);
+      if (!type) return [];
+      const units = toUnits(balance);
+      return [
+        {
+          currency: currencyOf(account),
+          units: DEBIT_NATURAL.has(type) ? units : -units,
+        },
+      ];
+    },
+  );
+  const perCurrency = mapValues(
+    groupBy(signed, ({ currency }) => currency),
+    (group) => sumBy(group, ({ units }) => units),
+  );
 
-  for (const [account, balance] of Object.entries(totals.balances)) {
-    const type = types.get(account);
-    if (!type) continue;
-    const currency = currencyOf(account);
-    const signed = DEBIT_NATURAL.has(type)
-      ? toUnits(balance)
-      : -toUnits(balance);
-    perCurrency.set(currency, (perCurrency.get(currency) ?? 0) + signed);
-  }
-
-  return [...perCurrency].map(([currency, units]) =>
+  return Object.entries(perCurrency).map(([currency, units]) =>
     check(
       `accounting equation balances (${currency})`,
       units === 0,

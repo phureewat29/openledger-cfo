@@ -6,7 +6,7 @@ import type { Check } from "./shared";
 import { unitAccountsOf } from "../accounts";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { distributionOn, dividendOn } from "../products/securities";
-import { legsOf } from "../types";
+import { deltasOf, legsOf } from "../types";
 import { check, detail } from "./shared";
 
 interface Payer {
@@ -51,7 +51,7 @@ export const payoutCheck = (
   rows: SeedRow[],
   payers: Payer[],
 ): Check => {
-  const positions = new Map(payers.map((payer) => [payer.position, payer]));
+  const tracked = new Set(payers.map((payer) => payer.position));
   const held = new Map<string, number>();
   const faults: string[] = [];
   let seen = 0;
@@ -62,7 +62,7 @@ export const payoutCheck = (
     );
     if (payer !== undefined) {
       seen += 1;
-      const quantity = fromUnits(held.get(payer.account) ?? 0);
+      const quantity = fromUnits(held.get(payer.position) ?? 0);
       const posted = sumBy(legsOf(seedRow), (entry) => toUnits(entry.amount));
       const wanted = toUnits(payer.payout(quantity));
       if (posted !== wanted) {
@@ -72,20 +72,8 @@ export const payoutCheck = (
       }
     }
 
-    for (const entry of legsOf(seedRow)) {
-      const bought = positions.get(entry.debit_account);
-      if (bought) {
-        held.set(
-          bought.account,
-          (held.get(bought.account) ?? 0) + toUnits(entry.amount),
-        );
-      }
-      const sold = positions.get(entry.credit_account);
-      if (!sold) continue;
-      held.set(
-        sold.account,
-        (held.get(sold.account) ?? 0) - toUnits(entry.amount),
-      );
+    for (const [position, units] of deltasOf(seedRow, tracked)) {
+      held.set(position, (held.get(position) ?? 0) + units);
     }
   }
 
