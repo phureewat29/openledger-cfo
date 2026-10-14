@@ -1,4 +1,4 @@
-import { sum } from "es-toolkit";
+import { groupBy, mapValues, partition, sum, sumBy, uniq } from "es-toolkit";
 
 import type { Life } from "../dataset";
 import type { Instrument } from "../products/securities";
@@ -8,7 +8,7 @@ import { unitAccountsOf } from "../accounts";
 import { monthIndexOf } from "../calendar";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { priceOn, withinPriceBand } from "../prices";
-import { legsOf } from "../types";
+import { deltasOf, legsOf } from "../types";
 import { check, detail } from "./shared";
 
 const REALIZED_GAIN_SUFFIX = ":investment:realized-gain";
@@ -63,76 +63,90 @@ const scanTrades = (life: Life, rows: SeedRow[]): TradeScan => {
       .map((account) => account.id),
   );
 
-  const trades: Trade[] = [];
-  const pairingFaults: string[] = [];
-  const gainFaults: string[] = [];
-  let disposals = 0;
-
-  for (const seedRow of rows) {
-    const moneyLegs = new Map<string, number[]>();
-    const unitLegs = new Map<string, number[]>();
-    let gainUnits = 0;
-    let gainLegs = 0;
-
-    for (const entry of legsOf(seedRow)) {
+  const scanRow = (seedRow: SeedRow): TradeScan => {
+    const legs = legsOf(seedRow);
+    const sides = legs.flatMap((entry) => {
       const units = toUnits(entry.amount);
-      for (const side of [entry.debit_account, entry.credit_account]) {
-        const traded = byMoney.get(side);
-        if (traded) {
-          moneyLegs.set(side, [...(moneyLegs.get(side) ?? []), units]);
-        }
-        const unit = byUnit.get(side);
-        if (unit) {
-          const key = unit.instrument.account;
-          unitLegs.set(key, [...(unitLegs.get(key) ?? []), units]);
-        }
-      }
-      // One account holds both directions: a gain is credited to it and a loss
-      // debited to it, so the side is what says which way the sale went.
-      if (gainAccounts.has(entry.credit_account)) {
-        gainUnits += units;
-        gainLegs += 1;
-      }
-      if (gainAccounts.has(entry.debit_account)) {
-        gainUnits -= units;
-        gainLegs += 1;
-      }
-    }
+      return [
+        { account: entry.debit_account, units },
+        { account: entry.credit_account, units },
+      ];
+    });
+    const moneyLegs = mapValues(
+      groupBy(
+        sides.filter(({ account }) => byMoney.has(account)),
+        ({ account }) => account,
+      ),
+      (group) => group.map(({ units }) => units),
+    );
+    const unitLegs = mapValues(
+      groupBy(
+        sides.filter(({ account }) => byUnit.has(account)),
+        ({ account }) => byUnit.get(account)?.instrument.account ?? account,
+      ),
+      (group) => group.map(({ units }) => units),
+    );
 
-    if (gainLegs > 0) {
-      disposals += 1;
-      // A gain belongs to whichever instrument was sold; naming more than one
-      // leaves every implied price carrying the wrong gain.
-      if (unitLegs.size > 1) {
-        gainFaults.push(
-          `${seedRow.date} "${seedRow.description}" books a realized gain across ${String(unitLegs.size)} instruments`,
-        );
-      }
-    }
+    // One account holds both directions: a gain is credited to it and a loss
+    // debited to it, so the side is what says which way the sale went.
+    const gainCredits = legs.filter((entry) =>
+      gainAccounts.has(entry.credit_account),
+    );
+    const gainDebits = legs.filter((entry) =>
+      gainAccounts.has(entry.debit_account),
+    );
+    const gainUnits =
+      sumBy(gainCredits, (entry) => toUnits(entry.amount)) -
+      sumBy(gainDebits, (entry) => toUnits(entry.amount));
+    const instrumentCount = Object.keys(unitLegs).length;
 
-    for (const account of new Set([...moneyLegs.keys(), ...unitLegs.keys()])) {
-      const money = moneyLegs.get(account) ?? [];
-      const quantity = unitLegs.get(account) ?? [];
-      // A loss sale credits the position twice, so money is summed, not
-      // counted; quantity must still be exactly one leg.
-      if (money.length === 0 || quantity.length !== 1) {
-        pairingFaults.push(
-          `${seedRow.date} "${seedRow.description}" pairs ${String(money.length)} money legs with ${String(quantity.length)} unit legs on ${account}`,
-        );
-        continue;
-      }
-      const traded = byMoney.get(account);
-      if (traded === undefined) continue;
-      trades.push({
-        date: seedRow.date,
-        instrument: traded.instrument,
-        moneyUnits: sum(money) + gainUnits,
-        quantity: fromUnits(quantity[0] ?? 0),
-      });
-    }
-  }
+    // A gain belongs to whichever instrument was sold; naming more than one
+    // leaves every implied price carrying the wrong gain.
+    const gainFaults =
+      gainCredits.length + gainDebits.length > 0 && instrumentCount > 1
+        ? [
+            `${seedRow.date} "${seedRow.description}" books a realized gain across ${String(instrumentCount)} instruments`,
+          ]
+        : [];
 
-  return { trades, pairingFaults, gainFaults, disposals };
+    // A loss sale credits the position twice, so money is summed, not
+    // counted; quantity must still be exactly one leg.
+    const [paired, broken] = partition(
+      uniq([...Object.keys(moneyLegs), ...Object.keys(unitLegs)]),
+      (account) =>
+        (moneyLegs[account]?.length ?? 0) > 0 &&
+        unitLegs[account]?.length === 1,
+    );
+    return {
+      trades: paired.flatMap((account) => {
+        const traded = byMoney.get(account);
+        return traded === undefined
+          ? []
+          : [
+              {
+                date: seedRow.date,
+                instrument: traded.instrument,
+                moneyUnits: sum(moneyLegs[account] ?? []) + gainUnits,
+                quantity: fromUnits(unitLegs[account]?.[0] ?? 0),
+              },
+            ];
+      }),
+      pairingFaults: broken.map(
+        (account) =>
+          `${seedRow.date} "${seedRow.description}" pairs ${String(moneyLegs[account]?.length ?? 0)} money legs with ${String(unitLegs[account]?.length ?? 0)} unit legs on ${account}`,
+      ),
+      gainFaults,
+      disposals: gainCredits.length + gainDebits.length > 0 ? 1 : 0,
+    };
+  };
+
+  const scans = rows.map(scanRow);
+  return {
+    trades: scans.flatMap((scan) => scan.trades),
+    pairingFaults: scans.flatMap((scan) => scan.pairingFaults),
+    gainFaults: scans.flatMap((scan) => scan.gainFaults),
+    disposals: sumBy(scans, (scan) => scan.disposals),
+  };
 };
 
 /**
@@ -177,33 +191,26 @@ const unitSolvencyCheck = (life: Life, rows: SeedRow[]): Check => {
     tradedInstruments(life).map((entry) => entry.position),
   );
   const balances = new Map<string, number>();
-  const faults: string[] = [];
-
+  const shortages: string[] = [];
   for (const seedRow of rows) {
-    for (const entry of legsOf(seedRow)) {
-      const units = toUnits(entry.amount);
-      if (positions.has(entry.debit_account)) {
-        const account = entry.debit_account;
-        balances.set(account, (balances.get(account) ?? 0) + units);
-      }
-      if (!positions.has(entry.credit_account)) continue;
-      const account = entry.credit_account;
-      const standing = (balances.get(account) ?? 0) - units;
+    for (const [account, units] of deltasOf(seedRow, positions)) {
+      const standing = (balances.get(account) ?? 0) + units;
       balances.set(account, standing);
-      if (standing < 0) {
-        faults.push(`${seedRow.date} ${account} goes short`);
+      if (units < 0 && standing < 0) {
+        shortages.push(`${seedRow.date} ${account} goes short`);
       }
     }
   }
-
-  for (const position of positions) {
+  const drifts = [...positions].flatMap((position) => {
     const tracked = toUnits(life.meta.expected.balances[position] ?? -1);
     const replayed = balances.get(position) ?? 0;
-    if (replayed === tracked) continue;
-    faults.push(
-      `${position} holds ${formatMoney(fromUnits(replayed))} against tracked ${formatMoney(fromUnits(tracked))}`,
-    );
-  }
+    return replayed === tracked
+      ? []
+      : [
+          `${position} holds ${formatMoney(fromUnits(replayed))} against tracked ${formatMoney(fromUnits(tracked))}`,
+        ];
+  });
+  const faults = [...shortages, ...drifts];
 
   return check(
     "unit positions stay solvent and close where the dataset says",
