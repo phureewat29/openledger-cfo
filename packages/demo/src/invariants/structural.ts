@@ -20,34 +20,41 @@ const leafIds = (accounts: AccountCreateInput[]): string[] =>
     .map((account) => account.id);
 
 export const coverageChecks = (life: Life, rows: SeedRow[]): Check[] => {
-  const posted = new Set<string>();
-  for (const seedRow of rows) {
-    for (const entry of legsOf(seedRow)) {
-      posted.add(entry.debit_account);
-      posted.add(entry.credit_account);
-    }
-  }
+  const posted = new Set(
+    rows
+      .flatMap(legsOf)
+      .flatMap((entry) => [entry.debit_account, entry.credit_account]),
+  );
 
   const dead = difference(leafIds(life.accounts), [...posted]);
   const counts = life.meta.expected.counts;
   const products = life.meta.products;
 
-  const shortfalls = [
-    products.banks.length >= 7 ? "" : "banks",
-    products.cards.length >= 4 ? "" : "cards",
-    products.loans.filter((loan) => loan.category === "mortgage").length >= 2
-      ? ""
-      : "mortgages",
-    products.loans.filter((loan) => loan.category === "personal").length >= 2
-      ? ""
-      : "personal loans",
-    products.holdings.filter((holding) => holding.kind === "stock").length >= 10
-      ? ""
-      : "stocks",
-    products.funds.length >= 3 ? "" : "funds",
-    products.coins.length >= 3 ? "" : "crypto",
-    products.incomeSources.length >= 2 ? "" : "income sources",
-  ].filter(Boolean);
+  const floors: [label: string, count: number, minimum: number][] = [
+    ["banks", products.banks.length, 7],
+    ["cards", products.cards.length, 4],
+    [
+      "mortgages",
+      products.loans.filter((loan) => loan.category === "mortgage").length,
+      2,
+    ],
+    [
+      "personal loans",
+      products.loans.filter((loan) => loan.category === "personal").length,
+      2,
+    ],
+    [
+      "stocks",
+      products.holdings.filter((holding) => holding.kind === "stock").length,
+      10,
+    ],
+    ["funds", products.funds.length, 3],
+    ["crypto", products.coins.length, 3],
+    ["income sources", products.incomeSources.length, 2],
+  ];
+  const shortfalls = floors
+    .filter(([, count, minimum]) => count < minimum)
+    .map(([label]) => label);
 
   const unposted = [
     ...products.banks.map((bank) => bank.account),
@@ -108,21 +115,19 @@ export const totalsCheck = (life: Life, totals: Totals): Check[] => {
 };
 
 export const chunkCheck = (life: Life): Check => {
-  const faults: string[] = [];
-  let previous = "";
-
-  for (const chunk of life.months) {
-    if (chunk.month <= previous) faults.push(`${chunk.month} out of order`);
-    previous = chunk.month;
-    for (const seedRow of chunk.rows) {
-      if (monthKey(seedRow.date) !== chunk.month) {
-        faults.push(`${seedRow.date} filed under ${chunk.month}`);
-      }
-      if (!within(seedRow.date, life.meta.window)) {
-        faults.push(`${seedRow.date} outside the window`);
-      }
-    }
-  }
+  const faults = life.months.flatMap((chunk, index) => [
+    ...(chunk.month <= (life.months[index - 1]?.month ?? "")
+      ? [`${chunk.month} out of order`]
+      : []),
+    ...chunk.rows.flatMap((seedRow) => [
+      ...(monthKey(seedRow.date) === chunk.month
+        ? []
+        : [`${seedRow.date} filed under ${chunk.month}`]),
+      ...(within(seedRow.date, life.meta.window)
+        ? []
+        : [`${seedRow.date} outside the window`]),
+    ]),
+  ]);
 
   return check(
     "months are ordered and hold only their own rows",

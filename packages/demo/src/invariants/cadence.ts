@@ -1,3 +1,5 @@
+import { groupBy, mapValues } from "es-toolkit";
+
 import type { Life } from "../dataset";
 import type { SeedRow } from "../types";
 import type { Check } from "./shared";
@@ -10,29 +12,24 @@ import { check } from "./shared";
  * month has to show both paydays and every loan that had not yet been settled.
  */
 export const cadenceCheck = (life: Life, rows: SeedRow[]): Check => {
-  const income = life.meta.products.incomeSources;
-  const seen = new Map<string, Set<string>>();
+  const { incomeSources: income, loans } = life.meta.products;
+  const incomeAccounts = new Set(income.map((source) => source.account));
+  const loanAccounts = new Set(loans.map((loan) => loan.account));
 
-  const note = (account: string, date: string): void => {
-    const months = seen.get(account) ?? new Set<string>();
-    months.add(monthKey(date));
-    seen.set(account, months);
-  };
-
-  for (const seedRow of rows) {
-    for (const entry of legsOf(seedRow)) {
-      if (income.some((source) => source.account === entry.credit_account)) {
-        note(entry.credit_account, seedRow.date);
-      }
-      if (
-        life.meta.products.loans.some(
-          (loan) => loan.account === entry.debit_account,
-        )
-      ) {
-        note(entry.debit_account, seedRow.date);
-      }
-    }
-  }
+  const postings = rows.flatMap((seedRow) =>
+    legsOf(seedRow).flatMap((entry) => [
+      ...(incomeAccounts.has(entry.credit_account)
+        ? [{ account: entry.credit_account, month: monthKey(seedRow.date) }]
+        : []),
+      ...(loanAccounts.has(entry.debit_account)
+        ? [{ account: entry.debit_account, month: monthKey(seedRow.date) }]
+        : []),
+    ]),
+  );
+  const seen = mapValues(
+    groupBy(postings, ({ account }) => account),
+    (group) => new Set(group.map(({ month }) => month)),
+  );
 
   const fullMonths = eachMonth(life.meta.window).filter(
     (month) =>
@@ -40,21 +37,21 @@ export const cadenceCheck = (life: Life, rows: SeedRow[]): Check => {
       lastDayIn(month) <= life.meta.window.end,
   );
 
-  const gaps: string[] = [];
-  for (const month of fullMonths) {
+  const gaps = fullMonths.flatMap((month) => {
     const key = monthKey(dayIn(month, 1));
-    for (const source of income) {
-      if (!seen.get(source.account)?.has(key))
-        gaps.push(`${key} ${source.key}`);
-    }
-    for (const loan of life.meta.products.loans) {
-      const settled =
-        (life.meta.expected.loanBalances[loan.account] ?? -1) === 0;
-      const lastMonth = [...(seen.get(loan.account) ?? [])].sort().at(-1) ?? "";
-      if (settled && key > lastMonth) continue;
-      if (!seen.get(loan.account)?.has(key)) gaps.push(`${key} ${loan.key}`);
-    }
-  }
+    const missingIncome = income
+      .filter((source) => !seen[source.account]?.has(key))
+      .map((source) => `${key} ${source.key}`);
+    const missingLoans = loans
+      .filter((loan) => {
+        const settled =
+          (life.meta.expected.loanBalances[loan.account] ?? -1) === 0;
+        const lastMonth = [...(seen[loan.account] ?? [])].sort().at(-1) ?? "";
+        return !(settled && key > lastMonth) && !seen[loan.account]?.has(key);
+      })
+      .map((loan) => `${key} ${loan.key}`);
+    return [...missingIncome, ...missingLoans];
+  });
 
   return check(
     "every full month pays both incomes and every live loan",
