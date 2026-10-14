@@ -34,6 +34,65 @@ const installmentsOf = (rows: SeedRow[], loan: Loan): Installment[] =>
       ),
     }));
 
+type Faults = (posted: Installment, balanceUnits: number) => string[];
+
+const flatFaults =
+  (loan: Extract<Loan, { kind: "flat" }>): Faults =>
+  (posted, balanceUnits) => {
+    const regular = toUnits(loan.monthlyPrincipal);
+    const isFinal = monthKey(posted.date) === loan.finalPaymentMonth;
+    const wanted = isFinal ? balanceUnits : Math.min(regular, balanceUnits);
+    return [
+      ...(posted.principalUnits === wanted
+        ? []
+        : [
+            `${posted.date} principal ${formatMoney(fromUnits(posted.principalUnits))}`,
+          ]),
+      ...(posted.interestUnits === toUnits(loan.monthlyInterest)
+        ? []
+        : [`${posted.date} flat interest drifted`]),
+    ];
+  };
+
+const amortizingFaults = (
+  loan: Extract<Loan, { kind: "amortizing" }>,
+): Faults => {
+  const prepaymentUnits = new Set(
+    loan.prepayments.map((entry) => toUnits(entry.amount)),
+  );
+  return (posted, balanceUnits) => {
+    const isPrepayment =
+      posted.interestUnits === 0 && prepaymentUnits.has(posted.principalUnits);
+    if (isPrepayment) return [];
+    const wantedInterest = Math.round((balanceUnits * loan.annualRate) / 12);
+    const wantedPrincipal = Math.min(
+      toUnits(loan.monthlyPayment) - wantedInterest,
+      balanceUnits,
+    );
+    return [
+      ...(posted.interestUnits === wantedInterest
+        ? []
+        : [
+            `${posted.date} interest ${formatMoney(fromUnits(posted.interestUnits))} vs ${formatMoney(fromUnits(wantedInterest))}`,
+          ]),
+      ...(posted.principalUnits === wantedPrincipal
+        ? []
+        : [
+            `${posted.date} principal ${formatMoney(fromUnits(posted.principalUnits))} vs ${formatMoney(fromUnits(wantedPrincipal))}`,
+          ]),
+    ];
+  };
+};
+
+const faultsFor = (loan: Loan): Faults =>
+  loan.kind === "flat" ? flatFaults(loan) : amortizingFaults(loan);
+
+interface Replay {
+  readonly balanceUnits: number;
+  readonly faults: string[];
+  readonly halted: boolean;
+}
+
 /**
  * Replays each loan against its own contract: on an amortizing loan the interest
  * charged has to be a month of the rate on what was still owed at the time, and
@@ -44,76 +103,42 @@ const installmentsOf = (rows: SeedRow[], loan: Loan): Installment[] =>
 export const loanCheck = (life: Life, rows: SeedRow[], loan: Loan): Check => {
   const name = `${loan.label} follows its schedule`;
   const installments = installmentsOf(rows, loan);
-  const prepaymentUnits = new Set(
-    loan.kind === "amortizing"
-      ? loan.prepayments.map((entry) => toUnits(entry.amount))
-      : [],
+  const faultsOf = faultsFor(loan);
+
+  const replay = installments.reduce<Replay>(
+    (state, posted) => {
+      if (state.halted) return state;
+      if (posted.principalUnits > state.balanceUnits) {
+        return {
+          ...state,
+          halted: true,
+          faults: [...state.faults, `${posted.date} repays more than is owed`],
+        };
+      }
+      return {
+        ...state,
+        balanceUnits: state.balanceUnits - posted.principalUnits,
+        faults: [...state.faults, ...faultsOf(posted, state.balanceUnits)],
+      };
+    },
+    { balanceUnits: toUnits(loan.opening), faults: [], halted: false },
   );
 
-  let balanceUnits = toUnits(loan.opening);
-  const faults: string[] = [];
-
-  for (const posted of installments) {
-    if (posted.principalUnits > balanceUnits) {
-      faults.push(`${posted.date} repays more than is owed`);
-      break;
-    }
-
-    if (loan.kind === "flat") {
-      const regular = toUnits(loan.monthlyPrincipal);
-      const isFinal = monthKey(posted.date) === loan.finalPaymentMonth;
-      const wanted = isFinal ? balanceUnits : Math.min(regular, balanceUnits);
-      if (posted.principalUnits !== wanted) {
-        faults.push(
-          `${posted.date} principal ${formatMoney(fromUnits(posted.principalUnits))}`,
-        );
-      }
-      if (posted.interestUnits !== toUnits(loan.monthlyInterest)) {
-        faults.push(`${posted.date} flat interest drifted`);
-      }
-    }
-
-    if (loan.kind === "amortizing") {
-      const isPrepayment =
-        posted.interestUnits === 0 &&
-        prepaymentUnits.has(posted.principalUnits);
-      if (!isPrepayment) {
-        const wantedInterest = Math.round(
-          (balanceUnits * loan.annualRate) / 12,
-        );
-        const wantedPrincipal = Math.min(
-          toUnits(loan.monthlyPayment) - wantedInterest,
-          balanceUnits,
-        );
-        if (posted.interestUnits !== wantedInterest) {
-          faults.push(
-            `${posted.date} interest ${formatMoney(fromUnits(posted.interestUnits))} vs ${formatMoney(fromUnits(wantedInterest))}`,
-          );
-        }
-        if (posted.principalUnits !== wantedPrincipal) {
-          faults.push(
-            `${posted.date} principal ${formatMoney(fromUnits(posted.principalUnits))} vs ${formatMoney(fromUnits(wantedPrincipal))}`,
-          );
-        }
-      }
-    }
-
-    balanceUnits -= posted.principalUnits;
-  }
-
   const tracked = toUnits(life.meta.expected.loanBalances[loan.account] ?? -1);
-  if (balanceUnits !== tracked) {
-    faults.push(
-      `ends at ${formatMoney(fromUnits(balanceUnits))} vs tracked ${formatMoney(fromUnits(tracked))}`,
-    );
-  }
+  const faults =
+    replay.balanceUnits === tracked
+      ? replay.faults
+      : [
+          ...replay.faults,
+          `ends at ${formatMoney(fromUnits(replay.balanceUnits))} vs tracked ${formatMoney(fromUnits(tracked))}`,
+        ];
 
   return check(
     name,
     installments.length > 0 && faults.length === 0,
     detail(
       faults,
-      `${String(installments.length)} installments, closes at ${formatMoney(fromUnits(balanceUnits))}`,
+      `${String(installments.length)} installments, closes at ${formatMoney(fromUnits(replay.balanceUnits))}`,
     ),
   );
 };
