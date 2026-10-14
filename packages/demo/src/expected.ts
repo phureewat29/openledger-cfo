@@ -1,3 +1,5 @@
+import { groupBy, mapValues, sumBy, uniq } from "es-toolkit";
+
 import type {
   AccountCreateInput,
   AccountType,
@@ -23,18 +25,20 @@ export interface Totals {
   unknownAccounts: string[];
 }
 
-const bump = (
-  totals: Map<string, number>,
-  key: string,
-  units: number,
-): void => {
-  totals.set(key, (totals.get(key) ?? 0) + units);
-};
-
-const asMoney = (totals: Map<string, number>): Record<string, number> =>
-  Object.fromEntries(
-    [...totals].map(([currency, units]) => [currency, fromUnits(units)]),
+const sumUnitsBy = (
+  entries: readonly { account: string; units: number }[],
+): Map<string, number> =>
+  new Map(
+    Object.entries(
+      mapValues(
+        groupBy(entries, ({ account }) => account),
+        (group) => sumBy(group, ({ units }) => units),
+      ),
+    ),
   );
+
+const asMoney = (totals: Record<string, number>): Record<string, number> =>
+  mapValues(totals, fromUnits);
 
 /**
  * Folds the rows into the same aggregates the ledger will report, in integer
@@ -47,47 +51,61 @@ export const foldTotals = (
   const typeOf = new Map(
     accounts.map((account) => [account.id, account.type] as const),
   );
-  const debits = new Map<string, number>();
-  const credits = new Map<string, number>();
-  const unknown = new Set<string>();
-  let transactions = 0;
+  const legs = rows.flatMap(legsOf).map((entry) => ({
+    ...entry,
+    units: toUnits(entry.amount),
+  }));
+  const debits = sumUnitsBy(
+    legs.map(({ debit_account, units }) => ({ account: debit_account, units })),
+  );
+  const credits = sumUnitsBy(
+    legs.map(({ credit_account, units }) => ({
+      account: credit_account,
+      units,
+    })),
+  );
+  const unknown = uniq(
+    legs
+      .flatMap((entry) => [entry.debit_account, entry.credit_account])
+      .filter((account) => !typeOf.has(account)),
+  );
 
-  for (const seedRow of rows) {
-    for (const entry of legsOf(seedRow)) {
-      transactions += 1;
-      const units = toUnits(entry.amount);
-      bump(debits, entry.debit_account, units);
-      bump(credits, entry.credit_account, units);
-      for (const account of [entry.debit_account, entry.credit_account]) {
-        if (!typeOf.has(account)) unknown.add(account);
-      }
-    }
-  }
-
-  const balances: Record<string, number> = {};
-  const incomeUnits = new Map<string, number>();
-  const expenseUnits = new Map<string, number>();
-
-  for (const account of new Set([...debits.keys(), ...credits.keys()])) {
-    const type = typeOf.get(account);
-    if (!type) continue;
-    const debited = debits.get(account) ?? 0;
-    const credited = credits.get(account) ?? 0;
-    const natural = DEBIT_NATURAL.has(type)
-      ? debited - credited
-      : credited - debited;
-    balances[account] = fromUnits(natural);
-
-    if (type === "income") bump(incomeUnits, currencyOf(account), natural);
-    if (type === "expense") bump(expenseUnits, currencyOf(account), natural);
-  }
+  const natural = [...new Set([...debits.keys(), ...credits.keys()])].flatMap(
+    (account) => {
+      const type = typeOf.get(account);
+      if (!type) return [];
+      const debited = debits.get(account) ?? 0;
+      const credited = credits.get(account) ?? 0;
+      return [
+        {
+          account,
+          type,
+          units: DEBIT_NATURAL.has(type)
+            ? debited - credited
+            : credited - debited,
+        },
+      ];
+    },
+  );
+  const byCurrency = (kind: AccountType): Record<string, number> =>
+    asMoney(
+      mapValues(
+        groupBy(
+          natural.filter(({ type }) => type === kind),
+          ({ account }) => currencyOf(account),
+        ),
+        (group) => sumBy(group, ({ units }) => units),
+      ),
+    );
 
   return {
-    transactions,
+    transactions: legs.length,
     rows: rows.length,
-    balances,
-    income: asMoney(incomeUnits),
-    expenses: asMoney(expenseUnits),
-    unknownAccounts: [...unknown],
+    balances: Object.fromEntries(
+      natural.map(({ account, units }) => [account, fromUnits(units)]),
+    ),
+    income: byCurrency("income"),
+    expenses: byCurrency("expense"),
+    unknownAccounts: unknown,
   };
 };
