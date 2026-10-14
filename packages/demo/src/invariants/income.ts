@@ -23,9 +23,7 @@ export const payslipCheck = (life: Life, rows: SeedRow[]): Check => {
     return check("employment payslips reconcile", false, "no source");
 
   const groups = linkedGroupsCrediting(rows, source.account);
-  const faults: string[] = [];
-
-  for (const group of groups) {
+  const faults = groups.flatMap((group) => {
     const legs = legsOf(group).filter(
       (entry) => entry.credit_account === source.account,
     );
@@ -39,14 +37,17 @@ export const payslipCheck = (life: Life, rows: SeedRow[]): Check => {
       (entry) => toUnits(entry.amount),
     );
 
-    if (legs.length !== 4)
-      faults.push(`${group.date} has ${String(legs.length)} legs`);
-    if (netUnits <= 0) faults.push(`${group.date} pays nothing to the bank`);
     const rate = grossUnits === 0 ? 0 : taxUnits / grossUnits;
-    if (rate < PAYSLIP_MIN_RATE || rate > PAYSLIP_MAX_RATE) {
-      faults.push(`${group.date} withholds ${(rate * 100).toFixed(1)}%`);
-    }
-  }
+    return [
+      ...(legs.length === 4
+        ? []
+        : [`${group.date} has ${String(legs.length)} legs`]),
+      ...(netUnits > 0 ? [] : [`${group.date} pays nothing to the bank`]),
+      ...(rate >= PAYSLIP_MIN_RATE && rate <= PAYSLIP_MAX_RATE
+        ? []
+        : [`${group.date} withholds ${(rate * 100).toFixed(1)}%`]),
+    ];
+  });
 
   return check(
     "employment payslips reconcile",
@@ -65,9 +66,7 @@ export const retainerCheck = (life: Life, rows: SeedRow[]): Check => {
     return check("consulting invoices reconcile", false, "no source");
 
   const groups = linkedGroupsCrediting(rows, source.account);
-  const faults: string[] = [];
-
-  for (const group of groups) {
+  const faults = groups.flatMap((group) => {
     const legs = legsOf(group).filter(
       (entry) => entry.credit_account === source.account,
     );
@@ -76,14 +75,15 @@ export const retainerCheck = (life: Life, rows: SeedRow[]): Check => {
       legs.filter((entry) => entry.debit_account === source.taxAccount),
       (entry) => toUnits(entry.amount),
     );
-    if (legs.length !== 2)
-      faults.push(`${group.date} has ${String(legs.length)} legs`);
-    if (whtUnits !== Math.round(grossUnits * CONSULTING_RATE)) {
-      faults.push(
-        `${group.date} withholds ${formatMoney(fromUnits(whtUnits))}`,
-      );
-    }
-  }
+    return [
+      ...(legs.length === 2
+        ? []
+        : [`${group.date} has ${String(legs.length)} legs`]),
+      ...(whtUnits === Math.round(grossUnits * CONSULTING_RATE)
+        ? []
+        : [`${group.date} withholds ${formatMoney(fromUnits(whtUnits))}`]),
+    ];
+  });
 
   return check(
     "consulting invoices reconcile",
