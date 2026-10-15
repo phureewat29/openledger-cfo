@@ -8,37 +8,25 @@ import { row } from "../types";
  * owes money has to be pushed its share before the bills that draw on it fall
  * due — which is why these dates all sit just after the two paydays.
  */
-export const generateTransfers = (ctx: SeedContext): SeedRow[] => {
-  const rows: SeedRow[] = [];
-
-  for (const month of ctx.months) {
-    for (const order of STANDING_ORDERS) {
-      const date = dayIn(month, order.day);
-      if (!within(date, ctx.window)) continue;
-      rows.push(
+export const generateTransfers = (ctx: SeedContext): SeedRow[] =>
+  ctx.months.flatMap((month) => {
+    const orders = STANDING_ORDERS.map((order) => ({
+      ...order,
+      date: dayIn(month, order.day),
+    }));
+    const sweep = {
+      ...BONUS_SWEEP,
+      date: dayIn(month, BONUS_SWEEP.day),
+    };
+    return [...orders, ...(month.month === BONUS_SWEEP.month ? [sweep] : [])]
+      .filter((transfer) => within(transfer.date, ctx.window))
+      .map((transfer) =>
         row({
-          date,
-          description: order.description,
-          debit: order.to,
-          credit: order.from,
-          amount: order.amount,
+          date: transfer.date,
+          description: transfer.description,
+          debit: transfer.to,
+          credit: transfer.from,
+          amount: transfer.amount,
         }),
       );
-    }
-
-    if (month.month !== BONUS_SWEEP.month) continue;
-    const sweepDate = dayIn(month, BONUS_SWEEP.day);
-    if (!within(sweepDate, ctx.window)) continue;
-    rows.push(
-      row({
-        date: sweepDate,
-        description: BONUS_SWEEP.description,
-        debit: BONUS_SWEEP.to,
-        credit: BONUS_SWEEP.from,
-        amount: BONUS_SWEEP.amount,
-      }),
-    );
-  }
-
-  return rows;
-};
+  });
