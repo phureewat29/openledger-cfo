@@ -1,7 +1,9 @@
+import { sumBy } from "es-toolkit";
+
 import type { SeedRow } from "../types";
 import { ACCOUNT } from "../accounts";
 import { fromUnits, toUnits } from "../money";
-import { legsOf, row } from "../types";
+import { deltasOf, row } from "../types";
 
 interface TopUpRule {
   account: string;
@@ -87,13 +89,6 @@ const TOP_UP_RULES: TopUpRule[] = [
   },
 ];
 
-const deltaUnits = (seedRow: SeedRow, account: string): number =>
-  legsOf(seedRow).reduce((delta, entry) => {
-    if (entry.debit_account === account) return delta + toUnits(entry.amount);
-    if (entry.credit_account === account) return delta - toUnits(entry.amount);
-    return delta;
-  }, 0);
-
 const roundUpTo = (units: number, step: number): number =>
   Math.ceil(units / step) * step;
 
@@ -107,11 +102,12 @@ const applyRule = (rows: SeedRow[], rule: TopUpRule): SeedRow[] => {
   const targetUnits = toUnits(rule.target);
   const stepUnits = toUnits(rule.roundTo);
 
+  const tracked = new Set([rule.account]);
   const merged: SeedRow[] = [];
   let balanceUnits = 0;
 
   for (const seedRow of rows) {
-    const delta = deltaUnits(seedRow, rule.account);
+    const delta = sumBy(deltasOf(seedRow, tracked), ([, units]) => units);
     if (delta !== 0 && balanceUnits + delta < floorUnits) {
       const amountUnits = roundUpTo(
         Math.max(targetUnits, floorUnits - delta) - balanceUnits,

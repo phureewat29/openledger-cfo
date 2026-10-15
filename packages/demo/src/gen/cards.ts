@@ -26,16 +26,12 @@ const chargesFor = (rows: SeedRow[], account: string): Charge[] =>
       .map((entry) => ({ date: seedRow.date, units: toUnits(entry.amount) })),
   );
 
-const lastDueInWindow = (ctx: SeedContext, card: Card): string => {
-  let last = "";
-  for (const month of ctx.months) {
-    const closeDate = dayIn(month, card.statementDay);
-    if (closeDate > ctx.window.end) break;
-    const dueDate = dayIn(addMonths(month, 1), card.dueDay);
-    if (within(dueDate, ctx.window)) last = dueDate;
-  }
-  return last;
-};
+const lastDueInWindow = (ctx: SeedContext, card: Card): string =>
+  ctx.months
+    .filter((month) => dayIn(month, card.statementDay) <= ctx.window.end)
+    .map((month) => dayIn(addMonths(month, 1), card.dueDay))
+    .filter((dueDate) => within(dueDate, ctx.window))
+    .at(-1) ?? "";
 
 /**
  * A card is a running cycle: spends land in the statement window that contains
