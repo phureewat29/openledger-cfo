@@ -318,89 +318,89 @@ const billRow = (ctx: SeedContext, month: Month, bill: Bill): SeedRow[] => {
   ];
 };
 
-export const generateHousehold = (ctx: SeedContext): SeedRow[] => {
-  const rows: SeedRow[] = [];
+const monthRows = (ctx: SeedContext, month: Month): SeedRow[] => {
+  const medicalDate = dayIn(month, 14);
+  const donationDate = dayIn(month, 21);
+  const jobDate = dayIn(month, 24);
+  const refundDate = dayIn(month, 24);
 
-  for (const month of ctx.months) {
-    for (const bill of MONTHLY_BILLS) rows.push(...billRow(ctx, month, bill));
-    for (const bill of ANNUAL_BILLS) {
-      if (bill.month !== month.month) continue;
-      rows.push(...billRow(ctx, month, bill));
-    }
+  // Spread elements run in order, and each section draws from the rng in the
+  // order the dataset was authored with.
+  return [
+    ...MONTHLY_BILLS.flatMap((bill) => billRow(ctx, month, bill)),
+    ...ANNUAL_BILLS.filter((bill) => bill.month === month.month).flatMap(
+      (bill) => billRow(ctx, month, bill),
+    ),
 
     // Sent weekly rather than in one lump, which is how the money is actually used.
-    for (const day of ALLOWANCE_DAYS) {
-      const allowanceDate = dayIn(month, day);
-      if (!within(allowanceDate, ctx.window)) continue;
-      rows.push(
+    ...ALLOWANCE_DAYS.map((day) => dayIn(month, day))
+      .filter((date) => within(date, ctx.window))
+      .map((date) =>
         row({
-          date: allowanceDate,
+          date,
           description: "Allowance — parents",
           debit: ACCOUNT.allowance,
           credit: ACCOUNT.ktb,
           amount: WEEKLY_ALLOWANCE,
         }),
-      );
-    }
+      ),
 
-    const medicalDate = dayIn(month, 14);
-    if (within(medicalDate, ctx.window) && chance(ctx.rng, 0.35)) {
-      rows.push(
-        row({
-          date: medicalDate,
-          description: "Parents — clinic and medication",
-          debit: ACCOUNT.familyMedical,
-          credit: ACCOUNT.ktb,
-          amount: money(ctx.rng, 1_500, 9_000),
-        }),
-      );
-    }
+    ...(within(medicalDate, ctx.window) && chance(ctx.rng, 0.35)
+      ? [
+          row({
+            date: medicalDate,
+            description: "Parents — clinic and medication",
+            debit: ACCOUNT.familyMedical,
+            credit: ACCOUNT.ktb,
+            amount: money(ctx.rng, 1_500, 9_000),
+          }),
+        ]
+      : []),
 
-    const donationDate = dayIn(month, 21);
-    if (within(donationDate, ctx.window)) {
-      rows.push(
-        row({
-          date: donationDate,
-          description: pick(ctx.rng, DONATION_CAUSES),
-          debit: ACCOUNT.donation,
-          credit: chance(ctx.rng, 0.5) ? ACCOUNT.cash : ACCOUNT.kbank,
-          amount: money(ctx.rng, 500, 3_000),
-        }),
-      );
-    }
+    ...(within(donationDate, ctx.window)
+      ? [
+          row({
+            date: donationDate,
+            description: pick(ctx.rng, DONATION_CAUSES),
+            debit: ACCOUNT.donation,
+            credit: chance(ctx.rng, 0.5) ? ACCOUNT.cash : ACCOUNT.kbank,
+            amount: money(ctx.rng, 500, 3_000),
+          }),
+        ]
+      : []),
 
-    const jobDate = dayIn(month, 24);
-    if (within(jobDate, ctx.window) && chance(ctx.rng, 0.25)) {
-      rows.push(
-        row({
-          date: jobDate,
-          description: `Condo maintenance — ${pick(ctx.rng, MAINTENANCE_JOBS)}`,
-          debit: ACCOUNT.maintenance,
-          credit: ACCOUNT.scb,
-          amount: money(ctx.rng, 1_500, 11_000),
-          merchant: MERCHANT.homePro,
-        }),
-      );
-    }
+    ...(within(jobDate, ctx.window) && chance(ctx.rng, 0.25)
+      ? [
+          row({
+            date: jobDate,
+            description: `Condo maintenance — ${pick(ctx.rng, MAINTENANCE_JOBS)}`,
+            debit: ACCOUNT.maintenance,
+            credit: ACCOUNT.scb,
+            amount: money(ctx.rng, 1_500, 11_000),
+            merchant: MERCHANT.homePro,
+          }),
+        ]
+      : []),
 
-    if (month.month !== TAX_REFUND_MONTH) continue;
-    const refundDate = dayIn(month, 24);
-    if (!within(refundDate, ctx.window)) continue;
-    rows.push(
-      row({
-        date: refundDate,
-        // A refund reverses withholding, so it credits the tax expense rather than income.
-        description: `Tax refund ${String(buddhistYear(month.year - 1))}`,
-        debit: ACCOUNT.kbank,
-        credit: ACCOUNT.incomeTax,
-        amount: money(ctx.rng, 70_000, 95_000),
-      }),
-    );
-  }
+    ...(month.month === TAX_REFUND_MONTH && within(refundDate, ctx.window)
+      ? [
+          row({
+            date: refundDate,
+            // A refund reverses withholding, so it credits the tax expense rather than income.
+            description: `Tax refund ${String(buddhistYear(month.year - 1))}`,
+            debit: ACCOUNT.kbank,
+            credit: ACCOUNT.incomeTax,
+            amount: money(ctx.rng, 70_000, 95_000),
+          }),
+        ]
+      : []),
+  ];
+};
 
-  for (const draw of EMERGENCY_DRAWS) {
-    if (!within(draw.date, ctx.window)) continue;
-    rows.push(
+export const generateHousehold = (ctx: SeedContext): SeedRow[] => [
+  ...ctx.months.flatMap((month) => monthRows(ctx, month)),
+  ...EMERGENCY_DRAWS.filter((draw) => within(draw.date, ctx.window)).map(
+    (draw) =>
       row({
         date: draw.date,
         description: draw.description,
@@ -409,8 +409,5 @@ export const generateHousehold = (ctx: SeedContext): SeedRow[] => {
         amount: draw.amount,
         merchant: draw.merchant,
       }),
-    );
-  }
-
-  return rows;
-};
+  ),
+];
