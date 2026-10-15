@@ -182,7 +182,7 @@ const tripRows = (ctx: SeedContext, month: Month, trip: Trip): SeedRow[] => {
   // and the prepaid hotel rate both settle weeks before anyone leaves.
   const booking = addDays(departure, -trip.flightLeadDays);
   const booked = within(booking, ctx.window) ? booking : departure;
-  const rows: SeedRow[] = [
+  const bookings: SeedRow[] = [
     row({
       date: booked,
       description: `Flights — ${trip.label}`,
@@ -203,31 +203,30 @@ const tripRows = (ctx: SeedContext, month: Month, trip: Trip): SeedRow[] => {
 
   // Spending money is drawn abroad from the account that holds the travel float,
   // so it is a movement between two of the persona's own assets, not a spend.
-  if (trip.international) {
-    for (const offset of [0, 3]) {
-      const drawDate = addDays(departure, offset);
-      if (!within(drawDate, ctx.window)) continue;
-      rows.push(
-        row({
-          date: drawDate,
-          description: `Foreign ATM withdrawal — ${trip.label}`,
-          debit: ACCOUNT.cash,
-          credit: ACCOUNT.uob,
-          amount: money(ctx.rng, 6_000, 14_000),
-        }),
-      );
-    }
-  }
+  const withdrawals = trip.international
+    ? [0, 3]
+        .map((offset) => addDays(departure, offset))
+        .filter((drawDate) => within(drawDate, ctx.window))
+        .map((drawDate) =>
+          row({
+            date: drawDate,
+            description: `Foreign ATM withdrawal — ${trip.label}`,
+            debit: ACCOUNT.cash,
+            credit: ACCOUNT.uob,
+            amount: money(ctx.rng, 6_000, 14_000),
+          }),
+        )
+    : [];
 
   // The itinerary is settled before the window gets a chance to truncate it.
   const spendCount = int(ctx.rng, trip.minSpends, trip.maxSpends);
   const itinerary = pickDistinct(ctx.rng, trip.places, spendCount);
 
-  itinerary.forEach((place, index) => {
+  const spends = itinerary.flatMap((place, index) => {
     const spendDate = addDays(departure, index + 1);
-    if (!within(spendDate, ctx.window)) return;
+    if (!within(spendDate, ctx.window)) return [];
     const amount = money(ctx.rng, trip.spendMin, trip.spendMax);
-    rows.push(
+    return [
       row({
         date: spendDate,
         description: `${trip.label} — ${place.label}`,
@@ -235,53 +234,52 @@ const tripRows = (ctx: SeedContext, month: Month, trip: Trip): SeedRow[] => {
         credit: FUNDING.absolute,
         amount,
       }),
-    );
-    if (!trip.international) return;
-    rows.push(
-      row({
-        date: spendDate,
-        description: `FX fee — ${trip.label}`,
-        debit: ACCOUNT.fxFees,
-        credit: FUNDING.absolute,
-        amount: satang(amount * FX_MARKUP),
-      }),
-    );
+      ...(trip.international
+        ? [
+            row({
+              date: spendDate,
+              description: `FX fee — ${trip.label}`,
+              debit: ACCOUNT.fxFees,
+              credit: FUNDING.absolute,
+              amount: satang(amount * FX_MARKUP),
+            }),
+          ]
+        : []),
+    ];
   });
 
-  return rows;
+  return [...bookings, ...withdrawals, ...spends];
 };
 
-export const generateTravel = (ctx: SeedContext): SeedRow[] => {
-  const rows: SeedRow[] = [];
+const saleRows = (ctx: SeedContext, month: Month): SeedRow[] => {
+  const sale = FESTIVAL_SALES[month.month];
+  if (!sale) return [];
+  const saleDate = dayIn(month, sale.day);
+  if (!within(saleDate, ctx.window)) return [];
 
-  for (const month of ctx.months) {
+  return Array.from({ length: int(ctx.rng, 3, 5) }, () => {
+    const merchant = pick(ctx.rng, SALE_MERCHANTS);
+    return row({
+      date: saleDate,
+      description: `${sale.label} — ${merchant.canonical}`,
+      debit: ACCOUNT.shoppingOnline,
+      credit: FUNDING.first,
+      amount: skewedMoney(ctx.rng, 1_500, 12_000),
+      merchant,
+    });
+  });
+};
+
+export const generateTravel = (ctx: SeedContext): SeedRow[] => [
+  ...ctx.months.flatMap((month) => {
     const trip = TRIPS[month.month];
-    if (trip) rows.push(...tripRows(ctx, month, trip));
-
-    const sale = FESTIVAL_SALES[month.month];
-    if (!sale) continue;
-    const saleDate = dayIn(month, sale.day);
-    if (!within(saleDate, ctx.window)) continue;
-
-    const orders = int(ctx.rng, 3, 5);
-    for (let index = 0; index < orders; index += 1) {
-      const merchant = pick(ctx.rng, SALE_MERCHANTS);
-      rows.push(
-        row({
-          date: saleDate,
-          description: `${sale.label} — ${merchant.canonical}`,
-          debit: ACCOUNT.shoppingOnline,
-          credit: FUNDING.first,
-          amount: skewedMoney(ctx.rng, 1_500, 12_000),
-          merchant,
-        }),
-      );
-    }
-  }
-
-  for (const purchase of BIG_PURCHASES) {
-    if (!within(purchase.date, ctx.window)) continue;
-    rows.push(
+    return [
+      ...(trip ? tripRows(ctx, month, trip) : []),
+      ...saleRows(ctx, month),
+    ];
+  }),
+  ...BIG_PURCHASES.filter((purchase) => within(purchase.date, ctx.window)).map(
+    (purchase) =>
       row({
         date: purchase.date,
         description: purchase.description,
@@ -290,8 +288,5 @@ export const generateTravel = (ctx: SeedContext): SeedRow[] => {
         amount: purchase.amount,
         merchant: purchase.merchant,
       }),
-    );
-  }
-
-  return rows;
-};
+  ),
+];
