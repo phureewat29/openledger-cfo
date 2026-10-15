@@ -291,6 +291,23 @@ const spendRow = (input: {
     ...(input.funding === "cash" ? {} : { merchant: input.merchant }),
   });
 
+/** One spend by a stream on a day: merchant, amount and funding drawn in that order. */
+const streamRow = (
+  ctx: SeedContext,
+  stream: DailyStream | CadenceStream,
+  date: string,
+): SeedRow => {
+  const merchant = pick(ctx.rng, stream.merchants);
+  return spendRow({
+    date,
+    description: `${stream.label} — ${merchant.canonical}`,
+    account: stream.account,
+    amount: stream.amount(ctx.rng),
+    funding: weighted(ctx.rng, stream.funding),
+    merchant,
+  });
+};
+
 /**
  * The volume driver: everyday spending, weekday/weekend aware. Every stream
  * calls chance() on every day, whether it fires or not — short-circuiting one
@@ -298,9 +315,6 @@ const spendRow = (input: {
  * given variant.
  */
 export const generateDaily = (ctx: SeedContext): SeedRow[] => {
-  const rows: SeedRow[] = [];
-  const days = eachDay(ctx.window);
-
   const nextDue = new Map<string, string>(
     CADENCE_STREAMS.map((stream) => [
       stream.label,
@@ -308,29 +322,20 @@ export const generateDaily = (ctx: SeedContext): SeedRow[] => {
     ]),
   );
 
-  for (const day of days) {
+  return eachDay(ctx.window).flatMap((day) => {
     const weekend = isWeekend(day);
 
-    for (const stream of DAILY_STREAMS) {
-      const probability = weekend ? stream.weekendChance : stream.weekdayChance;
-      if (!chance(ctx.rng, probability)) continue;
+    // Each stream draws its chance and then its row before the next stream
+    // draws, so this stays one flatMap rather than a filter and a map.
+    const daily = DAILY_STREAMS.flatMap((stream) =>
+      chance(ctx.rng, weekend ? stream.weekendChance : stream.weekdayChance)
+        ? [streamRow(ctx, stream, day)]
+        : [],
+    );
 
-      const merchant = pick(ctx.rng, stream.merchants);
-      rows.push(
-        spendRow({
-          date: day,
-          description: `${stream.label} — ${merchant.canonical}`,
-          account: stream.account,
-          amount: stream.amount(ctx.rng),
-          funding: weighted(ctx.rng, stream.funding),
-          merchant,
-        }),
-      );
-    }
-
-    for (const stream of CADENCE_STREAMS) {
-      const due = nextDue.get(stream.label) ?? ctx.window.start;
-      if (day < due) continue;
+    const cadence = CADENCE_STREAMS.filter(
+      (stream) => day >= (nextDue.get(stream.label) ?? ctx.window.start),
+    ).map((stream) => {
       nextDue.set(
         stream.label,
         addDays(
@@ -342,33 +347,24 @@ export const generateDaily = (ctx: SeedContext): SeedRow[] => {
           ),
         ),
       );
-      const merchant = pick(ctx.rng, stream.merchants);
-      rows.push(
-        spendRow({
-          date: day,
-          description: `${stream.label} — ${merchant.canonical}`,
-          account: stream.account,
-          amount: stream.amount(ctx.rng),
-          funding: weighted(ctx.rng, stream.funding),
-          merchant,
-        }),
-      );
-    }
+      return streamRow(ctx, stream, day);
+    });
 
-    const streetChance = weekend
-      ? STREET_FOOD_CHANCE_WEEKEND
-      : STREET_FOOD_CHANCE_WEEKDAY;
-    if (!chance(ctx.rng, streetChance)) continue;
-    rows.push(
-      row({
-        date: day,
-        description: `Street food — ${pick(ctx.rng, STREET_FOOD_PLACES)}`,
-        debit: ACCOUNT.restaurants,
-        credit: ACCOUNT.cash,
-        amount: money(ctx.rng, 60, 180),
-      }),
-    );
-  }
+    const streetFood = chance(
+      ctx.rng,
+      weekend ? STREET_FOOD_CHANCE_WEEKEND : STREET_FOOD_CHANCE_WEEKDAY,
+    )
+      ? [
+          row({
+            date: day,
+            description: `Street food — ${pick(ctx.rng, STREET_FOOD_PLACES)}`,
+            debit: ACCOUNT.restaurants,
+            credit: ACCOUNT.cash,
+            amount: money(ctx.rng, 60, 180),
+          }),
+        ]
+      : [];
 
-  return rows;
+    return [...daily, ...cadence, ...streetFood];
+  });
 };
