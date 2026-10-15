@@ -19,12 +19,10 @@ import { leg, linked } from "../types";
  * withholding, social security, the provident fund and whatever reaches the
  * bank, so the legs sum back to gross exactly.
  */
-const payslipRows = (ctx: SeedContext): SeedRow[] => {
-  const rows: SeedRow[] = [];
-
-  for (const month of ctx.months) {
+const payslipRows = (ctx: SeedContext): SeedRow[] =>
+  ctx.months.flatMap((month) => {
     const payday = onOrBeforeBusinessDay(dayIn(month, PAYROLL.paydayOfMonth));
-    if (!within(payday, ctx.window)) continue;
+    if (!within(payday, ctx.window)) return [];
 
     const assessable = assessableIncome(month.year);
     const grossUnits = toUnits(monthlyGross(month.year));
@@ -33,29 +31,26 @@ const payslipRows = (ctx: SeedContext): SeedRow[] => {
     const providentUnits = Math.round(grossUnits * PAYROLL.providentFundRate);
     const netUnits = grossUnits - taxUnits - socialUnits - providentUnits;
 
-    rows.push(
-      linked({
-        date: payday,
-        description: `Payslip — ${PERSONA.employer}`,
-        legs: [
-          leg(ACCOUNT.incomeTax, ACCOUNT.salary, fromUnits(taxUnits)),
-          leg(ACCOUNT.socialSecurity, ACCOUNT.salary, fromUnits(socialUnits)),
-          leg(ACCOUNT.pvd, ACCOUNT.salary, fromUnits(providentUnits)),
-          leg(ACCOUNT.kbank, ACCOUNT.salary, fromUnits(netUnits)),
-        ],
-      }),
-    );
+    const payslip = linked({
+      date: payday,
+      description: `Payslip — ${PERSONA.employer}`,
+      legs: [
+        leg(ACCOUNT.incomeTax, ACCOUNT.salary, fromUnits(taxUnits)),
+        leg(ACCOUNT.socialSecurity, ACCOUNT.salary, fromUnits(socialUnits)),
+        leg(ACCOUNT.pvd, ACCOUNT.salary, fromUnits(providentUnits)),
+        leg(ACCOUNT.kbank, ACCOUNT.salary, fromUnits(netUnits)),
+      ],
+    });
 
     const bonus = PAYROLL.bonusMonths[month.month];
-    if (bonus === undefined) continue;
+    if (bonus === undefined) return [payslip];
 
-    // A lump rides on top of a year's earnings, so it is withheld at the rate
-    // the last baht of salary already reached rather than the average one.
     const bonusGrossUnits = Math.round(grossUnits * bonus.multiplier);
     const bonusTaxUnits = Math.round(
       bonusGrossUnits * marginalRate(assessable),
     );
-    rows.push(
+    return [
+      payslip,
       linked({
         date: payday,
         description: `${bonus.label} — ${PERSONA.employer}`,
@@ -68,30 +63,25 @@ const payslipRows = (ctx: SeedContext): SeedRow[] => {
           ),
         ],
       }),
-    );
-  }
-
-  return rows;
-};
+    ];
+  });
 
 /**
  * The second stream: a fixed retainer invoiced on its own payday, taxed at the
  * flat 3% a Thai payer withholds from professional fees rather than through
  * PND1, and settled into a different bank from the salary.
  */
-const retainerRows = (ctx: SeedContext): SeedRow[] => {
-  const rows: SeedRow[] = [];
-
-  for (const month of ctx.months) {
+const retainerRows = (ctx: SeedContext): SeedRow[] =>
+  ctx.months.flatMap((month) => {
     const payday = onOrBeforeBusinessDay(
       dayIn(month, CONSULTING.paydayOfMonth),
     );
-    if (!within(payday, ctx.window)) continue;
+    if (!within(payday, ctx.window)) return [];
 
     const grossUnits = toUnits(monthlyRetainer(month.year));
     const whtUnits = Math.round(grossUnits * CONSULTING.withholdingRate);
 
-    rows.push(
+    return [
       linked({
         date: payday,
         description: `Freelance — ${PERSONA.client}`,
@@ -104,11 +94,8 @@ const retainerRows = (ctx: SeedContext): SeedRow[] => {
           ),
         ],
       }),
-    );
-  }
-
-  return rows;
-};
+    ];
+  });
 
 export const generateIncome = (ctx: SeedContext): SeedRow[] => [
   ...payslipRows(ctx),
