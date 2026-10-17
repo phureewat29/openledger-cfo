@@ -5,10 +5,12 @@ import { z } from "zod/v4";
 import type { OledError, Result } from "@openledger-cfo/openledger";
 import {
   accountCreateInputSchema,
+  andThen,
   err,
   ingestRowInputSchema,
   isoDateSchema,
   merchantUpsertInputSchema,
+  messageOf,
   ok,
 } from "@openledger-cfo/openledger";
 
@@ -106,40 +108,47 @@ export type Life = z.infer<typeof lifeSchema>;
 export const allRows = (life: Life): Life["months"][number]["rows"] =>
   life.months.flatMap((month) => month.rows);
 
-export const readLife = async (
-  path: string = LIFE_PATH,
-): Promise<Result<Life, OledError>> => {
-  let text: string;
+const readText = async (path: string): Promise<Result<string, OledError>> => {
   try {
-    text = await readFile(path, "utf8");
+    return ok(await readFile(path, "utf8"));
   } catch (cause) {
     return err<OledError>({
       kind: "not_found",
-      message: `Could not read ${path}: ${String(cause)}`,
+      message: `Could not read ${path}: ${messageOf(cause)}`,
       hint: "Author the dataset first with `pnpm demo:generate`.",
     });
   }
+};
 
-  let parsed: unknown;
+const parseJson = (path: string, text: string): Result<unknown, OledError> => {
   try {
-    parsed = JSON.parse(text) as unknown;
+    return ok(JSON.parse(text) as unknown);
   } catch (cause) {
     return err<OledError>({
       kind: "parse_failed",
-      message: `${path} is not valid JSON: ${String(cause)}`,
+      message: `${path} is not valid JSON: ${messageOf(cause)}`,
     });
   }
-
-  const validated = lifeSchema.safeParse(parsed);
-  if (!validated.success) {
-    return err<OledError>({
-      kind: "invalid",
-      message: `${path} does not match the dataset schema`,
-      hint: z.prettifyError(validated.error).slice(0, 2_000),
-    });
-  }
-  return ok(validated.data);
 };
+
+const validate = (path: string, parsed: unknown): Result<Life, OledError> => {
+  const validated = lifeSchema.safeParse(parsed);
+  return validated.success
+    ? ok(validated.data)
+    : err<OledError>({
+        kind: "invalid",
+        message: `${path} does not match the dataset schema`,
+        hint: z.prettifyError(validated.error).slice(0, 2_000),
+      });
+};
+
+export const readLife = async (
+  path: string = LIFE_PATH,
+): Promise<Result<Life, OledError>> =>
+  andThen(
+    andThen(await readText(path), (text) => parseJson(path, text)),
+    (parsed) => validate(path, parsed),
+  );
 
 /** Compact on purpose: the file is committed and read by machines, never edited by hand. */
 export const writeLife = async (
