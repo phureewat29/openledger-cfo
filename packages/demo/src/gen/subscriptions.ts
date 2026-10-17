@@ -124,29 +124,26 @@ const describe = (subscription: Subscription): string =>
     .filter(Boolean)
     .join(" ");
 
-export const generateSubscriptions = (ctx: SeedContext): SeedRow[] => {
-  const rows: SeedRow[] = [];
-
-  for (const month of ctx.months) {
-    for (const subscription of SUBSCRIPTIONS) {
+export const generateSubscriptions = (ctx: SeedContext): SeedRow[] =>
+  ctx.months.flatMap((month) =>
+    SUBSCRIPTIONS.flatMap((subscription) => {
       const chargeDate = dayIn(month, subscription.day);
-      if (!within(chargeDate, ctx.window)) continue;
-      if (!billedIn(subscription, monthKey(chargeDate))) continue;
+      if (!within(chargeDate, ctx.window)) return [];
+      if (!billedIn(subscription, monthKey(chargeDate))) return [];
 
       const source = FUNDING[subscription.funding];
-      rows.push(
-        row({
-          date: chargeDate,
-          description: describe(subscription),
-          debit: subscription.merchant.account,
-          credit: source,
-          amount: subscription.amount,
-          merchant: subscription.merchant,
-        }),
-      );
+      const charge = row({
+        date: chargeDate,
+        description: describe(subscription),
+        debit: subscription.merchant.account,
+        credit: source,
+        amount: subscription.amount,
+        merchant: subscription.merchant,
+      });
+      if (!subscription.foreignCurrency) return [charge];
 
-      if (!subscription.foreignCurrency) continue;
-      rows.push(
+      return [
+        charge,
         row({
           date: chargeDate,
           description: `FX fee — ${subscription.merchant.canonical}`,
@@ -154,9 +151,6 @@ export const generateSubscriptions = (ctx: SeedContext): SeedRow[] => {
           credit: source,
           amount: money(ctx.rng, FX_FEE_MIN, FX_FEE_MAX),
         }),
-      );
-    }
-  }
-
-  return rows;
-};
+      ];
+    }),
+  );

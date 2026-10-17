@@ -1,3 +1,4 @@
+import type { Month } from "../calendar";
 import type { Merchant } from "../merchants";
 import type { Rng } from "../rng";
 import type { SeedContext, SeedRow } from "../types";
@@ -81,45 +82,49 @@ const OUTINGS: Outing[] = [
   },
 ];
 
-export const generateLifestyle = (ctx: SeedContext): SeedRow[] => {
-  const rows: SeedRow[] = [];
-
-  for (const month of ctx.months) {
-    for (const outing of OUTINGS) {
-      const count = int(ctx.rng, outing.minPerMonth, outing.maxPerMonth);
-      for (let slot = 0; slot < count; slot += 1) {
-        const day = outing.days[slot % outing.days.length];
-        if (day === undefined) continue;
-        const date = dayIn(month, day);
-        if (!within(date, ctx.window)) continue;
-        const merchant = pick(ctx.rng, outing.merchants);
-        rows.push(
-          row({
-            date,
-            description: `${outing.label} — ${merchant.canonical}`,
-            debit: outing.account,
-            credit: outing.funding,
-            amount: outing.amount(ctx.rng),
-            merchant,
-          }),
-        );
-      }
-    }
-
-    if (!MEMBERSHIP_MONTHS.includes(month.month)) continue;
-    const dueDate = dayIn(month, MEMBERSHIP_DAY);
-    if (!within(dueDate, ctx.window)) continue;
-    rows.push(
+const outingRows = (
+  ctx: SeedContext,
+  month: Month,
+  outing: Outing,
+): SeedRow[] =>
+  Array.from(
+    { length: int(ctx.rng, outing.minPerMonth, outing.maxPerMonth) },
+    (_, slot) => outing.days[slot % outing.days.length],
+  ).flatMap((day) => {
+    if (day === undefined) return [];
+    const date = dayIn(month, day);
+    if (!within(date, ctx.window)) return [];
+    const merchant = pick(ctx.rng, outing.merchants);
+    return [
       row({
-        date: dueDate,
-        description: "Golf club membership — half year",
-        debit: ACCOUNT.golf,
-        credit: ACCOUNT.scb,
-        amount: MEMBERSHIP_FEE,
-        merchant: MERCHANT.alpineGolf,
+        date,
+        description: `${outing.label} — ${merchant.canonical}`,
+        debit: outing.account,
+        credit: outing.funding,
+        amount: outing.amount(ctx.rng),
+        merchant,
       }),
-    );
-  }
+    ];
+  });
 
-  return rows;
-};
+export const generateLifestyle = (ctx: SeedContext): SeedRow[] =>
+  ctx.months.flatMap((month) => {
+    const dueDate = dayIn(month, MEMBERSHIP_DAY);
+    const membership =
+      MEMBERSHIP_MONTHS.includes(month.month) && within(dueDate, ctx.window)
+        ? [
+            row({
+              date: dueDate,
+              description: "Golf club membership — half year",
+              debit: ACCOUNT.golf,
+              credit: ACCOUNT.scb,
+              amount: MEMBERSHIP_FEE,
+              merchant: MERCHANT.alpineGolf,
+            }),
+          ]
+        : [];
+    return [
+      ...OUTINGS.flatMap((outing) => outingRows(ctx, month, outing)),
+      ...membership,
+    ];
+  });
