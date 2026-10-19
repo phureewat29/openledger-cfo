@@ -1,6 +1,8 @@
 import type { UIMessageChunk } from "ai";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 
+import { asRecord, asString, parseJson, textOf } from "./untyped";
+
 /** A LangGraph v2 stream event. Kept structural so we never import graph internals. */
 export interface LangGraphEvent {
   event: string;
@@ -12,14 +14,6 @@ export interface LangGraphEvent {
 
 /** Masks a secret the same way the connector masks it in a command line. */
 const MASK = "•••";
-
-const asRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : {};
-
-const asString = (value: unknown): string =>
-  typeof value === "string" ? value : "";
 
 /**
  * LangChain objects arrive as class instances in-process but as
@@ -33,17 +27,6 @@ export const unwrap = (value: unknown): Record<string, unknown> => {
 /** Depth 0 is the root graph; subagents nest under `parent|child` namespaces. */
 export const nsDepth = (event: LangGraphEvent): number =>
   asString(event.metadata?.checkpoint_ns).split("|").length - 1;
-
-/** Pulls plain text out of string content or a content-block array. */
-export const textOf = (content: unknown): string => {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map(asRecord)
-    .filter((part) => part.type === "text")
-    .map((part) => asString(part.text))
-    .join("");
-};
 
 /** Anthropic-style thinking blocks and OpenAI-style reasoning both land here. */
 const reasoningOf = (chunk: Record<string, unknown>): string => {
@@ -86,11 +69,8 @@ interface ToolCallEntry {
 
 const parseInput = (args: string): unknown => {
   if (!args) return {};
-  try {
-    return JSON.parse(args) as unknown;
-  } catch {
-    return { _raw: args };
-  }
+  const parsed = parseJson(args);
+  return parsed === undefined ? { _raw: args } : parsed;
 };
 
 const maskSecrets = (input: unknown, secrets: readonly string[]): unknown => {

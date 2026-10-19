@@ -63,7 +63,7 @@ export interface Agent {
 
 type ChatMessage = AIMessage | HumanMessage;
 
-const textOf = (message: UIMessage): string =>
+const plainTextOf = (message: UIMessage): string =>
   message.parts
     .map((part) => (part.type === "text" ? part.text : ""))
     .join("")
@@ -72,7 +72,7 @@ const textOf = (message: UIMessage): string =>
 const toChatMessages = (messages: UIMessage[]): ChatMessage[] =>
   messages.flatMap((message) => {
     if (message.role === "system") return [];
-    const content = textOf(message);
+    const content = plainTextOf(message);
     if (content.length === 0) return [];
     return [
       message.role === "user"
@@ -123,7 +123,7 @@ export const createAgent = (kind: AgentKind, opts: AgentOptions): Agent => {
     stream: (messages, signal) => {
       const asked = messages
         .filter((message) => message.role === "user")
-        .map(textOf)
+        .map(plainTextOf)
         .filter((text) => text.length > 0);
 
       return toUIMessageStreamResponse(events(messages, signal), {
@@ -146,8 +146,9 @@ export const createAgent = (kind: AgentKind, opts: AgentOptions): Agent => {
 
 export type { GatewayConfig } from "./model";
 export type { AgentKind } from "./registry";
-export { nsDepth, textOf, unwrap } from "./stream";
+export { nsDepth, unwrap } from "./stream";
 export type { LangGraphEvent } from "./stream";
+export { textOf } from "./untyped";
 export { startIngestRunTool } from "./tools/runner";
 export type {
   RunnerMode,

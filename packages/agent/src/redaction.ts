@@ -17,7 +17,6 @@ import {
 } from "@langchain/core/messages";
 import { ChatGenerationChunk } from "@langchain/core/outputs";
 import {
-  compact,
   countBy,
   escapeRegExp,
   isPlainObject,
@@ -25,6 +24,8 @@ import {
   omit,
   uniqBy,
 } from "es-toolkit";
+
+import { asRecord, parseJson, textOf } from "./untyped";
 
 /**
  * Pseudonymizes the user's personal data on its way to an external model and
@@ -167,20 +168,6 @@ const prepare = (entries: readonly VocabEntry[]): Vocabulary[] => {
   }));
 };
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : {};
-
-/** Valid JSON never parses to `undefined`, so it doubles as the failure signal. */
-const parseJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return undefined;
-  }
-};
-
 /** Walks string values only: keys, numbers, booleans and structure are facts. */
 const walkJson = (value: unknown, map: (text: string) => string): unknown => {
   if (typeof value === "string") return map(value);
@@ -216,11 +203,6 @@ const transformContent = (
   if (!Array.isArray(content)) return content as MessageContent;
   return content.map((block) => transformBlock(block, map)) as MessageContent;
 };
-
-const textOf = (content: MessageContent): string =>
-  typeof content === "string"
-    ? content
-    : compact(content.map(proseOf)).join("");
 
 /** One direction of travel: plain prose, and prose held inside a JSON string. */
 interface TextPass {
