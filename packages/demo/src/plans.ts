@@ -1,4 +1,4 @@
-import { countBy, maxBy, orderBy, sumBy } from "es-toolkit";
+import { countBy, groupBy, maxBy, orderBy, sumBy } from "es-toolkit";
 
 import type { Result } from "@openledger-cfo/openledger";
 import { db } from "@openledger-cfo/db/client";
@@ -133,22 +133,31 @@ const buildBudgets = (life: Life): BudgetInsert[] => {
   const window = life.months.slice(-BUDGET_WINDOW_MONTHS);
   const monthKeys = window.map((chunk) => chunk.month);
 
-  const perCategoryMonth = new Map<string, Map<string, number>>();
-  for (const chunk of window) {
-    for (const seedRow of chunk.rows) {
-      for (const legEntry of legsOf(seedRow)) {
-        if (!isExpenseAccount(legEntry.debit_account)) continue;
-        const category = categoryOf(legEntry.debit_account);
-        const perMonth =
-          perCategoryMonth.get(category) ?? new Map<string, number>();
-        perMonth.set(
-          chunk.month,
-          (perMonth.get(chunk.month) ?? 0) + legEntry.amount,
-        );
-        perCategoryMonth.set(category, perMonth);
-      }
-    }
-  }
+  const spends = window.flatMap((chunk) =>
+    chunk.rows
+      .flatMap(legsOf)
+      .filter((legEntry) => isExpenseAccount(legEntry.debit_account))
+      .map((legEntry) => ({
+        category: categoryOf(legEntry.debit_account),
+        month: chunk.month,
+        amount: legEntry.amount,
+      })),
+  );
+  const perCategoryMonth = new Map(
+    Object.entries(groupBy(spends, ({ category }) => category)).map(
+      ([category, group]) => [
+        category,
+        new Map(
+          Object.entries(groupBy(group, ({ month }) => month)).map(
+            ([month, monthGroup]) => [
+              month,
+              sumBy(monthGroup, ({ amount }) => amount),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 
   const candidates = [...perCategoryMonth.entries()]
     .filter(([category]) => !OBLIGATION_CATEGORIES.has(category))
@@ -260,20 +269,26 @@ const buildCardReminders = (
   life: Life,
   today: string,
 ): Result<ReminderInsert[], string> => {
-  const rows: ReminderInsert[] = [];
-  for (const account of life.accounts) {
-    if (!account.id.startsWith(CREDIT_CARD_PREFIX)) continue;
-    if (account.due_day === undefined) {
-      return err(`card ${account.id} has no due_day in the dataset`);
-    }
-    rows.push({
-      title: `Pay ${account.name}`,
-      dueDate: nextMonthlyOccurrence(today, account.due_day),
-      monthly: true,
-      note: null,
-    });
-  }
-  return ok(rows);
+  const cards = life.accounts.filter((account) =>
+    account.id.startsWith(CREDIT_CARD_PREFIX),
+  );
+  const undated = cards.find((account) => account.due_day === undefined);
+  if (undated) return err(`card ${undated.id} has no due_day in the dataset`);
+
+  return ok(
+    cards.flatMap((account) =>
+      account.due_day === undefined
+        ? []
+        : [
+            {
+              title: `Pay ${account.name}`,
+              dueDate: nextMonthlyOccurrence(today, account.due_day),
+              monthly: true,
+              note: null,
+            },
+          ],
+    ),
+  );
 };
 
 const buildMortgageReminder = (
