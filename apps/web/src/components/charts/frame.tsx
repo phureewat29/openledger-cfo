@@ -20,51 +20,61 @@ const QUANTUM = 8;
 
 const quantize = (value: number) => Math.round(value / QUANTUM) * QUANTUM;
 
-const listeners = new WeakMap<Element, Set<Listener>>();
-/** Sizes seen since the last frame; one flush serves every chart on the page. */
-const pending = new Map<Element, ChartSize>();
-let frame = 0;
-
-const flush = () => {
-  frame = 0;
-  const batch = [...pending];
-  pending.clear();
-  for (const [element, size] of batch) {
-    for (const listener of listeners.get(element) ?? []) listener(size);
-  }
-};
-
-const measure = (entries: readonly ResizeObserverEntry[]) => {
-  for (const entry of entries) {
-    const { width, height } = entry.contentRect;
-    pending.set(entry.target, { w: quantize(width), h: quantize(height) });
-  }
-  if (frame === 0) frame = requestAnimationFrame(flush);
-};
-
 /**
- * One observer for every chart on the page. Per-instance observers each wake
- * the layout engine on the same frame for the same window resize.
+ * One observer for every chart on the page, flushed once per frame.
+ * Per-instance observers each wake the layout engine on the same frame for the
+ * same window resize.
  */
-const observer =
-  typeof ResizeObserver === "undefined"
-    ? undefined
-    : new ResizeObserver(measure);
+const createSizeHub = () => {
+  const listeners = new WeakMap<Element, Set<Listener>>();
+  /** Sizes seen since the last frame; one flush serves every chart on the page. */
+  const pending = new Map<Element, ChartSize>();
+  let frame = 0;
 
-const observeChart = (element: Element, listener: Listener): (() => void) => {
-  const registered = listeners.get(element) ?? new Set<Listener>();
-  registered.add(listener);
-  listeners.set(element, registered);
-  observer?.observe(element);
-
-  return () => {
-    registered.delete(listener);
-    if (registered.size > 0) return;
-    listeners.delete(element);
-    pending.delete(element);
-    observer?.unobserve(element);
+  const flush = () => {
+    frame = 0;
+    const batch = [...pending];
+    pending.clear();
+    batch.forEach(([element, size]) =>
+      listeners.get(element)?.forEach((listener) => listener(size)),
+    );
   };
+
+  const measure = (entries: readonly ResizeObserverEntry[]) => {
+    entries.forEach(({ target, contentRect }) =>
+      pending.set(target, {
+        w: quantize(contentRect.width),
+        h: quantize(contentRect.height),
+      }),
+    );
+    if (frame === 0) frame = requestAnimationFrame(flush);
+  };
+
+  // The server renders this module too, and it has no observer to give.
+  const observer =
+    typeof ResizeObserver === "undefined"
+      ? undefined
+      : new ResizeObserver(measure);
+
+  const observe = (element: Element, listener: Listener): (() => void) => {
+    const registered = listeners.get(element) ?? new Set<Listener>();
+    registered.add(listener);
+    listeners.set(element, registered);
+    observer?.observe(element);
+
+    return () => {
+      registered.delete(listener);
+      if (registered.size > 0) return;
+      listeners.delete(element);
+      pending.delete(element);
+      observer?.unobserve(element);
+    };
+  };
+
+  return { observe };
 };
+
+const sizes = createSizeHub();
 
 const same = (current: ChartSize | null, next: ChartSize) =>
   current !== null && current.w === next.w && current.h === next.h;
@@ -81,7 +91,7 @@ export const useChartSize = () => {
   useEffect(() => {
     const element = ref.current;
     if (element === null) return;
-    return observeChart(element, (next) =>
+    return sizes.observe(element, (next) =>
       setSize((current) => (same(current, next) ? current : next)),
     );
   }, []);
