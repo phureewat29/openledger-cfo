@@ -12,7 +12,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { VocabEntry } from "./redaction";
-import { chatModel, RedactingChatOpenAI } from "./model";
+import { chatModel, createRedactorSource, RedactingChatOpenAI } from "./model";
 import { createRedactor } from "./redaction";
 
 const GATEWAY = {
@@ -42,6 +42,59 @@ describe("chatModel", () => {
     expect(chatModel({ ...GATEWAY, redact: false })).not.toBeInstanceOf(
       RedactingChatOpenAI,
     );
+  });
+});
+
+describe("createRedactorSource", () => {
+  const vocab = (): Promise<VocabEntry[]> => Promise.resolve(VOCAB);
+  const broken = (): Promise<VocabEntry[]> =>
+    Promise.reject(new Error("ledger busy"));
+
+  it("shares one read between overlapping calls", async () => {
+    const read = vi.fn(vocab);
+    const redactorOf = createRedactorSource([read]);
+
+    const [first, second] = await Promise.all([redactorOf(), redactorOf()]);
+
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(second).toBe(first);
+  });
+
+  it("reads fresh once the shared read has settled", async () => {
+    const read = vi.fn(vocab);
+    const redactorOf = createRedactorSource([read]);
+
+    await redactorOf();
+    await redactorOf();
+
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a failed source and keeps the rest", async () => {
+    const redactorOf = createRedactorSource([broken, vocab]);
+    const redactor = await redactorOf();
+
+    expect(redactor.redactText(ACCOUNT)).not.toContain(ACCOUNT);
+  });
+
+  it("reuses the last good redactor when every source fails", async () => {
+    const read = vi.fn(vocab);
+    const redactorOf = createRedactorSource([read]);
+    const good = await redactorOf();
+
+    read.mockImplementation(broken);
+    const fallback = await redactorOf();
+
+    expect(fallback).toBe(good);
+    expect(fallback.redactText(USER)).not.toContain(USER);
+  });
+
+  it("falls back to patterns alone with no good read behind it", async () => {
+    const redactorOf = createRedactorSource([broken]);
+    const redactor = await redactorOf();
+
+    expect(redactor.redactText(ACCOUNT)).toBe(ACCOUNT);
+    expect(redactor.redactText("call 0812345678")).not.toContain("0812345678");
   });
 });
 

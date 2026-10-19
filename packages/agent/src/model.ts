@@ -8,6 +8,7 @@ import type {
 } from "@langchain/openai";
 import { convertChunksToEvents } from "@langchain/core/language_models/compat";
 import { ChatOpenAI } from "@langchain/openai";
+import { attemptAsync } from "es-toolkit";
 
 import type { Redactor, VocabEntry } from "./redaction";
 import { createRedactor } from "./redaction";
@@ -27,6 +28,8 @@ export interface GatewayConfig {
 
 type RedactorProvider = () => Promise<Redactor>;
 
+type VocabSource = () => Promise<VocabEntry[]>;
+
 /**
  * A ledger read that fails contributes nothing rather than ending the turn.
  * The residual is deliberate: in a fresh process with an unreachable ledger
@@ -34,14 +37,38 @@ type RedactorProvider = () => Promise<Redactor>;
  * is redacted by pattern only and earlier turns' real names go out in the
  * clear. An answerable turn is worth more than a perfectly hidden one.
  */
-const guarded = async (
-  read: () => Promise<VocabEntry[]>,
-): Promise<VocabEntry[]> => {
-  try {
-    return await read();
-  } catch {
-    return [];
-  }
+const guarded = async (read: VocabSource): Promise<VocabEntry[]> => {
+  const [, entries] = await attemptAsync(read);
+  return entries ?? [];
+};
+
+/**
+ * Read fresh for each model call: a model call follows tool execution, so an
+ * account the agent just created is already hidden on the turn that reports it.
+ * Calls that overlap within a turn share the one read, and the provider owns
+ * the last good redactor for as long as it lives.
+ */
+export const createRedactorSource = (
+  sources: readonly VocabSource[],
+): RedactorProvider => {
+  let inFlight: Promise<Redactor> | undefined;
+  let lastGood: Redactor | undefined;
+
+  const build = async (): Promise<Redactor> => {
+    const batches = await Promise.all(sources.map(guarded));
+    const entries = batches.flat();
+    // Every source failing at once must not quietly send a turn out in the clear.
+    if (entries.length === 0 && lastGood !== undefined) return lastGood;
+    lastGood = createRedactor(entries);
+    return lastGood;
+  };
+
+  return () => {
+    inFlight ??= build().finally(() => {
+      inFlight = undefined;
+    });
+    return inFlight;
+  };
 };
 
 const userName = async (): Promise<VocabEntry[]> => {
@@ -71,37 +98,12 @@ const statementNames = async (): Promise<VocabEntry[]> => {
   }));
 };
 
-const SOURCES: readonly (() => Promise<VocabEntry[]>)[] = [
+/** One per process, so the last good vocabulary outlives the turn that read it. */
+const currentRedactor = createRedactorSource([
   userName,
   accountLabels,
   statementNames,
-];
-
-let inFlight: Promise<Redactor> | null = null;
-let lastGood: Redactor | null = null;
-
-const build = async (): Promise<Redactor> => {
-  const batches = await Promise.all(SOURCES.map((source) => guarded(source)));
-  const entries = batches.flat();
-  // Every source failing at once must not quietly send a turn out in the clear.
-  if (entries.length === 0 && lastGood !== null) return lastGood;
-  lastGood = createRedactor(entries);
-  return lastGood;
-};
-
-/**
- * Read fresh for each model call: a model call follows tool execution, so an
- * account the agent just created is already hidden on the turn that reports it.
- * Calls that overlap within a turn share the one read.
- */
-const currentRedactor: RedactorProvider = () => {
-  if (inFlight !== null) return inFlight;
-  const pending = build().finally(() => {
-    inFlight = null;
-  });
-  inFlight = pending;
-  return pending;
-};
+]);
 
 /** A chat run carries one prompt and one completion, so both indices are fixed. */
 const TOKEN_INDICES = { prompt: 0, completion: 0 };
