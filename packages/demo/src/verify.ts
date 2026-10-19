@@ -1,4 +1,4 @@
-import { difference, sumBy } from "es-toolkit";
+import { difference, range, sumBy } from "es-toolkit";
 
 import type {
   AccountRow,
@@ -34,11 +34,9 @@ const asRange = (window: DateWindow) => ({
 /** `thb:asset:bank:kbank` implies `thb:asset` and `thb:asset:bank` exist too. */
 const withAncestors = (id: string): string[] => {
   const parts = id.split(":");
-  const ids: string[] = [];
-  for (let depth = 2; depth <= parts.length; depth += 1) {
-    ids.push(parts.slice(0, depth).join(":"));
-  }
-  return ids;
+  return range(2, parts.length + 1).map((depth) =>
+    parts.slice(0, depth).join(":"),
+  );
 };
 
 /** A month wholly inside the window, so its report is a full month of activity. */
