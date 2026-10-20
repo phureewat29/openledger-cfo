@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { EXIT } from "@aquartier/openledger/contract";
-import { delay } from "es-toolkit";
+import { attempt, delay } from "es-toolkit";
 
-import type { OledError, OledErrorKind } from "./errors";
+import type { OledError } from "./errors";
 import type { Result } from "./result";
 import { EXIT_KIND, parseCliErrorLine } from "./errors";
 import { err, ok } from "./result";
@@ -132,15 +132,14 @@ const BUSY_RETRY_DELAYS_MS = [25, 75, 150];
 
 const spawnRetryingBusy = async (
   argv: string[],
-  stdin?: string,
+  stdin: string | undefined,
+  delays = BUSY_RETRY_DELAYS_MS,
 ): Promise<SpawnOutcome> => {
-  let outcome = await spawnOled(argv, stdin);
-  for (const ms of BUSY_RETRY_DELAYS_MS) {
-    if (outcome.exitCode !== EXIT.BUSY) break;
-    await delay(ms);
-    outcome = await spawnOled(argv, stdin);
-  }
-  return outcome;
+  const outcome = await spawnOled(argv, stdin);
+  const [wait, ...rest] = delays;
+  if (outcome.exitCode !== EXIT.BUSY || wait === undefined) return outcome;
+  await delay(wait);
+  return spawnRetryingBusy(argv, stdin, rest);
 };
 
 const toSpawnError = (code: string): OledError => {
@@ -158,21 +157,14 @@ const toSpawnError = (code: string): OledError => {
 };
 
 const toExitError = (outcome: SpawnOutcome, argv: string[]): OledError => {
-  const kind: OledErrorKind = EXIT_KIND[outcome.exitCode] ?? "cli_error";
   const cliError = parseCliErrorLine(outcome.stderr);
-  if (!cliError) {
-    return {
-      kind,
-      message:
-        outcome.stderr.trim() ||
-        `\`${OLED_BIN} ${argv[0] ?? ""}\` exited ${String(outcome.exitCode)}`,
-      exitCode: outcome.exitCode,
-    };
-  }
+  const bare =
+    outcome.stderr.trim() ||
+    `\`${OLED_BIN} ${argv[0] ?? ""}\` exited ${String(outcome.exitCode)}`;
   return {
-    kind,
-    message: cliError.message,
-    ...(cliError.hint === undefined ? {} : { hint: cliError.hint }),
+    kind: EXIT_KIND[outcome.exitCode] ?? "cli_error",
+    message: cliError?.message ?? bare,
+    ...(cliError?.hint === undefined ? {} : { hint: cliError.hint }),
     exitCode: outcome.exitCode,
   };
 };
@@ -188,9 +180,9 @@ const run = async (
   allowPartial: boolean,
 ): Promise<RunOutcome> => {
   const outcome = await spawnRetryingBusy(argv, stdin).catch(
-    (cause: unknown) => ({
+    (): SpawnOutcome => ({
       stdout: "",
-      stderr: cause instanceof Error ? cause.message : String(cause),
+      stderr: "",
       exitCode: -1,
       spawnError: "ESPAWN",
     }),
@@ -199,11 +191,12 @@ const run = async (
   if (outcome.spawnError !== undefined) {
     return { result: err(toSpawnError(outcome.spawnError)), exitCode: -1 };
   }
-  if (outcome.exitCode === 0)
-    return { result: ok(outcome.stdout), exitCode: 0 };
   // Exit 7 wrote its results to stdout; the caller decides what a partial run means.
-  if (outcome.exitCode === EXIT.PARTIAL && allowPartial) {
-    return { result: ok(outcome.stdout), exitCode: EXIT.PARTIAL };
+  if (
+    outcome.exitCode === 0 ||
+    (outcome.exitCode === EXIT.PARTIAL && allowPartial)
+  ) {
+    return { result: ok(outcome.stdout), exitCode: outcome.exitCode };
   }
 
   return {
@@ -217,12 +210,7 @@ const notify = (
   listener: OledCommandListener | undefined,
   event: OledCommandEvent,
 ): void => {
-  if (!listener) return;
-  try {
-    listener(event);
-  } catch {
-    return;
-  }
+  if (listener) attempt(() => listener(event));
 };
 
 interface RunObservedOptions {
