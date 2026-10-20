@@ -28,7 +28,8 @@ export const mergeCliLog = (
   current: readonly CliEntry[],
   delta: readonly CliEntry[],
 ): CliEntry[] => {
-  const byId = new Map(current.map((entry) => [entry.id, entry]));
-  for (const entry of delta) byId.set(entry.id, entry);
+  const byId = new Map(
+    [...current, ...delta].map((entry) => [entry.id, entry]),
+  );
   return takeRight([...byId.values()], WINDOW);
 };
