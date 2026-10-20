@@ -129,8 +129,8 @@ export const objectiveOf = (
     CLOSING_RULE[mode],
   ].join("\n");
 
-/** The server ring's own capacity, restated: it cannot be imported client-side. */
-const WINDOW = 300;
+/** The server journal's capacity, which a reader's merged feed never outgrows. */
+export const RUN_JOURNAL_CAPACITY = 300;
 
 export const NO_RUN_ENTRIES: RunEntry[] = [];
 
@@ -142,7 +142,8 @@ export const mergeRunEntries = (
   current: readonly RunEntry[],
   delta: readonly RunEntry[],
 ): RunEntry[] => {
-  const byId = new Map(current.map((entry) => [entry.id, entry]));
-  for (const entry of delta) byId.set(entry.id, entry);
-  return takeRight([...byId.values()], WINDOW);
+  const byId = new Map(
+    [...current, ...delta].map((entry) => [entry.id, entry]),
+  );
+  return takeRight([...byId.values()], RUN_JOURNAL_CAPACITY);
 };
