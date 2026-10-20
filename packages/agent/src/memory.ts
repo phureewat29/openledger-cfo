@@ -1,6 +1,7 @@
 import { cpSync, existsSync, mkdirSync } from "node:fs";
-import { dirname, join, parse } from "node:path";
+import { dirname, join } from "node:path";
 import { FilesystemBackend } from "deepagents";
+import { memoize } from "es-toolkit";
 
 const WORKSPACE_MARKER = "pnpm-workspace.yaml";
 
@@ -14,15 +15,10 @@ const SKILLS_MOUNT = "skills";
 /** POSIX path, relative to the backend root, that the skills middleware scans. */
 export const SKILLS_PATH = `/${SKILLS_MOUNT}/`;
 
-const findWorkspaceRoot = (start: string): string | undefined => {
-  const { root } = parse(start);
-  let dir = start;
-
-  while (true) {
-    if (existsSync(join(dir, WORKSPACE_MARKER))) return dir;
-    if (dir === root) return undefined;
-    dir = dirname(dir);
-  }
+const findWorkspaceRoot = (dir: string): string | undefined => {
+  if (existsSync(join(dir, WORKSPACE_MARKER))) return dir;
+  const parent = dirname(dir);
+  return parent === dir ? undefined : findWorkspaceRoot(parent);
 };
 
 /**
@@ -39,23 +35,27 @@ const workspaceRoot = (): string => {
   return root;
 };
 
-const mounted = new Set<string>();
+interface SkillsMount {
+  readonly rootDir: string;
+  readonly skillsDir: string;
+}
 
 /**
  * Skills reach the model through the backend, not the real filesystem, so the
  * source directory is copied into the agent's root. The skill's directory name
- * must equal the `name` in its frontmatter.
+ * must equal the `name` in its frontmatter. Once per destination and process:
+ * later agents share the copy rather than rewrite it under a run reading it.
  */
-const mountSkills = (rootDir: string, skillsDir: string): void => {
-  const key = `${rootDir}/${skillsDir}`;
-  if (mounted.has(key)) return;
-  cpSync(
-    join(workspaceRoot(), SKILL_SOURCES, skillsDir),
-    join(rootDir, SKILLS_MOUNT, skillsDir),
-    { recursive: true },
-  );
-  mounted.add(key);
-};
+const mountSkills = memoize(
+  ({ rootDir, skillsDir }: SkillsMount): void => {
+    cpSync(
+      join(workspaceRoot(), SKILL_SOURCES, skillsDir),
+      join(rootDir, SKILLS_MOUNT, skillsDir),
+      { recursive: true },
+    );
+  },
+  { getCacheKey: ({ rootDir, skillsDir }) => join(rootDir, skillsDir) },
+);
 
 interface WorkspaceSpec {
   memoryNamespace: string;
@@ -70,6 +70,6 @@ interface WorkspaceSpec {
 export const backendFor = (spec: WorkspaceSpec): FilesystemBackend => {
   const rootDir = join(workspaceRoot(), AGENT_DIR, spec.memoryNamespace);
   mkdirSync(rootDir, { recursive: true });
-  mountSkills(rootDir, spec.skillsDir);
+  mountSkills({ rootDir, skillsDir: spec.skillsDir });
   return new FilesystemBackend({ rootDir, virtualMode: true });
 };
