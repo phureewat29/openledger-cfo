@@ -1,5 +1,6 @@
 import type { UIMessageChunk } from "ai";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
+import { attemptAsync, mapValues } from "es-toolkit";
 
 import { asRecord, asString, parseJson, textOf } from "./untyped";
 
@@ -73,13 +74,12 @@ const parseInput = (args: string): unknown => {
   return parsed === undefined ? { _raw: args } : parsed;
 };
 
-const maskSecrets = (input: unknown, secrets: readonly string[]): unknown => {
-  const record = asRecord(input);
-  const masked = secrets
-    .filter((field) => record[field] !== undefined)
-    .map((field) => [field, MASK] as const);
-  return { ...record, ...Object.fromEntries(masked) };
-};
+const maskSecrets = (input: unknown, secrets: readonly string[]): unknown =>
+  mapValues(asRecord(input), (value, field) =>
+    secrets.includes(field) ? MASK : value,
+  );
+
+type SecretInputs = Readonly<Record<string, readonly string[]>>;
 
 export interface BridgeOptions {
   /** Include subagent token output in the visible transcript. Default false. */
@@ -87,7 +87,7 @@ export interface BridgeOptions {
   /** Tool names to keep out of the transcript, results included. */
   hiddenTools?: readonly string[];
   /** Tool input fields, by tool name, whose values must never be echoed back. */
-  secretInputs?: Readonly<Record<string, readonly string[]>>;
+  secretInputs?: SecretInputs;
   /**
    * Given the answer just streamed, what the user might ask next. Called once
    * the last token is out, and it holds the stream open while it runs, so it
@@ -98,8 +98,13 @@ export interface BridgeOptions {
 
 const NONE: readonly string[] = [];
 
-/** Mutable bookkeeping for one `toUIChunks` run, threaded through its handlers. */
+/**
+ * One `toUIChunks` run: the options it was given, read-only, beside the
+ * bookkeeping its handlers write as events arrive.
+ */
 interface StreamState {
+  readonly hiddenTools: readonly string[];
+  readonly secretInputs: SecretInputs;
   stepOpen: boolean;
   textId: string | null;
   reasoningId: string | null;
@@ -111,7 +116,12 @@ interface StreamState {
   answer: string;
 }
 
-const initialState = (): StreamState => ({
+const initialState = (
+  hiddenTools: readonly string[],
+  secretInputs: SecretInputs,
+): StreamState => ({
+  hiddenTools,
+  secretInputs,
   stepOpen: false,
   textId: null,
   reasoningId: null,
@@ -140,7 +150,7 @@ function* closeStep(state: StreamState): Generator<UIMessageChunk> {
   state.stepOpen = false;
 }
 
-/** Handles `on_chat_model_start`: closes any prior step and opens a new one. */
+/** Closes any prior step and opens a new one. */
 function* startStep(state: StreamState): Generator<UIMessageChunk> {
   yield* closeStep(state);
   yield { type: "start-step" };
@@ -184,7 +194,6 @@ function* textDelta(
 function* openToolCall(
   part: ToolCallChunk,
   state: StreamState,
-  hiddenTools: readonly string[],
 ): Generator<UIMessageChunk, ToolCallEntry | null> {
   const existing = state.pending.get(part.index);
   if (existing) return existing;
@@ -198,7 +207,7 @@ function* openToolCall(
   };
   state.pending.set(part.index, entry);
 
-  if (hiddenTools.includes(entry.name)) {
+  if (state.hiddenTools.includes(entry.name)) {
     state.hidden.add(entry.id);
     return entry;
   }
@@ -214,12 +223,11 @@ function* toolInputDelta(
   part: ToolCallChunk,
   entry: ToolCallEntry,
   state: StreamState,
-  secretInputs: Readonly<Record<string, readonly string[]>>,
 ): Generator<UIMessageChunk> {
   if (!part.args) return;
   entry.args += part.args;
   // A secret would reach the transcript one delta at a time.
-  if (state.hidden.has(entry.id) || secretInputs[entry.name]) return;
+  if (state.hidden.has(entry.id) || state.secretInputs[entry.name]) return;
   yield {
     type: "tool-input-delta",
     toolCallId: entry.id,
@@ -230,36 +238,31 @@ function* toolInputDelta(
 function* toolInputDeltas(
   chunk: Record<string, unknown>,
   state: StreamState,
-  hiddenTools: readonly string[],
-  secretInputs: Readonly<Record<string, readonly string[]>>,
 ): Generator<UIMessageChunk> {
   for (const part of toolCallChunksOf(chunk)) {
-    const entry = yield* openToolCall(part, state, hiddenTools);
+    const entry = yield* openToolCall(part, state);
     if (!entry) continue;
-    yield* toolInputDelta(part, entry, state, secretInputs);
+    yield* toolInputDelta(part, entry, state);
   }
 }
 
-/** Handles `on_chat_model_stream`: fans one chunk out to its deltas. */
+/** Fans one model chunk out to its deltas. */
 function* modelDeltas(
   event: LangGraphEvent,
   state: StreamState,
-  hiddenTools: readonly string[],
-  secretInputs: Readonly<Record<string, readonly string[]>>,
 ): Generator<UIMessageChunk> {
   const chunk = unwrap(event.data?.chunk);
   yield* reasoningDelta(chunk, event, state);
   yield* textDelta(chunk, event, state);
-  yield* toolInputDeltas(chunk, state, hiddenTools, secretInputs);
+  yield* toolInputDeltas(chunk, state);
 }
 
 function* toolInputAvailable(
   entry: ToolCallEntry,
   state: StreamState,
-  secretInputs: Readonly<Record<string, readonly string[]>>,
 ): Generator<UIMessageChunk> {
   if (state.hidden.has(entry.id)) return;
-  const secrets = secretInputs[entry.name];
+  const secrets = state.secretInputs[entry.name];
   const input = parseInput(entry.args);
   yield {
     type: "tool-input-available",
@@ -269,19 +272,16 @@ function* toolInputAvailable(
   };
 }
 
-/** Handles `on_chat_model_end`: closes the turn and flushes finished tool calls. */
-function* modelEnd(
-  state: StreamState,
-  secretInputs: Readonly<Record<string, readonly string[]>>,
-): Generator<UIMessageChunk> {
+/** Closes the turn and flushes its finished tool calls. */
+function* modelEnd(state: StreamState): Generator<UIMessageChunk> {
   yield* closeReasoning(state);
   yield* closeText(state);
   for (const entry of state.pending.values()) {
-    yield* toolInputAvailable(entry, state, secretInputs);
+    yield* toolInputAvailable(entry, state);
   }
 }
 
-/** Handles `on_tool_end`: reports a result, unless its call was hidden. */
+/** Reports a tool's result, unless its call was hidden. */
 function* toolOutput(
   event: LangGraphEvent,
   state: StreamState,
@@ -311,6 +311,22 @@ function* toolOutput(
   };
 }
 
+type Handler = (
+  event: LangGraphEvent,
+  state: StreamState,
+) => Generator<UIMessageChunk>;
+
+/** The graph events the transcript reads; every other one passes unseen. */
+const HANDLERS = {
+  on_chat_model_start: (_event, state) => startStep(state),
+  on_chat_model_stream: modelDeltas,
+  on_chat_model_end: (_event, state) => modelEnd(state),
+  on_tool_end: toolOutput,
+} satisfies Record<string, Handler>;
+
+const isHandled = (name: string): name is keyof typeof HANDLERS =>
+  Object.hasOwn(HANDLERS, name);
+
 /**
  * Rides out on the answer's own message as a data part, which is what keeps the
  * chips attached to the turn that earned them once the transcript scrolls on.
@@ -324,13 +340,9 @@ async function* followUpData(
 ): AsyncGenerator<UIMessageChunk> {
   if (followUps === undefined || state.answer.length === 0) return;
 
-  try {
-    const suggestions = await followUps(state.answer);
-    if (suggestions.length === 0) return;
-    yield { type: "data-suggestions", data: [...suggestions] };
-  } catch {
-    return;
-  }
+  const [, suggestions] = await attemptAsync(() => followUps(state.answer));
+  if (suggestions === null || suggestions.length === 0) return;
+  yield { type: "data-suggestions", data: [...suggestions] };
 }
 
 /**
@@ -350,37 +362,13 @@ async function* toUIChunks(
     followUps,
   } = options;
 
-  const state = initialState();
+  const state = initialState(hiddenTools, secretInputs);
 
   yield { type: "start" };
 
   for await (const event of events) {
     if (!includeSubagents && nsDepth(event) > 0) continue;
-
-    switch (event.event) {
-      case "on_chat_model_start": {
-        yield* startStep(state);
-        break;
-      }
-
-      case "on_chat_model_stream": {
-        yield* modelDeltas(event, state, hiddenTools, secretInputs);
-        break;
-      }
-
-      case "on_chat_model_end": {
-        yield* modelEnd(state, secretInputs);
-        break;
-      }
-
-      case "on_tool_end": {
-        yield* toolOutput(event, state);
-        break;
-      }
-
-      default:
-        break;
-    }
+    if (isHandled(event.event)) yield* HANDLERS[event.event](event, state);
   }
 
   yield* closeStep(state);
