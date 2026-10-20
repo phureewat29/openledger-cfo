@@ -20,14 +20,26 @@ const OLED_BIN = "oled";
 // Statement batches and full-ledger reads comfortably exceed the 1MB default.
 const MAX_BUFFER = 64 * 1024 * 1024;
 
+export type OledLane = "fast" | "slow";
+
 /**
+ * Process-wide on purpose: every connector reaches the same ledger file, so
+ * all of them share the lanes that serialize it, and one id sequence keeps a
+ * listener shared between connectors from pairing one command's start with
+ * another's end.
+ *
  * Two lanes, not one: `ingest prepare` can hold a statement for minutes under
  * OCR, and a single queue would block every read behind it — overlaps can
  * still contend for the ledger lock (exit 8, retried below).
  */
-const LANES = { fast: createSerialQueue(), slow: createSerialQueue() };
+const createLanes = () => {
+  const lanes = { fast: createSerialQueue(), slow: createSerialQueue() };
+  let lastId = 0;
+  return <T>(lane: OledLane, task: (id: number) => Promise<T>): Promise<T> =>
+    lanes[lane](() => task(++lastId));
+};
 
-export type OledLane = keyof typeof LANES;
+const inLane = createLanes();
 
 /** Flags whose following argument must never reach a log, a UI, or an error. */
 const SECRET_FLAGS = new Set(["--password", "--ocr-api-key"]);
@@ -200,8 +212,6 @@ const run = async (
   };
 };
 
-let lastCommandId = 0;
-
 // The listener is caller code on the command path: its failure is not the command's.
 const notify = (
   listener: OledCommandListener | undefined,
@@ -227,8 +237,7 @@ const runObserved = (
   argv: string[],
   opts: RunObservedOptions,
 ): Promise<Result<string, OledError>> =>
-  LANES[opts.lane](async () => {
-    const id = ++lastCommandId;
+  inLane(opts.lane, async (id) => {
     const masked = maskArgv(argv);
     const startedAt = Date.now();
     notify(opts.onCommand, { phase: "start", id, ts: startedAt, argv: masked });
