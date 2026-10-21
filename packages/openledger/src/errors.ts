@@ -1,5 +1,9 @@
 import { EXIT } from "@aquartier/openledger/contract";
+import { attempt } from "es-toolkit";
 import { z } from "zod/v4";
+
+import type { Result } from "./result";
+import { err, ok } from "./result";
 
 export type OledErrorKind =
   | "spawn_failed"
@@ -44,24 +48,31 @@ const cliErrorLineSchema = z.object({
   }),
 });
 
-export type CliErrorLine = z.infer<typeof cliErrorLineSchema>["error"];
+type CliErrorLine = z.infer<typeof cliErrorLineSchema>["error"];
 
 /** JSON has no `undefined`, so it doubles as the parse-failure signal. */
 export const safeJsonParse = (text: string): unknown => {
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return undefined;
-  }
+  const [error, value] = attempt<unknown, unknown>(() => JSON.parse(text));
+  return error === null ? value : undefined;
+};
+
+/** Zod's verdict as a Result, every issue folded into one message after `context`. */
+export const parseAs = <T>(
+  schema: z.ZodType<T>,
+  value: unknown,
+  kind: OledErrorKind,
+  context: string,
+): Result<T, OledError> => {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return ok(parsed.data);
+  return err({ kind, message: `${context}: ${z.prettifyError(parsed.error)}` });
 };
 
 /** Under --json a failing command writes one JSON error object to stderr. */
-export const parseCliErrorLine = (stderr: string): CliErrorLine | undefined => {
-  for (const line of stderr.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("{")) continue;
-    const parsed = cliErrorLineSchema.safeParse(safeJsonParse(trimmed));
-    if (parsed.success) return parsed.data.error;
-  }
-  return undefined;
-};
+export const parseCliErrorLine = (stderr: string): CliErrorLine | undefined =>
+  stderr
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("{"))
+    .map((line) => cliErrorLineSchema.safeParse(safeJsonParse(line)).data)
+    .find((parsed) => parsed !== undefined)?.error;

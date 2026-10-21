@@ -5,8 +5,8 @@ import { z } from "zod/v4";
 
 import type { OledError } from "./errors";
 import type { Result } from "./result";
-import { safeJsonParse } from "./errors";
-import { err, ok } from "./result";
+import { parseAs, safeJsonParse } from "./errors";
+import { err } from "./result";
 
 const WORKSPACE_MARKER = "pnpm-workspace.yaml";
 
@@ -74,12 +74,10 @@ export const readOledConfigFile = async (
     });
   }
 
-  const parsed = oledConfigFileSchema.safeParse(safeJsonParse(text));
-  if (!parsed.success) {
-    return err<OledError>({
-      kind: "parse_failed",
-      message: `${configPath}: ${z.prettifyError(parsed.error)}`,
-    });
-  }
-  return ok(parsed.data);
+  return parseAs(
+    oledConfigFileSchema,
+    safeJsonParse(text),
+    "parse_failed",
+    configPath,
+  );
 };

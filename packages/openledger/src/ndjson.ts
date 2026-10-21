@@ -1,9 +1,9 @@
+import type { z } from "zod/v4";
 import { isPlainObject } from "es-toolkit";
-import { z } from "zod/v4";
 
 import type { OledError } from "./errors";
 import type { Result } from "./result";
-import { safeJsonParse } from "./errors";
+import { parseAs, safeJsonParse } from "./errors";
 import { err, ok } from "./result";
 
 const PREVIEW = 200;
@@ -50,25 +50,20 @@ export const parseNdjsonRows = <TRow, TSummary = unknown>(
 
     if (isSummary(value)) {
       if (!summarySchema) continue;
-      const parsedSummary = summarySchema.safeParse(value);
-      if (!parsedSummary.success) {
-        return err(
-          parseFailed(
-            `Unexpected summary row: ${z.prettifyError(parsedSummary.error)}`,
-          ),
-        );
-      }
-      summary = parsedSummary.data;
+      const parsed = parseAs(
+        summarySchema,
+        value,
+        "parse_failed",
+        "Unexpected summary row",
+      );
+      if (!parsed.ok) return parsed;
+      summary = parsed.value;
       continue;
     }
 
-    const parsedRow = rowSchema.safeParse(value);
-    if (!parsedRow.success) {
-      return err(
-        parseFailed(`Unexpected row: ${z.prettifyError(parsedRow.error)}`),
-      );
-    }
-    rows.push(parsedRow.data);
+    const parsed = parseAs(rowSchema, value, "parse_failed", "Unexpected row");
+    if (!parsed.ok) return parsed;
+    rows.push(parsed.value);
   }
 
   return ok({ rows, summary });
@@ -88,11 +83,5 @@ export const parseSingle = <T>(
     return err(parseFailed(`Expected one JSON object, got: ${preview(line)}`));
   }
 
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) {
-    return err(
-      parseFailed(`Unexpected output: ${z.prettifyError(parsed.error)}`),
-    );
-  }
-  return ok(parsed.data);
+  return parseAs(schema, value, "parse_failed", "Unexpected output");
 };
