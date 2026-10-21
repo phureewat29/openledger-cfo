@@ -40,27 +40,31 @@ const toEntry = (event: OledCommandEvent, seq: number): CliLogEntry => ({
   durationMs: event.durationMs ?? null,
 });
 
+/**
+ * An exit rewrites an entry a reader has already been handed, so it takes a
+ * fresh seq to come back past that reader's cursor. A start already evicted
+ * from the ring must not drop its end: the exit lands as a new entry instead.
+ */
 export const recordCliCommand = (event: OledCommandEvent): void => {
+  const seq = ++log.seq;
   const running =
     event.phase === "end"
       ? log.entries.find((entry) => entry.id === event.id)
       : undefined;
 
-  if (running !== undefined) {
-    // An exit rewrites an entry a reader has already been handed, so it takes a
-    // fresh seq to come back past that reader's cursor.
-    running.seq = ++log.seq;
-    running.exitCode = event.exitCode ?? null;
-    running.durationMs = event.durationMs ?? null;
-    return;
-  }
-
-  // A start already evicted from the ring must not drop its end: append a new
-  // entry so the exit is still recorded.
-  log.entries.push(toEntry(event, ++log.seq));
-  if (log.entries.length > CAPACITY) {
-    log.entries.splice(0, log.entries.length - CAPACITY);
-  }
+  log.entries =
+    running === undefined
+      ? [...log.entries, toEntry(event, seq)].slice(-CAPACITY)
+      : log.entries.map((entry) =>
+          entry === running
+            ? {
+                ...running,
+                seq,
+                exitCode: event.exitCode ?? null,
+                durationMs: event.durationMs ?? null,
+              }
+            : entry,
+        );
 };
 
 export const listCliLog = (after?: number) => ({
