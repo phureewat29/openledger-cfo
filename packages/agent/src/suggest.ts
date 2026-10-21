@@ -1,4 +1,5 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { uniqBy } from "es-toolkit";
 import { z } from "zod/v4";
 
 import type { GatewayConfig } from "./model";
@@ -73,26 +74,22 @@ const promptFor = ({ asked, answer }: SuggestInput): string => {
   return `${history}The answer on screen:\n${answer.slice(-ANSWER_TAIL)}\n\nWhat should the household ask or do next?`;
 };
 
+const caseless = (label: string): string => label.toLowerCase();
+
 const clean = (
   raw: readonly string[],
   asked: readonly string[],
 ): readonly string[] => {
-  const seen = new Set(asked.map((text) => sanitizeLabel(text).toLowerCase()));
-  const kept: string[] = [];
-
-  for (const candidate of raw) {
-    const label = sanitizeLabel(candidate);
-    if (label.length === 0 || label.length > MAX_LABEL) continue;
-
-    const key = label.toLowerCase();
-    if (seen.has(key)) continue;
-
-    seen.add(key);
-    kept.push(label);
-    if (kept.length === MAX_COUNT) break;
-  }
-
-  return kept;
+  const askedKeys = new Set(asked.map((text) => caseless(sanitizeLabel(text))));
+  const fitting = raw
+    .map(sanitizeLabel)
+    .filter(
+      (label) =>
+        label.length > 0 &&
+        label.length <= MAX_LABEL &&
+        !askedKeys.has(caseless(label)),
+    );
+  return uniqBy(fitting, caseless).slice(0, MAX_COUNT);
 };
 
 /**

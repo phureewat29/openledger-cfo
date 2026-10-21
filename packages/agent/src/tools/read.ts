@@ -1,4 +1,5 @@
 import { tool } from "@langchain/core/tools";
+import { compact } from "es-toolkit";
 import { z } from "zod/v4";
 
 import { sanitizeLabel, sanitizeOptional } from "../sanitize";
@@ -9,6 +10,10 @@ const MAX_ROWS = 200;
 const DEFAULT_ROWS = 50;
 
 const isoDate = z.iso.date();
+
+/** A flag and its value, or nothing at all when the value was not given. */
+const flag = (name: string, value: string | undefined): string[] =>
+  value === undefined ? [] : [name, value];
 
 export const getReport = tool(
   async ({ from, to }) =>
@@ -44,12 +49,10 @@ export const listTransactions = tool(
         command: oledCommand(
           "transactions",
           "list",
-          ...(filters.account === undefined
-            ? []
-            : ["--account", filters.account]),
-          ...(filters.from === undefined ? [] : ["--from", filters.from]),
-          ...(filters.to === undefined ? [] : ["--to", filters.to]),
-          ...(filters.query === undefined ? [] : ["--query", filters.query]),
+          ...flag("--account", filters.account),
+          ...flag("--from", filters.from),
+          ...flag("--to", filters.to),
+          ...flag("--query", filters.query),
           "--limit",
           String(limit),
         ),
@@ -142,9 +145,7 @@ export const listAccounts = tool(
     guardedRun(async () => {
       const accounts = await caller.ledger.accounts.list();
       const parentIds = new Set(
-        accounts.rows
-          .map((row) => row.parent_id)
-          .filter((id): id is string => id !== null),
+        compact(accounts.rows.map((row) => row.parent_id)),
       );
       return toolResult({
         command: oledCommand("accounts", "list"),

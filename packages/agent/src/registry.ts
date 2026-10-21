@@ -1,4 +1,5 @@
 import type { StructuredToolInterface } from "@langchain/core/tools";
+import { compact } from "es-toolkit";
 
 import { CFO_PERSONA } from "./personas/cfo";
 import { INGEST_PREAMBLE } from "./personas/ingest";
@@ -59,9 +60,7 @@ const UNTRUSTED_NOTE =
 const withContext =
   (persona: string) =>
   (context?: string): string =>
-    [persona, context, UNTRUSTED_NOTE]
-      .filter((block) => block !== undefined && block.length > 0)
-      .join("\n\n");
+    compact([persona, context, UNTRUSTED_NOTE]).join("\n\n");
 
 interface AgentSpec {
   /** Directory under src/skills; its name must match the skill's frontmatter. */
