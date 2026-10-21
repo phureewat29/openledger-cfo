@@ -7,19 +7,16 @@ import { db } from "@openledger-cfo/db/client";
 import { createOpenLedger } from "@openledger-cfo/openledger";
 
 import { recordCliCommand } from "./cli-log";
+import { perProcess } from "./per-process";
 
 /**
- * One connector per process, not per module graph. Next bundles the server
- * components and the route handlers separately, so this module is instantiated
- * twice in one process — and the connector's queues only serialize the `oled`
- * spawns that share an instance. Two instances means two processes contending
- * for the ledger's SQLite lock: needless ~5s busy waits and exit-8 retries.
+ * The connector's queues only serialize the `oled` spawns that share an
+ * instance. Two instances means two processes contending for the ledger's
+ * SQLite lock: needless ~5s busy waits and exit-8 retries.
  */
-const forLedger = globalThis as unknown as { oledConnector?: OpenLedger };
-
-export const ledger = (forLedger.oledConnector ??= createOpenLedger({
-  onCommand: recordCliCommand,
-}));
+export const ledger: OpenLedger = perProcess("oledConnector", () =>
+  createOpenLedger({ onCommand: recordCliCommand }),
+);
 
 export const createTRPCContext = (opts: { headers: Headers }) => ({
   db,

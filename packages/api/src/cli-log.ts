@@ -1,5 +1,7 @@
 import type { OledCommandEvent } from "@openledger-cfo/openledger";
 
+import { perProcess } from "./per-process";
+
 /** Exported for declaration emit only: it prints inside `ledgerRouter`'s type. */
 export interface CliLogEntry {
   id: number;
@@ -12,18 +14,17 @@ export interface CliLogEntry {
 
 const CAPACITY = 200;
 
+interface CliLog {
+  entries: CliLogEntry[];
+  /** The last seq handed out, kept beside the ring so no seq ever repeats. */
+  seq: number;
+}
+
 /**
  * One ring per process: the graph that records commands differs from the one
- * the reader polls, so two rings would leave it empty; the cursor beside it
- * survives re-evaluation so no seq repeats.
+ * the reader polls, so two rings would leave it empty.
  */
-const forRing = globalThis as unknown as {
-  oledCliLog?: CliLogEntry[];
-  oledCliLogCursor?: { seq: number };
-};
-
-const entries = (forRing.oledCliLog ??= []);
-const cursor = (forRing.oledCliLogCursor ??= { seq: 0 });
+const log = perProcess<CliLog>("oledCliRing", () => ({ entries: [], seq: 0 }));
 
 /**
  * Both phases carry the whole invocation, so one shape serves either: a start
@@ -39,16 +40,16 @@ const toEntry = (event: OledCommandEvent, seq: number): CliLogEntry => ({
   durationMs: event.durationMs ?? null,
 });
 
-export const recordCliCommand = (event: OledCommandEvent) => {
+export const recordCliCommand = (event: OledCommandEvent): void => {
   const running =
     event.phase === "end"
-      ? entries.find((entry) => entry.id === event.id)
+      ? log.entries.find((entry) => entry.id === event.id)
       : undefined;
 
   if (running !== undefined) {
     // An exit rewrites an entry a reader has already been handed, so it takes a
     // fresh seq to come back past that reader's cursor.
-    running.seq = ++cursor.seq;
+    running.seq = ++log.seq;
     running.exitCode = event.exitCode ?? null;
     running.durationMs = event.durationMs ?? null;
     return;
@@ -56,13 +57,16 @@ export const recordCliCommand = (event: OledCommandEvent) => {
 
   // A start already evicted from the ring must not drop its end: append a new
   // entry so the exit is still recorded.
-  entries.push(toEntry(event, ++cursor.seq));
-  if (entries.length > CAPACITY) {
-    entries.splice(0, entries.length - CAPACITY);
+  log.entries.push(toEntry(event, ++log.seq));
+  if (log.entries.length > CAPACITY) {
+    log.entries.splice(0, log.entries.length - CAPACITY);
   }
 };
 
 export const listCliLog = (after?: number) => ({
-  entries: after === undefined ? entries : entries.filter((e) => e.seq > after),
-  latest: cursor.seq,
+  entries:
+    after === undefined
+      ? log.entries
+      : log.entries.filter((entry) => entry.seq > after),
+  latest: log.seq,
 });
