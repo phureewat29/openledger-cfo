@@ -9,6 +9,8 @@ import type {
   RouterInputs,
   RouterOutputs,
 } from "@openledger-cfo/api";
+import type { Result } from "@openledger-cfo/openledger/result";
+import { err, map, ok } from "@openledger-cfo/openledger/result";
 import { cn } from "@openledger-cfo/ui";
 import { Button } from "@openledger-cfo/ui/button";
 import { Input } from "@openledger-cfo/ui/input";
@@ -70,9 +72,6 @@ function SectionBox({
     </fieldset>
   );
 }
-
-/** Form-side Result: `message` reads better than `error` at a validation site. */
-type Candidate<T> = { ok: true; value: T } | { ok: false; message: string };
 
 const httpUrl = (value: string): boolean => {
   const protocol = URL.parse(value)?.protocol;
@@ -195,37 +194,28 @@ export function ConfigForm({
     setFormError(null);
   };
 
-  const gatewayCandidate = (): Candidate<{
-    baseUrl: string;
-    apiKey: string;
-    model: string;
-  }> => {
+  const gatewayCandidate = (): Result<
+    { baseUrl: string; apiKey: string; model: string },
+    string
+  > => {
     const url = baseUrl.trim();
     if (!httpUrl(url)) {
-      return {
-        ok: false,
-        message: "Base URL must start with http:// or https://.",
-      };
+      return err("Base URL must start with http:// or https://.");
     }
-    if (model.trim().length === 0) {
-      return { ok: false, message: "Model is required." };
-    }
-    return {
-      ok: true,
-      value: { baseUrl: url, apiKey: apiKey.trim(), model: model.trim() },
-    };
+    if (model.trim().length === 0) return err("Model is required.");
+    return ok({ baseUrl: url, apiKey: apiKey.trim(), model: model.trim() });
   };
 
   // URL and key only; both callers validate the model first.
-  const ocrCandidate = (): Candidate<{ baseUrl: string; apiKey: string }> => {
+  const ocrCandidate = (): Result<
+    { baseUrl: string; apiKey: string },
+    string
+  > => {
     const url = ocrBaseUrl.trim();
     if (!httpUrl(url)) {
-      return {
-        ok: false,
-        message: "OCR base URL must start with http:// or https://.",
-      };
+      return err("OCR base URL must start with http:// or https://.");
     }
-    return { ok: true, value: { baseUrl: url, apiKey: ocrApiKey.trim() } };
+    return ok({ baseUrl: url, apiKey: ocrApiKey.trim() });
   };
 
   const probe = (
@@ -261,17 +251,15 @@ export function ConfigForm({
   const runTest = () => {
     setFormError(null);
     const gateway = gatewayCandidate();
-    if (!gateway.ok) return setGatewayLine(invalid(gateway.message));
+    if (!gateway.ok) return setGatewayLine(invalid(gateway.error));
     probe(gatewayTest, setGatewayLine, { ...gateway.value, kind: "gateway" });
 
     if (!ocrEnabled || ocrView === undefined) return;
     if (ocrModel.trim().length === 0) {
       return setOcrLine(invalid("OCR model is required."));
     }
-    const target = shares
-      ? { ok: true as const, value: gateway.value }
-      : ocrCandidate();
-    if (!target.ok) return setOcrLine(invalid(target.message));
+    const target = shares ? ok(gateway.value) : ocrCandidate();
+    if (!target.ok) return setOcrLine(invalid(target.error));
     probe(ocrTest, setOcrLine, {
       ...target.value,
       model: ocrModel.trim(),
@@ -293,23 +281,16 @@ export function ConfigForm({
    * `undefined` leaves the ledger's OCR settings alone: unreadable view, or
    * off on both sides — a forward would only invent failure modes.
    */
-  const ocrSaveInput = (): Candidate<OcrSaveInput | undefined> => {
-    if (ocrView === undefined) return { ok: true, value: undefined };
-    if (!ocrEnabled) {
-      return { ok: true, value: ocrView.enabled ? { mode: "off" } : undefined };
-    }
-    if (ocrModel.trim().length === 0) {
-      return { ok: false, message: "OCR model is required." };
-    }
-    if (shares) {
-      return { ok: true, value: { mode: "shared", model: ocrModel.trim() } };
-    }
-    const candidate = ocrCandidate();
-    if (!candidate.ok) return candidate;
-    return {
-      ok: true,
-      value: { mode: "custom", model: ocrModel.trim(), ...candidate.value },
-    };
+  const ocrSaveInput = (): Result<OcrSaveInput | undefined, string> => {
+    if (ocrView === undefined) return ok(undefined);
+    if (!ocrEnabled) return ok(ocrView.enabled ? { mode: "off" } : undefined);
+    if (ocrModel.trim().length === 0) return err("OCR model is required.");
+    if (shares) return ok({ mode: "shared", model: ocrModel.trim() });
+    return map(ocrCandidate(), (endpoint) => ({
+      mode: "custom",
+      model: ocrModel.trim(),
+      ...endpoint,
+    }));
   };
 
   const submit = (event: React.FormEvent) => {
@@ -317,9 +298,9 @@ export function ConfigForm({
     setFormError(null);
 
     const gateway = gatewayCandidate();
-    if (!gateway.ok) return setGatewayLine(invalid(gateway.message));
+    if (!gateway.ok) return setGatewayLine(invalid(gateway.error));
     const ocr = ocrSaveInput();
-    if (!ocr.ok) return setOcrLine(invalid(ocr.message));
+    if (!ocr.ok) return setOcrLine(invalid(ocr.error));
 
     save.mutate(
       {
