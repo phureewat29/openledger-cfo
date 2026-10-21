@@ -20,9 +20,6 @@ export interface ToolFailure {
   message: string;
 }
 
-const messageOf = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : "the command failed";
-
 /**
  * A thrown error would end the whole run; returned as data, the model can
  * retry the step or move to the next file, which its own rules require.
@@ -33,7 +30,10 @@ export const guardedRun = async (
   try {
     return await run();
   } catch (cause) {
-    return toolResult({ status: "error", message: messageOf(cause) });
+    return toolResult({
+      status: "error",
+      message: cause instanceof Error ? cause.message : "the command failed",
+    });
   }
 };
 

@@ -3,6 +3,7 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod/v4";
 
 import type { IngestFileRow } from "@openledger-cfo/openledger";
+import { oledCauseOf } from "@openledger-cfo/api";
 import {
   ACCOUNT_ID_PATTERN,
   FILE_ID_PATTERN,
@@ -165,13 +166,6 @@ export const ingestDone = tool(
   },
 );
 
-/** The api caller throws real TRPCErrors, and the code is all this reads of one. */
-const isNotFound = (cause: unknown): boolean =>
-  typeof cause === "object" &&
-  cause !== null &&
-  "code" in cause &&
-  cause.code === "NOT_FOUND";
-
 const LOCKED_NOT_UNREADABLE =
   "refused: this file is locked, not unreadable — leave it where it is, the operator's password is the only thing that prepares it";
 
@@ -194,7 +188,7 @@ const lockedRefusal = async (
 ): Promise<ToolFailure | undefined> => {
   const missing = await caller.ledger.ingest.document({ fileId }).then(
     () => false,
-    (cause: unknown) => isNotFound(cause),
+    (cause: unknown) => oledCauseOf(cause)?.kind === "not_found",
   );
   if (!missing) return undefined;
 
