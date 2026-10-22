@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 
+import { messageOf } from "@openledger-cfo/openledger";
+
 export type ProbeReason = "unauthorized" | "unreachable" | "rejected";
 
 export type ProbeOutcome =
@@ -56,10 +58,11 @@ const fail = (reason: ProbeReason, message: string): ProbeOutcome => ({
 // undici buries the useful part (ECONNREFUSED host:port) in `cause.cause`;
 // its own message is just "fetch failed".
 const causeOf = (cause: unknown): string => {
-  if (!(cause instanceof Error)) return String(cause);
   const nested =
-    cause.cause instanceof Error ? ` — ${cause.cause.message}` : "";
-  return `${cause.message}${nested}`;
+    cause instanceof Error && cause.cause instanceof Error
+      ? ` — ${cause.cause.message}`
+      : "";
+  return `${messageOf(cause)}${nested}`;
 };
 
 const caught = (cause: unknown, timeoutMs: number): ProbeOutcome =>
@@ -77,37 +80,25 @@ const answered = (url: string, status: number): string =>
       : "."
   }`;
 
+const bearer = (apiKey?: string): Record<string, string> =>
+  apiKey ? { authorization: `Bearer ${apiKey}` } : {};
+
 /**
- * The Test button's probe: one completion capped at a single token — the only
- * check that proves URL, key, and model together, because it is the request
- * this config exists to serve.
+ * The verdicts every probe shares: a 429 proves the route and the credential,
+ * since throttled is not broken, and 401/403 is the key. Any other failed
+ * status is the caller's to read; a throw or a timeout is unreachable.
  */
-export const probeChat = async (candidate: {
-  baseUrl: string;
-  apiKey?: string;
-  model: string;
-  kind: ProbeKind;
-}): Promise<ProbeOutcome> => {
-  const url = `${trimTrailingSlashes(candidate.baseUrl)}/chat/completions`;
+const probe = async (
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+  rejected: (response: Response) => ProbeOutcome | Promise<ProbeOutcome>,
+): Promise<ProbeOutcome> => {
   try {
     const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(candidate.apiKey
-          ? { authorization: `Bearer ${candidate.apiKey}` }
-          : {}),
-      },
-      body: JSON.stringify({
-        model: candidate.model,
-        messages: MESSAGES[candidate.kind],
-        max_tokens: 1,
-        stream: false,
-        temperature: 0,
-      }),
-      signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
     });
-    // 429 proves the route and the credential; throttled is not broken.
     if (response.ok || response.status === 429) return { ok: true };
     if (UNAUTHORIZED.has(response.status)) {
       return fail(
@@ -115,37 +106,60 @@ export const probeChat = async (candidate: {
         `${url} answered ${String(response.status)}.`,
       );
     }
-    // An error body is the endpoint speaking ("model not found"); a bare
-    // status is the route missing.
+    return await rejected(response);
+  } catch (cause) {
+    return caught(cause, timeoutMs);
+  }
+};
+
+/**
+ * The Test button's probe: one completion capped at a single token — the only
+ * check that proves URL, key, and model together, because it is the request
+ * this config exists to serve.
+ */
+export const probeChat = (candidate: {
+  baseUrl: string;
+  apiKey?: string;
+  model: string;
+  kind: ProbeKind;
+}): Promise<ProbeOutcome> => {
+  const url = `${trimTrailingSlashes(candidate.baseUrl)}/chat/completions`;
+  const init: RequestInit = {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...bearer(candidate.apiKey),
+    },
+    body: JSON.stringify({
+      model: candidate.model,
+      messages: MESSAGES[candidate.kind],
+      max_tokens: 1,
+      stream: false,
+      temperature: 0,
+    }),
+  };
+  // An error body is the endpoint speaking ("model not found"); a bare
+  // status is the route missing.
+  return probe(url, init, CHAT_TIMEOUT_MS, async (response) => {
     const body = ErrorBody.safeParse(
       await response.json().catch(() => undefined),
     );
     return body.success
       ? fail("rejected", body.data.error)
       : fail("unreachable", answered(url, response.status));
-  } catch (cause) {
-    return caught(cause, CHAT_TIMEOUT_MS);
-  }
+  });
 };
 
 /** The status dot's free liveness ping; the Test button runs `probeChat`. */
-export const probeModels = async (candidate: {
+export const probeModels = (candidate: {
   baseUrl: string;
   apiKey?: string;
 }): Promise<ProbeOutcome> => {
   const url = `${trimTrailingSlashes(candidate.baseUrl)}/models`;
-  try {
-    const response = await fetch(url, {
-      headers: candidate.apiKey
-        ? { authorization: `Bearer ${candidate.apiKey}` }
-        : {},
-      signal: AbortSignal.timeout(PING_TIMEOUT_MS),
-    });
-    if (response.ok || response.status === 429) return { ok: true };
-    return UNAUTHORIZED.has(response.status)
-      ? fail("unauthorized", `${url} answered ${String(response.status)}.`)
-      : fail("unreachable", answered(url, response.status));
-  } catch (cause) {
-    return caught(cause, PING_TIMEOUT_MS);
-  }
+  return probe(
+    url,
+    { headers: bearer(candidate.apiKey) },
+    PING_TIMEOUT_MS,
+    (response) => fail("unreachable", answered(url, response.status)),
+  );
 };
