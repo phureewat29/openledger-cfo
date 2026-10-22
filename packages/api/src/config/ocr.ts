@@ -43,10 +43,11 @@ export type OcrView =
  */
 export const readOcrView = async (ledger: OpenLedger): Promise<OcrView> => {
   const view = await ledger.config.read();
+  // The one benign failure: no oled config file yet simply means OCR off.
   if (!view.ok) {
-    // The one benign case: no oled config file yet simply means OCR off.
-    if (view.error.kind !== "not_configured") return { readable: false };
-    return { readable: true, enabled: false };
+    return view.error.kind === "not_configured"
+      ? { readable: true, enabled: false }
+      : { readable: false };
   }
   const { ocrBaseUrl, ocrModel, ocrApiKey } = view.value;
   return {
