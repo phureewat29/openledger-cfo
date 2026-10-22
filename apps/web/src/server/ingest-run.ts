@@ -57,6 +57,40 @@ interface Lockable {
 
 interface Waiting extends RunWaiting, Lockable {}
 
+type SettledStatus = Exclude<RunStatus, "running" | "waiting-password">;
+
+/**
+ * Where a run is in its life. Each status carries only what it can hold: only
+ * a parked run names a file it waits on, and a settled run has no password.
+ *
+ * The password is the one the operator typed, kept for this run's other locked
+ * files and nothing else: it reaches `oled` as one masked argv and never the
+ * transcript, the journal or a snapshot.
+ */
+type Phase =
+  | {
+      readonly status: "running";
+      readonly currentFile?: string;
+      readonly password?: string;
+    }
+  | {
+      readonly status: "waiting-password";
+      readonly waiting: Waiting;
+      readonly password?: string;
+    }
+  | { readonly status: SettledStatus; readonly finishedAt: number };
+
+/**
+ * What the run changed, said back when it settles. Sets, not counters: a
+ * supervised close and the model's idempotent retry are one closed file.
+ */
+interface Tally {
+  readonly closed: ReadonlySet<string>;
+  readonly discarded: ReadonlySet<string>;
+  readonly rows: number;
+}
+
+/** Everything one run knows. Its phase and tally are values, replaced whole. */
 interface Run {
   readonly runId: string;
   readonly scope: string;
@@ -77,35 +111,17 @@ interface Run {
   readonly refusedCloses: Map<string, number>;
   /** Prepares this run has spent trying its password on a file, per file. */
   readonly unlockAttempts: Map<string, number>;
-  /**
-   * What the run changed, said back when it settles. Sets, not counters: a
-   * supervised close and the model's idempotent retry are one closed file.
-   * Only files the run was asked for count — the agent does wander.
-   */
-  readonly tally: {
-    readonly closed: Set<string>;
-    readonly discarded: Set<string>;
-    rows: number;
-  };
-  status: RunStatus;
   files: number;
-  currentFile?: string;
-  /**
-   * The password the operator typed, kept for this run's other locked files and
-   * nothing else: it reaches `oled` as one masked argv and never the transcript,
-   * the journal or a snapshot.
-   */
-  password?: string;
-  waiting?: Waiting;
-  finishedAt?: number;
+  phase: Phase;
+  tally: Tally;
   transcript: UIMessage[];
 }
 
 /** One slot per process: a second start is refused rather than queued. */
 const forSlot = globalThis as unknown as {
-  ingestRunSlot?: { run: Run | null };
+  ingestRun?: { run: Run | null };
 };
-const slot = (forSlot.ingestRunSlot ??= { run: null });
+const slot = (forSlot.ingestRun ??= { run: null });
 
 /** Graph supersteps, not model turns: one statement costs a dozen round trips. */
 const recursionLimitFor = (files: number): number =>
@@ -218,33 +234,45 @@ const REFUSAL: Record<string, Refusal> = {
 const refusalOf = (artifact: Record<string, unknown>): Refusal | undefined =>
   typeof artifact.reason === "string" ? REFUSAL[artifact.reason] : undefined;
 
+const withId = (ids: ReadonlySet<string>, id: string): ReadonlySet<string> =>
+  new Set([...ids, id]);
+
 /** What each landed step adds to the tally; a tool absent here changes nothing. */
 const TALLY_OF: Record<
   string,
-  (
-    run: Run,
-    artifact: Record<string, unknown>,
-    fileId: string | undefined,
-  ) => void
+  (tally: Tally, artifact: Record<string, unknown>, fileId: string) => Tally
 > = {
-  ingestDone: (run, _artifact, fileId) => {
-    if (fileId !== undefined && run.own.has(fileId)) {
-      run.tally.closed.add(fileId);
-    }
-  },
-  ingestFail: (run, _artifact, fileId) => {
-    if (fileId !== undefined && run.own.has(fileId)) {
-      run.tally.discarded.add(fileId);
-    }
-  },
-  ingestCommit: (run, artifact, fileId) => {
-    if (fileId === undefined || !run.own.has(fileId)) return;
+  ingestDone: (tally, _artifact, fileId) => ({
+    ...tally,
+    closed: withId(tally.closed, fileId),
+  }),
+  ingestFail: (tally, _artifact, fileId) => ({
+    ...tally,
+    discarded: withId(tally.discarded, fileId),
+  }),
+  ingestCommit: (tally, artifact) => {
     const posted = asRecord(artifact.summary).posted;
-    if (typeof posted === "number") run.tally.rows += posted;
+    return typeof posted === "number"
+      ? { ...tally, rows: tally.rows + posted }
+      : tally;
   },
 };
 
-const tallySaid = (tally: Run["tally"]): string => {
+/** Only files the run was asked for count — the agent does wander. */
+const tallyStep = (
+  run: Run,
+  tool: string,
+  artifact: Record<string, unknown>,
+  fileId: string | undefined,
+): void => {
+  const step = TALLY_OF[tool];
+  if (step === undefined || fileId === undefined || !run.own.has(fileId)) {
+    return;
+  }
+  run.tally = step(run.tally, artifact, fileId);
+};
+
+const tallySaid = (tally: Tally): string => {
   const said = runLine(
     tally.closed.size > 0 ? `closed ${String(tally.closed.size)}` : undefined,
     tally.discarded.size > 0
@@ -373,19 +401,36 @@ const noteClarifications = async (): Promise<void> => {
   }
 };
 
-const settle = (run: Run, status: RunStatus): void => {
-  run.status = status;
-  run.finishedAt = Date.now();
-  run.currentFile = undefined;
-  run.waiting = undefined;
-  // A finished run lingers in the slot until the next start; its password does not.
-  run.password = undefined;
+const passwordOf = (phase: Phase): string | undefined =>
+  "password" in phase ? phase.password : undefined;
+
+/** Parking keeps the password in hand: the next lock may open with it. */
+const parkedOn = (phase: Phase, waiting: Waiting): Phase => ({
+  status: "waiting-password",
+  waiting,
+  password: passwordOf(phase),
+});
+
+/** Back to work on the file it parked on. */
+const resumedFrom = (
+  waiting: Waiting,
+  password: string | undefined,
+): Phase => ({
+  status: "running",
+  currentFile: waiting.relPath,
+  password,
+});
+
+const workingOn = (phase: Phase, currentFile: string): Phase =>
+  phase.status === "running" ? { ...phase, currentFile } : phase;
+
+/** A finished run lingers in the slot until the next start; its password does not. */
+const settle = (run: Run, status: SettledStatus): void => {
+  run.phase = { status, finishedAt: Date.now() };
 };
 
 const park = (run: Run, waiting: Waiting): void => {
-  run.status = "waiting-password";
-  run.waiting = waiting;
-  run.currentFile = waiting.relPath;
+  run.phase = parkedOn(run.phase, waiting);
   appendEntry({
     id: crypto.randomUUID(),
     kind: "ask",
@@ -455,7 +500,7 @@ const tryUnlock = async (
   { pathOrId, relPath }: Lockable,
 ): Promise<Result<Unlocked, { message: string }>> => {
   const prepared = await caller.ledger.ingest
-    .prepare({ pathOrId, password: run.password })
+    .prepare({ pathOrId, password: passwordOf(run.phase) })
     .catch((cause: unknown) => ({
       ok: false as const,
       message: messageOf(cause),
@@ -487,6 +532,13 @@ interface Sweep {
 const attemptKeyOf = (run: Run, pathOrId: string): string =>
   run.names.get(pathOrId) ?? pathOrId;
 
+/** Counts one more against `key` and says the new count. */
+const bump = (counts: Map<string, number>, key: string): number => {
+  const count = (counts.get(key) ?? 0) + 1;
+  counts.set(key, count);
+  return count;
+};
+
 /**
  * One file at a time: a prepare is minutes of OCR on the write lane, and the
  * gap between two of them is the only place a cancel can be noticed — no turn
@@ -500,9 +552,8 @@ const unlockEach = async (
   const locked: Waiting[] = [];
   for (const file of files) {
     if (run.abort.signal.aborted) break;
-    run.currentFile = file.relPath;
-    const key = attemptKeyOf(run, file.pathOrId);
-    run.unlockAttempts.set(key, (run.unlockAttempts.get(key) ?? 0) + 1);
+    run.phase = workingOn(run.phase, file.relPath);
+    bump(run.unlockAttempts, attemptKeyOf(run, file.pathOrId));
     const out = await tryUnlock(run, file);
     if (out.ok) unlocked.push(out.value);
     else locked.push({ ...file, message: out.error.message });
@@ -527,7 +578,9 @@ const autoUnlock = async (
   run: Run,
   files: readonly Waiting[],
 ): Promise<Sweep> => {
-  if (run.password === undefined) return { unlocked: [], locked: [...files] };
+  if (passwordOf(run.phase) === undefined) {
+    return { unlocked: [], locked: [...files] };
+  }
 
   const [tried, spent] = partition(
     files,
@@ -646,15 +699,13 @@ const superviseClose = async (
   fileId: string,
   name: string | undefined,
 ): Promise<void> => {
-  const refused = (run.refusedCloses.get(fileId) ?? 0) + 1;
-  run.refusedCloses.set(fileId, refused);
-  if (refused !== REFUSED_CLOSE_LIMIT) return;
+  if (bump(run.refusedCloses, fileId) !== REFUSED_CLOSE_LIMIT) return;
 
   try {
     const out = await caller.ledger.ingest.done({ fileId });
     // A refusal here means the model's next fileId-only retry can still land.
     if (out.ok) {
-      if (run.own.has(fileId)) run.tally.closed.add(fileId);
+      tallyStep(run, "ingestDone", {}, fileId);
       note(runLine("Closed", name), RECONCILE_SKIPPED);
     }
   } catch (cause) {
@@ -701,7 +752,7 @@ const runTurn = async (run: Run): Promise<void> => {
     const target = targetOf(inputOf(event));
     const name = displayOf(run, target);
     open.set(id, { tool, name, target });
-    if (name !== undefined) run.currentFile = name;
+    if (name !== undefined) run.phase = workingOn(run.phase, name);
     appendEntry({
       id,
       kind: "tool",
@@ -761,7 +812,7 @@ const runTurn = async (run: Run): Promise<void> => {
     if (refusal !== undefined) {
       // A partial commit still posted the rows it names; the tally keeps them.
       if (artifact.reason === "partial") {
-        TALLY_OF.ingestCommit?.(run, artifact, fileId);
+        tallyStep(run, "ingestCommit", artifact, fileId);
       }
       updateEntry(id, {
         kind: "note",
@@ -787,7 +838,7 @@ const runTurn = async (run: Run): Promise<void> => {
     if (call.tool === "ingestDone" && fileId !== undefined) {
       run.refusedCloses.delete(fileId);
     }
-    TALLY_OF[call.tool]?.(run, artifact, fileId);
+    tallyStep(run, call.tool, artifact, fileId);
     updateEntry(id, {
       kind: "tool",
       running: false,
@@ -896,7 +947,7 @@ export const startRun = async (
   }
 
   const previous = slot.run;
-  if (previous !== null && isRunLive(previous.status)) {
+  if (previous !== null && isRunLive(previous.phase.status)) {
     return err({
       reason: "busy",
       message: "A run is already working the queue.",
@@ -914,9 +965,9 @@ export const startRun = async (
     own: new Set(),
     refusedCloses: new Map(),
     unlockAttempts: new Map(),
-    tally: { closed: new Set(), discarded: new Set(), rows: 0 },
-    status: "running",
     files: 0,
+    phase: { status: "running" },
+    tally: { closed: new Set(), discarded: new Set(), rows: 0 },
     transcript: [],
   };
   // Claimed before the first await: two starts landing together must not both pass.
@@ -968,9 +1019,9 @@ const wasCancelled = (run: Run): boolean => run.abort.signal.aborted;
 const parked = (): { run: Run; waiting: Waiting } | null => {
   const run = slot.run;
   if (run === null) return null;
-  if (run.status !== "waiting-password") return null;
-  if (run.waiting === undefined) return null;
-  return { run, waiting: run.waiting };
+  const { phase } = run;
+  if (phase.status !== "waiting-password") return null;
+  return { run, waiting: phase.waiting };
 };
 
 const NOT_PARKED = "No run is waiting for a password.";
@@ -988,9 +1039,7 @@ export const submitPassword = async (
   if (found === null) return err({ message: NOT_PARKED });
   const { run, waiting } = found;
 
-  run.status = "running";
-  run.waiting = undefined;
-  run.password = password;
+  run.phase = resumedFrom(waiting, password);
 
   const unlocked = await tryUnlock(run, waiting);
   // Every prepare here spends minutes with no turn in flight: a cancel lands
@@ -1026,8 +1075,7 @@ export const skipWaiting = async (): Promise<RunCommandResult> => {
   const { run, waiting } = found;
 
   note(runLine("Skipped", waiting.relPath), "left locked");
-  run.status = "running";
-  run.waiting = undefined;
+  run.phase = resumedFrom(waiting, passwordOf(run.phase));
 
   const scan = await scanLocked(run);
   if (run.abort.signal.aborted) {
@@ -1044,11 +1092,11 @@ export const skipWaiting = async (): Promise<RunCommandResult> => {
 
 export const cancelRun = (): RunCommandResult => {
   const run = slot.run;
-  if (run === null || !isRunLive(run.status)) {
+  if (run === null || !isRunLive(run.phase.status)) {
     return err({ message: "No run is working the queue." });
   }
   // A parked run has no turn in flight to interrupt; it ends here instead.
-  if (run.status === "waiting-password") {
+  if (run.phase.status === "waiting-password") {
     settleCancelled(run);
     return ok(undefined);
   }
@@ -1056,21 +1104,43 @@ export const cancelRun = (): RunCommandResult => {
   return ok(undefined);
 };
 
-/** Field by field, so neither the transcript nor the controller can leak out. */
+type PhaseView = Pick<
+  RunSnapshot,
+  "status" | "currentFile" | "waiting" | "finishedAt"
+>;
+
+/** A parked run is on the file it waits for, and says only its name and why. */
+const phaseView = (phase: Phase): PhaseView => {
+  if (phase.status === "running") {
+    return { status: phase.status, currentFile: phase.currentFile };
+  }
+  if (phase.status === "waiting-password") {
+    const { relPath, message } = phase.waiting;
+    return {
+      status: phase.status,
+      currentFile: relPath,
+      waiting: { relPath, message },
+    };
+  }
+  return { status: phase.status, finishedAt: phase.finishedAt };
+};
+
+/**
+ * Field by field, so neither the transcript, the password nor the controller
+ * can leak out.
+ */
 export const readRun = (): RunSnapshot | null => {
   const run = slot.run;
   if (run === null) return null;
+  const view = phaseView(run.phase);
   return {
     runId: run.runId,
-    status: run.status,
+    status: view.status,
     scope: run.scope,
     mode: run.mode,
-    currentFile: run.currentFile,
-    waiting:
-      run.waiting === undefined
-        ? undefined
-        : { relPath: run.waiting.relPath, message: run.waiting.message },
+    currentFile: view.currentFile,
+    waiting: view.waiting,
     startedAt: run.startedAt,
-    finishedAt: run.finishedAt,
+    finishedAt: view.finishedAt,
   };
 };
