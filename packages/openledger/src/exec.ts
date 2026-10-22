@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { EXIT } from "@aquartier/openledger/contract";
-import { attempt, delay } from "es-toolkit";
+import { attempt, delay, isPlainObject } from "es-toolkit";
 
 import type { OledError } from "./errors";
 import type { Result } from "./result";
@@ -71,6 +71,26 @@ const toFinalArgv = (args: string[], configPath: string): string[] => [
   "--config",
   configPath,
 ];
+
+/**
+ * Walks a flag table over an input, in table order: `undefined` and `false`
+ * are absent, `true` is a bare switch, and an object travels as JSON.
+ */
+export const toFlagArgs = <TInput extends object>(
+  flags: Partial<Record<keyof TInput & string, string>>,
+  input: TInput,
+): string[] =>
+  (Object.entries(flags) as [keyof TInput & string, string][]).flatMap(
+    ([key, flag]) => {
+      const value = input[key];
+      if (value === undefined || value === false) return [];
+      if (value === true) return [flag];
+      return [
+        flag,
+        isPlainObject(value) ? JSON.stringify(value) : String(value),
+      ];
+    },
+  );
 
 // Everything outside this set would change meaning when the command is pasted back into a shell.
 const SHELL_SAFE = /^[\w@%+=:,./-]+$/;

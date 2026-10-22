@@ -24,7 +24,7 @@ import type {
   TreeSummary,
 } from "./schemas";
 import { readOledConfigFile } from "./config";
-import { runOled } from "./exec";
+import { runOled, toFlagArgs } from "./exec";
 import { parseNdjsonRows, parseSingle } from "./ndjson";
 import { err, ok } from "./result";
 import {
@@ -72,7 +72,7 @@ export interface TransactionFilters {
   offset?: number;
 }
 
-const TRANSACTION_FLAGS: Record<keyof TransactionFilters, string> = {
+const TRANSACTION_FLAGS = {
   account: "--account",
   from: "--from",
   to: "--to",
@@ -80,14 +80,7 @@ const TRANSACTION_FLAGS: Record<keyof TransactionFilters, string> = {
   currency: "--currency",
   limit: "--limit",
   offset: "--offset",
-};
-
-const toTransactionArgs = (filters: TransactionFilters): string[] =>
-  Object.entries(TRANSACTION_FLAGS).flatMap(([key, flag]) => {
-    const value = filters[key as keyof TransactionFilters];
-    if (value === undefined) return [];
-    return [flag, String(value)];
-  });
+} as const satisfies Record<keyof TransactionFilters, string>;
 
 export interface ListPage<TRow, TSummary> {
   rows: TRow[];
@@ -104,10 +97,10 @@ export interface PageOptions {
   offset?: number;
 }
 
-const toPageArgs = ({ limit, offset }: PageOptions): string[] => [
-  ...(limit === undefined ? [] : ["--limit", String(limit)]),
-  ...(offset === undefined ? [] : ["--offset", String(offset)]),
-];
+const PAGE_FLAGS = {
+  limit: "--limit",
+  offset: "--offset",
+} as const satisfies Record<keyof PageOptions, string>;
 
 /** The extracted statement text, read from the cache `ingest prepare` wrote. */
 export interface IngestDocument {
@@ -198,7 +191,7 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     const out = await exec([
       "transactions",
       "list",
-      ...toTransactionArgs(filters),
+      ...toFlagArgs(TRANSACTION_FLAGS, filters),
       NO_REDACT,
     ]);
     if (!out.ok) return out;
@@ -236,7 +229,7 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     const out = await exec([
       "accounts",
       "list",
-      ...(opts.type === undefined ? [] : ["--type", opts.type]),
+      ...toFlagArgs({ type: "--type" }, opts),
       NO_REDACT,
     ]);
     if (!out.ok) return out;
@@ -271,7 +264,7 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     const out = await exec([
       "accounts",
       "tree",
-      ...(opts.type === undefined ? [] : ["--type", opts.type]),
+      ...toFlagArgs({ type: "--type" }, opts),
       NO_REDACT,
     ]);
     if (!out.ok) return out;
@@ -284,7 +277,7 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     const out = await exec([
       "merchants",
       "list",
-      ...toPageArgs(opts),
+      ...toFlagArgs(PAGE_FLAGS, opts),
       NO_REDACT,
     ]);
     if (!out.ok) return out;
@@ -297,8 +290,10 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     const out = await exec([
       "questions",
       "list",
-      ...toPageArgs(opts),
-      ...(opts.includeDeferred === true ? ["--include-deferred"] : []),
+      ...toFlagArgs(
+        { ...PAGE_FLAGS, includeDeferred: "--include-deferred" },
+        opts,
+      ),
       NO_REDACT,
     ]);
     if (!out.ok) return out;

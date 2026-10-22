@@ -42,7 +42,7 @@ import type {
   TransactionUpdateInput,
   TransactionUpdateResult,
 } from "./schemas";
-import { formatOledCommand, runOled, runOledConfig } from "./exec";
+import { formatOledCommand, runOled, runOledConfig, toFlagArgs } from "./exec";
 import { parseNdjsonRows, parseSingle } from "./ndjson";
 import { err, ok } from "./result";
 import {
@@ -171,6 +171,7 @@ const TRANSACTION_ADD_FLAGS = {
   date: "--date",
   description: "--description",
   merchant_name: "--merchant-name",
+  resolve: "--resolve",
 } as const satisfies Partial<Record<keyof TransactionAddInput, string>>;
 
 const ACCOUNT_CREATE_FLAGS = {
@@ -183,6 +184,7 @@ const ACCOUNT_CREATE_FLAGS = {
   account_number_masked: "--masked",
   due_day: "--due-day",
   statement_day: "--statement-day",
+  metadata: "--metadata",
 } as const satisfies Partial<Record<keyof AccountCreateInput, string>>;
 
 const ACCOUNT_UPDATE_FLAGS = {
@@ -192,6 +194,7 @@ const ACCOUNT_UPDATE_FLAGS = {
   points: "--points",
   bank_name: "--bank",
   account_number_masked: "--masked",
+  metadata: "--metadata",
 } as const satisfies Partial<Record<keyof AccountUpdateInput, string>>;
 
 const TRANSACTION_UPDATE_FLAGS = {
@@ -199,16 +202,6 @@ const TRANSACTION_UPDATE_FLAGS = {
   description: "--description",
   merchant: "--merchant",
 } as const satisfies Partial<Record<keyof TransactionUpdateInput, string>>;
-
-/** Flag tables carry the knowledge; this walks any of them over an input. */
-const toFlagArgs = <TInput extends object>(
-  flags: Partial<Record<keyof TInput & string, string>>,
-  input: TInput,
-): string[] =>
-  Object.entries(flags).flatMap(([key, flag]) => {
-    const value = input[key as keyof TInput];
-    return value === undefined ? [] : [flag as string, String(value)];
-  });
 
 /** Both sides of a move or merge must name the same ledger. */
 const accountPairSchema = z
@@ -229,10 +222,21 @@ export interface IngestPrepareOptions {
   force?: boolean;
 }
 
+const PREPARE_FLAGS = {
+  password: "--password",
+  rescan: "--rescan",
+  force: "--force",
+} as const satisfies Record<keyof IngestPrepareOptions, string>;
+
 export interface IngestDoneOptions {
   account?: string;
   closingBalance?: number;
 }
+
+const DONE_FLAGS = {
+  account: "--account",
+  closingBalance: "--closing-balance",
+} as const satisfies Record<keyof IngestDoneOptions, string>;
 
 export interface WritesOptions {
   configPath: string;
@@ -395,9 +399,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "ingest",
       "prepare",
       pathOrId,
-      ...(opts.password === undefined ? [] : ["--password", opts.password]),
-      ...(opts.rescan === true ? ["--rescan"] : []),
-      ...(opts.force === true ? ["--force"] : []),
+      ...toFlagArgs(PREPARE_FLAGS, opts),
     ];
 
     // Exit 7 is a document with holes, not a failed read: failed_pages names them.
@@ -423,7 +425,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     const args = [
       "ingest",
       "commit",
-      ...(opts.fileId === undefined ? [] : ["--file", opts.fileId]),
+      ...toFlagArgs({ fileId: "--file" }, opts),
     ];
 
     const out = await exec(args, {
@@ -459,15 +461,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       });
     }
 
-    const args = [
-      "ingest",
-      "done",
-      fileId,
-      ...(opts.account === undefined ? [] : ["--account", opts.account]),
-      ...(opts.closingBalance === undefined
-        ? []
-        : ["--closing-balance", String(opts.closingBalance)]),
-    ];
+    const args = ["ingest", "done", fileId, ...toFlagArgs(DONE_FLAGS, opts)];
 
     return runSingle(args, ingestDoneResultSchema);
   };
@@ -566,7 +560,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "questions",
       "defer",
       id,
-      ...(opts.days === undefined ? [] : ["--days", String(opts.days)]),
+      ...toFlagArgs({ days: "--days" }, opts),
     ];
 
     return runSingle(args, questionDeferRowSchema);
@@ -584,7 +578,6 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "transactions",
       "add",
       ...toFlagArgs(TRANSACTION_ADD_FLAGS, validated.data),
-      ...(validated.data.resolve === true ? ["--resolve"] : []),
     ];
     return runSingle(args, transactionAddResultSchema);
   };
@@ -680,9 +673,6 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "accounts",
       "create",
       ...toFlagArgs(ACCOUNT_CREATE_FLAGS, validated.data),
-      ...(validated.data.metadata === undefined
-        ? []
-        : ["--metadata", JSON.stringify(validated.data.metadata)]),
     ];
     return runSingle(args, accountCreatedResultSchema);
   };
@@ -704,9 +694,6 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "update",
       id,
       ...toFlagArgs(ACCOUNT_UPDATE_FLAGS, validated.data),
-      ...(validated.data.metadata === undefined
-        ? []
-        : ["--metadata", JSON.stringify(validated.data.metadata)]),
     ];
     return runSingle(args, accountUpdateResultSchema);
   };
@@ -758,7 +745,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       String(opts.to),
       "--reason",
       opts.reason,
-      ...(opts.date === undefined ? [] : ["--date", opts.date]),
+      ...toFlagArgs({ date: "--date" }, opts),
     ];
     return runSingle(args, accountAdjustResultSchema);
   };
