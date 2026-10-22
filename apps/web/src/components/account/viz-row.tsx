@@ -278,24 +278,37 @@ function BasicViz({ account }: { account: AccountView }) {
   return <BarsPane account={account} className={VIZ_FULL} title="In and out" />;
 }
 
+interface VizProps<K extends AccountKind> {
+  readonly account: AccountView;
+  readonly series: SeriesOf<K>;
+}
+
+const VIZ: {
+  readonly [K in AccountKind]: (props: VizProps<K>) => React.ReactNode;
+} = {
+  cash: CashViz,
+  card: CardViz,
+  loan: LoanViz,
+  position: PositionViz,
+  basic: BasicViz,
+};
+
+// The kind rides apart from the series: only a generic key ties a table entry
+// to the props it is rendered with.
+const vizOf = <K extends AccountKind>(
+  kind: K,
+  account: AccountView,
+  series: SeriesOf<K>,
+) => {
+  const Viz: (props: VizProps<K>) => React.ReactNode = VIZ[kind];
+  return <Viz account={account} series={series} />;
+};
+
 /**
  * The account's type only chooses which two charts sit here; every other part
  * of the page is the same recipe for every account. Two measures of different
  * scale are always two panes — never one pane with two axes.
  */
 export function VizRow({ account }: { account: AccountView }) {
-  const series = account.series;
-
-  switch (series.kind) {
-    case "cash":
-      return <CashViz account={account} series={series} />;
-    case "card":
-      return <CardViz account={account} series={series} />;
-    case "loan":
-      return <LoanViz account={account} series={series} />;
-    case "position":
-      return <PositionViz account={account} series={series} />;
-    case "basic":
-      return <BasicViz account={account} />;
-  }
+  return vizOf(account.series.kind, account, account.series);
 }

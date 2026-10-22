@@ -28,79 +28,84 @@ const dayText = (day: number | null) => (day === null ? "—" : ordinalDay(day))
 const dateText = (date: string | undefined) =>
   date === undefined ? "—" : formatStamp(date);
 
+type MetaKind = AccountMeta["kind"];
+type MetaOf<K extends MetaKind> = Extract<AccountMeta, { kind: K }>;
+
 /** The balance is already the hero figure, so no cell here repeats it. */
-const cellsOf = (
-  meta: AccountMeta,
+const CELLS: {
+  readonly [K in MetaKind]: (
+    meta: MetaOf<K>,
+    money: Money,
+    price: Money,
+  ) => readonly Cell[];
+} = {
+  card: (meta, money) => [
+    meta.lastPayment === undefined
+      ? { label: "Last payment", value: "—" }
+      : {
+          label: `Last payment · ${formatDayMonth(meta.lastPayment.date)}`,
+          value: money(meta.lastPayment.amount),
+        },
+    { label: "Cycle since", value: formatStamp(meta.cycleFrom) },
+    { label: "Statement", value: dayText(meta.statementDay) },
+    { label: "Payment due", value: dayText(meta.dueDay) },
+  ],
+  loan: (meta, money) => [
+    {
+      label: "Implied rate",
+      value:
+        meta.impliedApr === undefined
+          ? "—"
+          : formatPercentFine(meta.impliedApr),
+    },
+    {
+      label: `Repaid ${formatPercent(meta.progress)}`,
+      value: money(meta.paid),
+    },
+    { label: "Borrowed", value: money(meta.original) },
+    { label: "Interest paid", value: money(meta.interestPaid) },
+  ],
+  cash: (meta, money) => [
+    { label: `Interest ${meta.year}`, value: money(meta.interestEarned) },
+    { label: "Last activity", value: dateText(meta.lastActivity) },
+    { label: "Paid in", value: money(meta.received) },
+    { label: "Paid out", value: money(meta.sent) },
+  ],
+  position: (meta, money, price) => [
+    {
+      label: "Shares held",
+      value: meta.shares === undefined ? "—" : formatQuantity(meta.shares),
+    },
+    {
+      label: "Avg cost",
+      value: meta.avgCost === undefined ? "—" : price(meta.avgCost),
+    },
+    meta.lastTrade === undefined
+      ? { label: "Last buy", value: dateText(meta.lastBuy) }
+      : {
+          // The quantity rides in the label: two figures in one value is
+          // the only composition wide enough to clip at the narrow tiers.
+          label: `Last buy · ${formatDayMonth(meta.lastTrade.date)} · ${formatQuantity(meta.lastTrade.quantity)}`,
+          value: price(meta.lastTrade.price),
+        },
+    { label: "Invested 12 mo", value: money(meta.invested12m) },
+  ],
+  basic: (meta, money) => [
+    { label: "Total in", value: money(meta.totalIn) },
+    { label: "Total out", value: money(meta.totalOut) },
+    { label: "Transactions", value: String(meta.transactions) },
+    { label: "Last activity", value: dateText(meta.lastActivity) },
+  ],
+};
+
+// The kind rides apart from the meta: only a generic key ties a table entry
+// to the argument it is called with.
+const cellsOf = <K extends MetaKind>(
+  kind: K,
+  meta: MetaOf<K>,
   money: Money,
   currency: string,
-): readonly Cell[] => {
-  const price = priceOf(currency);
-
-  switch (meta.kind) {
-    case "card":
-      return [
-        meta.lastPayment === undefined
-          ? { label: "Last payment", value: "—" }
-          : {
-              label: `Last payment · ${formatDayMonth(meta.lastPayment.date)}`,
-              value: money(meta.lastPayment.amount),
-            },
-        { label: "Cycle since", value: formatStamp(meta.cycleFrom) },
-        { label: "Statement", value: dayText(meta.statementDay) },
-        { label: "Payment due", value: dayText(meta.dueDay) },
-      ];
-    case "loan":
-      return [
-        {
-          label: "Implied rate",
-          value:
-            meta.impliedApr === undefined
-              ? "—"
-              : formatPercentFine(meta.impliedApr),
-        },
-        {
-          label: `Repaid ${formatPercent(meta.progress)}`,
-          value: money(meta.paid),
-        },
-        { label: "Borrowed", value: money(meta.original) },
-        { label: "Interest paid", value: money(meta.interestPaid) },
-      ];
-    case "cash":
-      return [
-        { label: `Interest ${meta.year}`, value: money(meta.interestEarned) },
-        { label: "Last activity", value: dateText(meta.lastActivity) },
-        { label: "Paid in", value: money(meta.received) },
-        { label: "Paid out", value: money(meta.sent) },
-      ];
-    case "position":
-      return [
-        {
-          label: "Shares held",
-          value: meta.shares === undefined ? "—" : formatQuantity(meta.shares),
-        },
-        {
-          label: "Avg cost",
-          value: meta.avgCost === undefined ? "—" : price(meta.avgCost),
-        },
-        meta.lastTrade === undefined
-          ? { label: "Last buy", value: dateText(meta.lastBuy) }
-          : {
-              // The quantity rides in the label: two figures in one value is
-              // the only composition wide enough to clip at the narrow tiers.
-              label: `Last buy · ${formatDayMonth(meta.lastTrade.date)} · ${formatQuantity(meta.lastTrade.quantity)}`,
-              value: price(meta.lastTrade.price),
-            },
-        { label: "Invested 12 mo", value: money(meta.invested12m) },
-      ];
-    case "basic":
-      return [
-        { label: "Total in", value: money(meta.totalIn) },
-        { label: "Total out", value: money(meta.totalOut) },
-        { label: "Transactions", value: String(meta.transactions) },
-        { label: "Last activity", value: dateText(meta.lastActivity) },
-      ];
-  }
-};
+): readonly Cell[] => CELLS[kind](meta, money, priceOf(currency));
 
 const typeChip = (account: AccountView) =>
   (account.subtype ?? account.type).replace(/[-_]/g, " ");
@@ -113,6 +118,12 @@ export function AccountHead({
   className?: string;
 }) {
   const money = moneyOf(account.currency);
+  const cells = cellsOf(
+    account.meta.kind,
+    account.meta,
+    money,
+    account.currency,
+  );
 
   return (
     <section
@@ -147,7 +158,7 @@ export function AccountHead({
       </div>
 
       <div className={HEAD_GRID}>
-        {cellsOf(account.meta, money, account.currency).map((cell) => (
+        {cells.map((cell) => (
           <figure key={cell.label} className={HEAD_CELL}>
             <figcaption className="label truncate" title={cell.label}>
               {cell.label}
