@@ -3,7 +3,7 @@ import { z } from "zod/v4";
 import type { Result } from "@openledger-cfo/openledger";
 import { db } from "@openledger-cfo/db/client";
 import { configuration } from "@openledger-cfo/db/schema";
-import { err, ok } from "@openledger-cfo/openledger";
+import { err, messageOf, ok, unwrapOr } from "@openledger-cfo/openledger";
 
 export const DEFAULT_AI_MODEL = "qwen/qwen3.8-27b";
 
@@ -38,7 +38,7 @@ type ConfigurationRow = typeof configuration.$inferSelect;
 
 /** "no such table" = the db predates `pnpm db:push`: a setup state, not an outage. */
 const toStoreError = (cause: unknown): ConfigReadError => {
-  const message = cause instanceof Error ? cause.message : String(cause);
+  const message = messageOf(cause);
   return message.includes("no such table")
     ? {
         reason: "missing-table",
@@ -47,29 +47,35 @@ const toStoreError = (cause: unknown): ConfigReadError => {
     : { reason: "unavailable", message };
 };
 
-export const readConfigurationRow = async (): Promise<
-  Result<ConfigurationRow | undefined, ConfigReadError>
-> => {
+/** The store's one failure mapping: whatever the driver throws becomes data. */
+const fromStore = async <T>(
+  run: () => Promise<T>,
+): Promise<Result<T, ConfigReadError>> => {
   try {
-    return ok(
-      await db.query.configuration.findFirst({
-        where: (table, { eq }) => eq(table.id, CONFIG_ROW_ID),
-      }),
-    );
+    return ok(await run());
   } catch (cause) {
     return err(toStoreError(cause));
   }
 };
 
+export const readConfigurationRow = (): Promise<
+  Result<ConfigurationRow | undefined, ConfigReadError>
+> =>
+  fromStore(() =>
+    db.query.configuration.findFirst({
+      where: (table, { eq }) => eq(table.id, CONFIG_ROW_ID),
+    }),
+  );
+
 /** A control-plane hiccup reads as "not configured", never a 500 — the layout and chat route sit on this. */
 export const readGateway = async (): Promise<GatewayConfig | undefined> => {
-  const row = await readConfigurationRow();
-  if (!row.ok || row.value === undefined) return undefined;
+  const row = unwrapOr(await readConfigurationRow(), undefined);
+  if (row === undefined) return undefined;
   return {
-    baseUrl: row.value.aiBaseUrl,
-    apiKey: row.value.aiApiKey,
-    model: row.value.aiModel,
-    redact: row.value.aiRedact,
+    baseUrl: row.aiBaseUrl,
+    apiKey: row.aiApiKey,
+    model: row.aiModel,
+    redact: row.aiRedact,
   };
 };
 
@@ -90,13 +96,10 @@ export const saveConfiguration = async (input: {
       : { ocrSharesGateway: input.ocrSharesGateway }),
     ...(input.redact === undefined ? {} : { aiRedact: input.redact }),
   };
-  try {
+  return fromStore(async () => {
     await db
       .insert(configuration)
       .values({ id: CONFIG_ROW_ID, ...row })
       .onConflictDoUpdate({ target: configuration.id, set: row });
-    return ok(undefined);
-  } catch (cause) {
-    return err(toStoreError(cause));
-  }
+  });
 };

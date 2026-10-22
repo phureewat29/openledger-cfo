@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 
+import { unwrapOr } from "@openledger-cfo/openledger";
+
 import {
   DEFAULT_OCR_MODEL,
   forwardOcr,
@@ -21,7 +23,7 @@ import { createTRPCRouter, publicProcedure } from "../trpc";
 export const configurationRouter = createTRPCRouter({
   get: publicProcedure.query(async ({ ctx }) => {
     const row = await readConfigurationRow();
-    const saved = row.ok ? row.value : undefined;
+    const saved = unwrapOr(row, undefined);
     const ocr = await readOcrView(ctx.ledger);
     return {
       store: row.ok ? ("ready" as const) : row.error.reason,
