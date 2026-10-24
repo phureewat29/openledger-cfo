@@ -25,7 +25,7 @@ const nonEmptyLines = (stdout: string): string[] =>
     .map((line) => line.trim())
     .filter((line) => line !== "");
 
-export interface NdjsonPage<TRow, TSummary> {
+export interface ListPage<TRow, TSummary> {
   rows: TRow[];
   summary: TSummary | undefined;
 }
@@ -38,7 +38,7 @@ export const parseNdjsonRows = <TRow, TSummary = unknown>(
   rowSchema: z.ZodType<TRow>,
   stdout: string,
   summarySchema?: z.ZodType<TSummary>,
-): Result<NdjsonPage<TRow, TSummary>, OledError> => {
+): Result<ListPage<TRow, TSummary>, OledError> => {
   const rows: TRow[] = [];
   let summary: TSummary | undefined;
 

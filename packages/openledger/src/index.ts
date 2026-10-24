@@ -97,9 +97,9 @@ export { quoteShellArg } from "./exec";
 export type { OledCommandEvent, OledCommandListener } from "./exec";
 export { andThen, err, map, mapErr, messageOf, ok, unwrapOr } from "./result";
 export type { Result } from "./result";
+export type { ListPage } from "./ndjson";
 export type {
   IngestDocument,
-  ListPage,
   PageOptions,
   ReportRange,
   TransactionFilters,

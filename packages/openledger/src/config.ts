@@ -58,6 +58,12 @@ const oledConfigFileSchema = z.looseObject({
 });
 export type OledConfigFile = z.infer<typeof oledConfigFileSchema>;
 
+export const notConfigured = (configPath: string): OledError => ({
+  kind: "not_configured",
+  message: `No oled config at ${configPath}`,
+  hint: "Run `oled config <path> --init`, or point OLED_CONFIG at an initialized ledger.",
+});
+
 /**
  * Reads the config file directly: the extraction artifacts live under cacheDir
  * and no command hands their directory back.
@@ -66,13 +72,7 @@ export const readOledConfigFile = async (
   configPath: string,
 ): Promise<Result<OledConfigFile, OledError>> => {
   const text = await readFile(configPath, "utf8").catch(() => undefined);
-  if (text === undefined) {
-    return err<OledError>({
-      kind: "not_configured",
-      message: `No oled config at ${configPath}`,
-      hint: "Run `oled config <path> --init`, or point OLED_CONFIG at an initialized ledger.",
-    });
-  }
+  if (text === undefined) return err(notConfigured(configPath));
 
   return parseAs(
     oledConfigFileSchema,

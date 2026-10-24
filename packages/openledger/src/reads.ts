@@ -1,10 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { z } from "zod/v4";
 import { CONTRACT_VERSION } from "@aquartier/openledger/contract";
 
 import type { OledConfigFile } from "./config";
 import type { OledError } from "./errors";
 import type { OledCommandListener } from "./exec";
+import type { ListPage } from "./ndjson";
 import type { Result } from "./result";
 import type {
   AccountMatchRow,
@@ -23,10 +25,10 @@ import type {
   TransactionRow,
   TreeSummary,
 } from "./schemas";
-import { readOledConfigFile } from "./config";
+import { notConfigured, readOledConfigFile } from "./config";
 import { runOled, toFlagArgs } from "./exec";
 import { parseNdjsonRows, parseSingle } from "./ndjson";
-import { err, ok } from "./result";
+import { andThen, err, map, ok } from "./result";
 import {
   accountMatchRowSchema,
   accountMatchSummarySchema,
@@ -82,11 +84,6 @@ const TRANSACTION_FLAGS = {
   offset: "--offset",
 } as const satisfies Record<keyof TransactionFilters, string>;
 
-export interface ListPage<TRow, TSummary> {
-  rows: TRow[];
-  summary: TSummary | undefined;
-}
-
 export interface ReportRange {
   from: string;
   to: string;
@@ -116,28 +113,48 @@ const errnoOf = (cause: unknown): unknown =>
   cause instanceof Error ? (cause as NodeJS.ErrnoException).code : undefined;
 
 /** ENOENT is the ordinary miss: nothing prepared the file, or closing it cleaned the cache. */
-const readDocument = async (
+const readDocument = (
   path: string,
   fileId: string,
-): Promise<Result<string, OledError>> => {
-  try {
-    return ok(await readFile(path, "utf8"));
-  } catch (cause) {
-    if (errnoOf(cause) === "ENOENT") {
-      return err<OledError>({
-        kind: "not_found",
-        message: `No extracted document for ${fileId}`,
-        hint: "run ingest prepare first",
-      });
-    }
+): Promise<Result<string, OledError>> =>
+  readFile(path, "utf8").then(ok, (cause: unknown) =>
+    err<OledError>(
+      errnoOf(cause) === "ENOENT"
+        ? {
+            kind: "not_found",
+            message: `No extracted document for ${fileId}`,
+            hint: "run ingest prepare first",
+          }
+        : {
+            kind: "cli_error",
+            message: `Cannot read ${path}: ${String(cause)}`,
+          },
+    ),
+  );
+
+const admitStatus = (
+  status: Status,
+  configPath: string,
+): Result<Status, OledError> => {
+  // Gate first: a pre-contract CLI still falls back to the default profile,
+  // and blaming the config would send the operator to reseed a healthy ledger.
+  if (status.contract_version !== CONTRACT_VERSION) {
+    const found = status.contract_version ?? "pre-0.24";
+    const cli = status.version ?? "unknown version";
     return err<OledError>({
-      kind: "cli_error",
-      message: `Cannot read ${path}: ${String(cause)}`,
+      kind: "contract_mismatch",
+      message: `oled (${cli}) speaks wire contract ${String(found)}; this app expects ${String(CONTRACT_VERSION)}.`,
+      hint: "Update the CLI (`npm install -g @aquartier/openledger`) or this app until the contract versions match.",
     });
   }
+
+  // `contract_version` pins shape, not semantics: a same-contract CLI may
+  // yet report `configured: false` instead of exiting 3 — refuse that answer.
+  if (!status.configured) return err(notConfigured(configPath));
+  return ok(status);
 };
 
-export interface ReadsOptions {
+interface ReadsOptions {
   configPath: string;
   onCommand?: OledCommandListener;
 }
@@ -146,57 +163,44 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
   const exec = (args: string[]): Promise<Result<string, OledError>> =>
     runOled(args, { configPath, onCommand });
 
+  /** Every list command ends the same way: rows, then one summary row. */
+  const runList = async <TRow, TSummary>(
+    args: string[],
+    rowSchema: z.ZodType<TRow>,
+    summarySchema: z.ZodType<TSummary>,
+  ): Promise<Result<ListPage<TRow, TSummary>, OledError>> =>
+    andThen(await exec(args), (stdout) =>
+      parseNdjsonRows(rowSchema, stdout, summarySchema),
+    );
+
   const status = async (): Promise<Result<Status, OledError>> => {
-    const out = await exec(["status", NO_REDACT]);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(statusSchema, out.value);
-    if (!parsed.ok) return parsed;
-
-    // Gate first: a pre-contract CLI still falls back to the default profile,
-    // and blaming the config would send the operator to reseed a healthy ledger.
-    if (parsed.value.contract_version !== CONTRACT_VERSION) {
-      const found = parsed.value.contract_version ?? "pre-0.24";
-      const cli = parsed.value.version ?? "unknown version";
-      return err<OledError>({
-        kind: "contract_mismatch",
-        message: `oled (${cli}) speaks wire contract ${String(found)}; this app expects ${String(CONTRACT_VERSION)}.`,
-        hint: "Update the CLI (`npm install -g @aquartier/openledger`) or this app until the contract versions match.",
-      });
-    }
-
-    // `contract_version` pins shape, not semantics: a same-contract CLI may
-    // yet report `configured: false` instead of exiting 3 — refuse that answer.
-    if (!parsed.value.configured) {
-      return err<OledError>({
-        kind: "not_configured",
-        message: `No oled config at ${configPath}`,
-        hint: "Run `oled config <path> --init`, or point OLED_CONFIG at an initialized ledger.",
-      });
-    }
-    return parsed;
+    const parsed = andThen(await exec(["status", NO_REDACT]), (stdout) =>
+      parseSingle(statusSchema, stdout),
+    );
+    return andThen(parsed, (value) => admitStatus(value, configPath));
   };
 
   const report = async (
     range: ReportRange,
-  ): Promise<Result<Report, OledError>> => {
-    const out = await exec(["report", "--from", range.from, "--to", range.to]);
-    if (!out.ok) return out;
-    return parseSingle(reportSchema, out.value);
-  };
+  ): Promise<Result<Report, OledError>> =>
+    andThen(
+      await exec(["report", "--from", range.from, "--to", range.to]),
+      (stdout) => parseSingle(reportSchema, stdout),
+    );
 
-  const listTransactions = async (
+  const listTransactions = (
     filters: TransactionFilters = {},
-  ): Promise<Result<ListPage<TransactionRow, PageSummary>, OledError>> => {
-    const out = await exec([
-      "transactions",
-      "list",
-      ...toFlagArgs(TRANSACTION_FLAGS, filters),
-      NO_REDACT,
-    ]);
-    if (!out.ok) return out;
-    return parseNdjsonRows(transactionRowSchema, out.value, pageSummarySchema);
-  };
+  ): Promise<Result<ListPage<TransactionRow, PageSummary>, OledError>> =>
+    runList(
+      [
+        "transactions",
+        "list",
+        ...toFlagArgs(TRANSACTION_FLAGS, filters),
+        NO_REDACT,
+      ],
+      transactionRowSchema,
+      pageSummarySchema,
+    );
 
   const listAllTransactions = async (
     filters: Omit<TransactionFilters, "limit" | "offset"> = {},
@@ -223,18 +227,14 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     return ok(rows.slice(0, MAX_ROWS));
   };
 
-  const listAccounts = async (
+  const listAccounts = (
     opts: { type?: AccountType } = {},
-  ): Promise<Result<ListPage<AccountRow, CountSummary>, OledError>> => {
-    const out = await exec([
-      "accounts",
-      "list",
-      ...toFlagArgs({ type: "--type" }, opts),
-      NO_REDACT,
-    ]);
-    if (!out.ok) return out;
-    return parseNdjsonRows(accountRowSchema, out.value, countSummarySchema);
-  };
+  ): Promise<Result<ListPage<AccountRow, CountSummary>, OledError>> =>
+    runList(
+      ["accounts", "list", ...toFlagArgs({ type: "--type" }, opts), NO_REDACT],
+      accountRowSchema,
+      countSummarySchema,
+    );
 
   // `accounts match` declares no --no-redact; unknown flags exit 2 (E_USAGE).
   const matchAccounts = async (
@@ -248,70 +248,53 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
         message: "accounts match: query cannot be empty",
       });
     }
-
-    const out = await exec(["accounts", "match", "--query", query]);
-    if (!out.ok) return out;
-    return parseNdjsonRows(
+    return runList(
+      ["accounts", "match", "--query", query],
       accountMatchRowSchema,
-      out.value,
       accountMatchSummarySchema,
     );
   };
 
-  const accountsTree = async (
+  const accountsTree = (
     opts: { type?: AccountType } = {},
-  ): Promise<Result<ListPage<AccountTreeNode, TreeSummary>, OledError>> => {
-    const out = await exec([
-      "accounts",
-      "tree",
-      ...toFlagArgs({ type: "--type" }, opts),
-      NO_REDACT,
-    ]);
-    if (!out.ok) return out;
-    return parseNdjsonRows(accountTreeNodeSchema, out.value, treeSummarySchema);
-  };
+  ): Promise<Result<ListPage<AccountTreeNode, TreeSummary>, OledError>> =>
+    runList(
+      ["accounts", "tree", ...toFlagArgs({ type: "--type" }, opts), NO_REDACT],
+      accountTreeNodeSchema,
+      treeSummarySchema,
+    );
 
-  const listMerchants = async (
+  const listMerchants = (
     opts: PageOptions = {},
-  ): Promise<Result<ListPage<MerchantRow, PageSummary>, OledError>> => {
-    const out = await exec([
-      "merchants",
-      "list",
-      ...toFlagArgs(PAGE_FLAGS, opts),
-      NO_REDACT,
-    ]);
-    if (!out.ok) return out;
-    return parseNdjsonRows(merchantRowSchema, out.value, pageSummarySchema);
-  };
+  ): Promise<Result<ListPage<MerchantRow, PageSummary>, OledError>> =>
+    runList(
+      ["merchants", "list", ...toFlagArgs(PAGE_FLAGS, opts), NO_REDACT],
+      merchantRowSchema,
+      pageSummarySchema,
+    );
 
-  const listQuestions = async (
+  const listQuestions = (
     opts: PageOptions & { includeDeferred?: boolean } = {},
-  ): Promise<Result<ListPage<QuestionRow, PageSummary>, OledError>> => {
-    const out = await exec([
-      "questions",
-      "list",
-      ...toFlagArgs(
-        { ...PAGE_FLAGS, includeDeferred: "--include-deferred" },
-        opts,
-      ),
-      NO_REDACT,
-    ]);
-    if (!out.ok) return out;
-    return parseNdjsonRows(questionRowSchema, out.value, pageSummarySchema);
-  };
+  ): Promise<Result<ListPage<QuestionRow, PageSummary>, OledError>> =>
+    runList(
+      [
+        "questions",
+        "list",
+        ...toFlagArgs(
+          { ...PAGE_FLAGS, includeDeferred: "--include-deferred" },
+          opts,
+        ),
+        NO_REDACT,
+      ],
+      questionRowSchema,
+      pageSummarySchema,
+    );
 
   // `ingest list` declares no --no-redact and rejects unknown flags with E_USAGE.
-  const ingestList = async (): Promise<
+  const ingestList = (): Promise<
     Result<ListPage<IngestFileRow, IngestFileSummary>, OledError>
-  > => {
-    const out = await exec(["ingest", "list"]);
-    if (!out.ok) return out;
-    return parseNdjsonRows(
-      ingestFileRowSchema,
-      out.value,
-      ingestFileSummarySchema,
-    );
-  };
+  > =>
+    runList(["ingest", "list"], ingestFileRowSchema, ingestFileSummarySchema);
 
   /**
    * No command reads an extraction back, so this opens the artifact directly.
@@ -332,25 +315,18 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     if (!config.ok) return config;
 
     const path = join(config.value.cacheDir, fileId, DOCUMENT_FILE);
-    const read = await readDocument(path, fileId);
-    if (!read.ok) return read;
-    const text = read.value;
-
-    return ok({
+    return map(await readDocument(path, fileId), (text) => ({
       file_id: fileId,
       path,
       text: text.slice(0, MAX_DOCUMENT_CHARS),
       truncated: text.length > MAX_DOCUMENT_CHARS,
       // Counted over the whole document, so a truncated read still reports its length.
       page_count: text.match(PAGE_MARKER)?.length ?? 0,
-    });
+    }));
   };
 
-  const configDataDir = async (): Promise<Result<string, OledError>> => {
-    const config = await readOledConfigFile(configPath);
-    if (!config.ok) return config;
-    return ok(config.value.dataDir);
-  };
+  const configDataDir = async (): Promise<Result<string, OledError>> =>
+    map(await readOledConfigFile(configPath), (config) => config.dataDir);
 
   /**
    * Off the file, raw key included: this is a local single-user app and the
