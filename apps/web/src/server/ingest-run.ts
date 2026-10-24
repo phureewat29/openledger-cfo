@@ -1,12 +1,12 @@
 import type { UIMessage } from "ai";
 import { TRPCError } from "@trpc/server";
-import { partition, uniqBy } from "es-toolkit";
+import { attempt, partition, uniqBy } from "es-toolkit";
 
 import type { GatewayConfig, LangGraphEvent } from "@openledger-cfo/agent";
 import type { Result } from "@openledger-cfo/openledger";
 import { createAgent, nsDepth, textOf, unwrap } from "@openledger-cfo/agent";
 import { appRouter, createTRPCContext, readGateway } from "@openledger-cfo/api";
-import { err, ok } from "@openledger-cfo/openledger";
+import { err, messageOf, ok } from "@openledger-cfo/openledger";
 
 import type { IngestFile } from "~/domain/ingest-files";
 import type {
@@ -142,19 +142,13 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 const asString = (value: unknown): string =>
   typeof value === "string" ? value : "";
 
-const parseJson = (raw: string): unknown => {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return {};
-  }
-};
-
 /** The graph hands a tool's arguments over as a JSON string nested in `input`. */
 const inputOf = (event: LangGraphEvent): Record<string, unknown> => {
   const wrapper = asRecord(event.data?.input);
   const raw = wrapper.input;
-  return typeof raw === "string" ? asRecord(parseJson(raw)) : wrapper;
+  if (typeof raw !== "string") return wrapper;
+  const [, parsed] = attempt<unknown, unknown>(() => JSON.parse(raw));
+  return asRecord(parsed);
 };
 
 /**
@@ -439,9 +433,6 @@ const park = (run: Run, waiting: Waiting): void => {
   });
 };
 
-const messageOf = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : String(cause);
-
 const isTimeout = (cause: unknown): boolean =>
   cause instanceof Error &&
   (cause.name === "TimeoutError" || cause.name === "AbortError");
@@ -454,6 +445,25 @@ const settleCancelled = (run: Run): void => {
   );
 };
 
+/** What the feed says of a turn that ended badly, ahead of the tally. */
+const failureOf = (
+  run: Run,
+  cause: unknown,
+): { readonly label: string; readonly detail?: string } => {
+  if (cause instanceof Error && cause.name === "GraphRecursionError") {
+    return {
+      label:
+        "Run stopped — it reached its step limit. Select what is still open and press Ingest again.",
+    };
+  }
+  if (isTimeout(cause)) {
+    return {
+      label: `Run stopped — it passed its ${String(budgetFor(run.files) / 60_000)} minute limit. Select what is still open and press Ingest again.`,
+    };
+  }
+  return { label: "Run failed.", detail: messageOf(cause) };
+};
+
 /**
  * Every way a turn can end badly, said plainly — and with the tally, because
  * a stopped run is exactly when the operator needs to know what landed. The
@@ -464,24 +474,9 @@ const settleFailure = (run: Run, cause: unknown): void => {
     settleCancelled(run);
     return;
   }
-  if (cause instanceof Error && cause.name === "GraphRecursionError") {
-    settle(run, "failed");
-    note(
-      "Run stopped — it reached its step limit. Select what is still open and press Ingest again.",
-      tallySaid(run.tally),
-    );
-    return;
-  }
-  if (isTimeout(cause)) {
-    settle(run, "failed");
-    note(
-      `Run stopped — it passed its ${String(budgetFor(run.files) / 60_000)} minute limit. Select what is still open and press Ingest again.`,
-      tallySaid(run.tally),
-    );
-    return;
-  }
+  const failure = failureOf(run, cause);
   settle(run, "failed");
-  note("Run failed.", runLine(messageOf(cause), tallySaid(run.tally)));
+  note(failure.label, runLine(failure.detail, tallySaid(run.tally)));
 };
 
 interface Unlocked {
@@ -926,6 +921,24 @@ const labelOf = (scope: RunScope): string =>
     ? scope.pathOrId
     : `${String(scope.pathOrIds.length)} selected`;
 
+/** The queue as it stands, and the targets the scope names in it. */
+const readQueue = async (
+  scope: RunScope,
+): Promise<Result<{ rows: IngestFile[]; targets: RunTarget[] }, string>> => {
+  const rows = await caller.ledger.ingest.list().then(
+    (page) => page.rows,
+    () => null,
+  );
+  if (rows === null) return err("The ingest queue could not be read.");
+  return selectTargets(scope, rows).then(
+    (targets) => ok({ rows, targets }),
+    (cause: unknown) =>
+      err(
+        cause instanceof Error ? cause.message : "The ledger did not answer.",
+      ),
+  );
+};
+
 /** Which way this run was asked to handle what the ledger asks back. */
 const MODE_NOTE: Record<RunMode, string> = {
   auto: "auto — the agent answers the questions itself",
@@ -973,32 +986,15 @@ export const startRun = async (
   // Claimed before the first await: two starts landing together must not both pass.
   slot.run = run;
 
-  const rows = await caller.ledger.ingest.list().then(
-    (page) => page.rows,
-    () => null,
-  );
-  if (rows === null) {
+  const queue = await readQueue(scope);
+  if (!queue.ok) {
     slot.run = previous;
-    return err({
-      reason: "unavailable",
-      message: "The ingest queue could not be read.",
-    });
+    return err({ reason: "unavailable", message: queue.error });
   }
 
+  const { rows, targets } = queue.value;
   for (const row of rows) {
     if (row.file_id !== null) run.names.set(row.file_id, row.rel_path);
-  }
-
-  let targets: RunTarget[];
-  try {
-    targets = await selectTargets(scope, rows);
-  } catch (cause) {
-    slot.run = previous;
-    return err({
-      reason: "unavailable",
-      message:
-        cause instanceof Error ? cause.message : "The ledger did not answer.",
-    });
   }
   run.files = targets.length;
   for (const target of targets) {
@@ -1006,10 +1002,7 @@ export const startRun = async (
     if (target.fileId !== null) run.own.add(target.fileId);
   }
 
-  note(
-    `Run started — ${String(targets.length)} ${targets.length === 1 ? "file" : "files"}`,
-    MODE_NOTE[mode],
-  );
+  note(`Run started — ${countNoun(targets.length, "file")}`, MODE_NOTE[mode]);
   advance(run, objectiveOf(targets, mode));
   return ok({ runId: run.runId });
 };
