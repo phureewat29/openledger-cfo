@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { sankey, sankeyLinkHorizontal } from "d3-sankey";
-import { groupBy, orderBy } from "es-toolkit";
+import { groupBy, sortBy } from "es-toolkit";
 
 import type { TipRow } from "~/components/charts/tooltip";
 import type { FlowGraph, NodeKind } from "~/domain/flows/types";
@@ -155,6 +155,9 @@ const UNMARKED = "";
 
 interface PlacedLink {
   readonly id: string;
+  /** The node ids at either end, so hovering a node can lift exactly these. */
+  readonly source: string;
+  readonly target: string;
   readonly d: string;
   readonly width: number;
   readonly targetKind: NodeKind;
@@ -195,6 +198,30 @@ const markFor = (gap: number, type: TypeSizes): Mark => {
   return "none";
 };
 
+interface Marked {
+  readonly node: PlacedNode;
+  readonly mark: Mark;
+}
+
+/** Down one column, each node keeps only what its neighbour above left room for. */
+const markColumn = (
+  column: readonly PlacedNode[],
+  type: TypeSizes,
+): readonly Marked[] =>
+  sortBy(column, [centerOf]).reduce<{
+    cursor: number;
+    marked: readonly Marked[];
+  }>(
+    ({ cursor, marked }, node) => {
+      const mark = markFor(centerOf(node) - cursor, type);
+      return {
+        cursor: mark === "none" ? cursor : centerOf(node),
+        marked: [...marked, { node, mark }],
+      };
+    },
+    { cursor: -Infinity, marked: [] },
+  ).marked;
+
 /**
  * Labels are placed greedily down each column: a node whose neighbour left it
  * room keeps its name, one that did not gets a number, and one with room for
@@ -206,44 +233,38 @@ const placeLabels = (
   nameMax: number,
   type: TypeSizes,
 ) => {
-  const columns = orderBy(
+  const columns = sortBy(
     Object.entries(groupBy(nodes, (node) => String(Math.round(node.x0)))),
     [([x]) => Number(x)],
-    ["asc"],
   );
-
-  const notes: Note[] = [];
-  const labelled: LabelledNode[] = [];
+  const marked = columns.flatMap(([, column]) => markColumn(column, type));
   // Counted apart from the strip's length: only a node the diagram draws a
   // number beside may claim one, so every printed number has something to find.
-  let numbered = 0;
+  const numbered = marked
+    .filter(({ mark }) => mark === "marker")
+    .map(({ node }) => node.id);
 
-  for (const [, column] of columns) {
-    let cursor = -Infinity;
-    for (const node of orderBy(column, [centerOf], ["asc"])) {
-      const mark = markFor(centerOf(node) - cursor, type);
-      if (mark !== "none") cursor = centerOf(node);
+  const labelled = marked.map(({ node, mark }): LabelledNode => {
+    const value = formatThbCompact(node.total);
+    return {
+      ...node,
+      name: truncate(node.label, value, nameMax, type),
+      value,
+      mark,
+      note: mark === "marker" ? numbered.indexOf(node.id) + 1 : 0,
+    };
+  });
 
-      const value = formatThbCompact(node.total);
-      if (mark === "marker") numbered += 1;
-      const note = mark === "marker" ? numbered : 0;
-      if (mark !== "label") {
-        notes.push({
-          id: node.id,
-          glyph: note > 0 ? String(note) : UNMARKED,
-          label: node.label,
-          value: formatThb(node.total),
-        });
-      }
-      labelled.push({
-        ...node,
-        name: truncate(node.label, value, nameMax, type),
-        value,
-        mark,
-        note,
-      });
-    }
-  }
+  const notes = labelled
+    .filter((node) => node.mark !== "label")
+    .map(
+      (node): Note => ({
+        id: node.id,
+        glyph: node.note > 0 ? String(node.note) : UNMARKED,
+        label: node.label,
+        value: formatThb(node.total),
+      }),
+    );
 
   return { labelled, notes };
 };
@@ -290,14 +311,6 @@ const buildLayout = (graph: FlowGraph, expanded: boolean, type: TypeSizes) => {
   });
 
   const toPath = sankeyLinkHorizontal<NodeDatum, LinkDatum>();
-  /** Which ribbons a node touches, so hovering one can lift exactly those. */
-  const incident = new Map<string, Set<string>>();
-  const touch = (nodeId: string, linkId: string) => {
-    const set = incident.get(nodeId) ?? new Set<string>();
-    set.add(linkId);
-    incident.set(nodeId, set);
-  };
-
   const links = laid.links.flatMap((link): PlacedLink[] => {
     const source = typeof link.source === "object" ? link.source : undefined;
     const target = typeof link.target === "object" ? link.target : undefined;
@@ -305,12 +318,11 @@ const buildLayout = (graph: FlowGraph, expanded: boolean, type: TypeSizes) => {
     if (!finite(link.width)) return [];
     const d = toPath(link);
     if (d === null) return [];
-    const id = linkKey(source.id, target.id);
-    touch(source.id, id);
-    touch(target.id, id);
     return [
       {
-        id,
+        id: linkKey(source.id, target.id),
+        source: source.id,
+        target: target.id,
         d,
         width: link.width,
         targetKind: target.kind,
@@ -321,7 +333,7 @@ const buildLayout = (graph: FlowGraph, expanded: boolean, type: TypeSizes) => {
   });
 
   const nameMax = expanded ? EXPANDED_NAME_MAX : NAME_MAX;
-  return { ...placeLabels(nodes, nameMax, type), links, incident };
+  return { ...placeLabels(nodes, nameMax, type), links };
 };
 
 const labelX = (node: PlacedNode) => {
@@ -390,6 +402,18 @@ interface Hot {
   readonly y: number;
 }
 
+/** A ribbon is lit by the cursor on it, or on a node at either end of it. */
+const touches = (link: PlacedLink, hot: Hot) =>
+  hot.kind === "link"
+    ? link.id === hot.id
+    : link.source === hot.id || link.target === hot.id;
+
+const opacityOf = (link: PlacedLink, hot: Hot | null) => {
+  const tone = LINK_TONE[link.targetKind];
+  if (hot === null) return tone.rest;
+  return touches(link, hot) ? tone.lit : DIM;
+};
+
 const scaleOf = (width: number, height: number) =>
   // `meet` fits to the smaller axis; quantizing stops per-pixel re-layouts.
   Math.max(Math.round(Math.min(width / WIDTH, height / HEIGHT) * 20) / 20, 0.2);
@@ -410,14 +434,16 @@ export function Sankey({
 
   const scale = size === null ? ASSUMED_SCALE : scaleOf(size.w, size.h);
   const type = useMemo(() => typeFor(scale), [scale]);
-  const { labelled, links, notes, incident } = useMemo(
+  const { labelled, links, notes } = useMemo(
     () => buildLayout(graph, expanded, type),
     [graph, expanded, type],
   );
 
+  // Not `??=`: the React Compiler skips any component that uses it.
   const boxOf = () => {
-    box.current ??= ref.current?.getBoundingClientRect() ?? null;
-    return box.current;
+    const rect = box.current ?? ref.current?.getBoundingClientRect() ?? null;
+    box.current = rect;
+    return rect;
   };
 
   const at = (clientX: number, clientY: number) => {
@@ -442,13 +468,6 @@ export function Sankey({
       y: (mark.top + mark.bottom) / 2 - (plot?.top ?? 0),
     });
   };
-
-  const litLinks =
-    hot === null
-      ? null
-      : hot.kind === "link"
-        ? new Set([hot.id])
-        : (incident.get(hot.id) ?? new Set<string>());
 
   const hub = labelled.find((node) => node.kind === "hub");
   const hotNode = labelled.find(
@@ -505,13 +524,7 @@ export function Sankey({
                 d={link.d}
                 stroke={LINK_TONE[link.targetKind].stroke}
                 strokeWidth={link.width}
-                strokeOpacity={
-                  litLinks === null
-                    ? LINK_TONE[link.targetKind].rest
-                    : litLinks.has(link.id)
-                      ? LINK_TONE[link.targetKind].lit
-                      : DIM
-                }
+                strokeOpacity={opacityOf(link, hot)}
                 className="transition-[stroke-opacity] duration-150"
               />
             ))}
