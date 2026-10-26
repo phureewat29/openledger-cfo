@@ -1,11 +1,9 @@
 import { cache } from "react";
 
-import { ok } from "@openledger-cfo/openledger";
-
 import type { LedgerLoad } from "~/server/head";
 import { overdueCount } from "~/domain/action";
 import { asOfFor, isoToday, isStale } from "~/domain/period";
-import { ledgerHead, toFailure } from "~/server/head";
+import { asLedgerLoad, ledgerHead } from "~/server/head";
 import { caller } from "~/trpc/server";
 
 export interface Chrome {
@@ -24,20 +22,19 @@ export interface RailBadges {
 export const NO_BADGES: RailBadges = { monitor: 0, ingest: 0 };
 
 /** Enough for the chrome; the panes load their own data. */
-export const loadChrome = cache(async (): Promise<LedgerLoad<Chrome>> => {
+export const loadChrome = cache((): Promise<LedgerLoad<Chrome>> => {
   const today = isoToday();
-  try {
-    const { status, newest } = await ledgerHead();
-    const asOf = asOfFor(newest, today);
-    return ok({
-      asOf,
-      stale: isStale(asOf, today),
-      transactions: status.counts?.transactions ?? 0,
-      accounts: status.counts?.accounts ?? 0,
-    });
-  } catch (error) {
-    return toFailure(error);
-  }
+  return asLedgerLoad(
+    ledgerHead().then(({ status, newest }) => {
+      const asOf = asOfFor(newest, today);
+      return {
+        asOf,
+        stale: isStale(asOf, today),
+        transactions: status.counts?.transactions ?? 0,
+        accounts: status.counts?.accounts ?? 0,
+      };
+    }),
+  );
 });
 
 /**
@@ -46,21 +43,16 @@ export const loadChrome = cache(async (): Promise<LedgerLoad<Chrome>> => {
  * the control plane rather than another `oled` process.
  */
 export const loadRailBadges = cache(
-  async (): Promise<LedgerLoad<RailBadges>> => {
-    try {
-      const [{ status }, reminders] = await Promise.all([
-        ledgerHead(),
-        caller.reminders.list(),
-      ]);
-      return ok({
-        monitor: overdueCount(reminders, isoToday()),
-        ingest:
-          status.files.new +
-          status.files.failed +
-          (status.questions?.open ?? 0),
-      });
-    } catch (error) {
-      return toFailure(error);
-    }
-  },
+  (): Promise<LedgerLoad<RailBadges>> =>
+    asLedgerLoad(
+      Promise.all([ledgerHead(), caller.reminders.list()]).then(
+        ([{ status }, reminders]) => ({
+          monitor: overdueCount(reminders, isoToday()),
+          ingest:
+            status.files.new +
+            status.files.failed +
+            (status.questions?.open ?? 0),
+        }),
+      ),
+    ),
 );

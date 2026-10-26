@@ -3,7 +3,7 @@ import { cache } from "react";
 import type { RouterOutputs } from "@openledger-cfo/api";
 import type { OledErrorKind, Result } from "@openledger-cfo/openledger";
 import { oledCauseOf } from "@openledger-cfo/api";
-import { err } from "@openledger-cfo/openledger";
+import { err, messageOf, ok } from "@openledger-cfo/openledger";
 
 import { caller } from "~/trpc/server";
 
@@ -36,14 +36,17 @@ const REASON: Partial<Record<OledErrorKind, LedgerFailureReason>> = {
  * The connector cause's bare message on purpose: the setup card owns the
  * remedy, and the hint the transport folded in would say the command twice.
  */
-export const toFailure = (error: unknown): LedgerLoad<never> => {
+const toFailure = (error: unknown): LedgerLoad<never> => {
   const oled = oledCauseOf(error);
   return err({
     reason: (oled && REASON[oled.kind]) ?? "unavailable",
-    message:
-      oled?.message ?? (error instanceof Error ? error.message : String(error)),
+    message: oled?.message ?? messageOf(error),
   });
 };
+
+/** A server read as a value: whatever it throws becomes the reason it has none. */
+export const asLedgerLoad = <T>(read: Promise<T>): Promise<LedgerLoad<T>> =>
+  read.then((value) => ok(value), toFailure);
 
 interface LedgerHead {
   readonly status: RouterOutputs["ledger"]["status"];

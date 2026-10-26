@@ -10,7 +10,7 @@ import { FileList } from "~/components/ingest/file-list";
 import { InfoPane } from "~/components/ingest/info-pane";
 import { RunFeed } from "~/components/ingest/run-feed";
 import { SelectionProvider } from "~/components/ingest/selection";
-import { ledgerHead, toFailure } from "~/server/head";
+import { asLedgerLoad, ledgerHead } from "~/server/head";
 import { HydrateClient, prefetch, trpc } from "~/trpc/server";
 
 export const metadata: Metadata = { title: "Ingest · OpenLedger CFO" };
@@ -24,11 +24,8 @@ export default async function IngestPage() {
    * costs no extra spawn) doubles as the health probe: a broken ledger is one
    * setup screen, not four pane-local errors.
    */
-  const probe = await ledgerHead().then(
-    () => null,
-    (cause: unknown) => toFailure(cause),
-  );
-  if (probe !== null && !probe.ok) {
+  const probe = await asLedgerLoad(ledgerHead());
+  if (!probe.ok) {
     return (
       <SetupCard reason={probe.error.reason} message={probe.error.message} />
     );

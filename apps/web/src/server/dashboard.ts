@@ -2,7 +2,6 @@ import { cache } from "react";
 import { groupBy, orderBy } from "es-toolkit";
 
 import type { RouterOutputs } from "@openledger-cfo/api";
-import { ok } from "@openledger-cfo/openledger";
 
 import type { AccountRow } from "~/domain/accounts";
 import type { Baseline } from "~/domain/flows/types";
@@ -41,7 +40,7 @@ import { toPostings } from "~/domain/postings";
 import { weeklyBalance } from "~/domain/series/account";
 import { netWorthSeries, TRAJECTORY_MONTHS } from "~/domain/series/net-worth";
 import { ledgerUpcoming } from "~/domain/upcoming";
-import { ledgerHead, toFailure } from "~/server/head";
+import { asLedgerLoad, ledgerHead } from "~/server/head";
 import { caller } from "~/trpc/server";
 
 /** Wide enough to be "everything"; `report` echoes back the range it used. */
@@ -161,13 +160,9 @@ const lastActivity = (
   return seen;
 };
 
-export const loadDashboard = cache(async (): Promise<LedgerLoad<Dashboard>> => {
-  try {
-    return ok(await buildDashboard());
-  } catch (error) {
-    return toFailure(error);
-  }
-});
+export const loadDashboard = cache(
+  (): Promise<LedgerLoad<Dashboard>> => asLedgerLoad(buildDashboard()),
+);
 
 const buildDashboard = async (): Promise<Dashboard> => {
   const today = isoToday();
