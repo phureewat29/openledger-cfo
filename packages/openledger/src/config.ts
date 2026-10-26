@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, join, parse } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod/v4";
 
 import type { OledError } from "./errors";
@@ -10,15 +10,11 @@ import { err } from "./result";
 
 const WORKSPACE_MARKER = "pnpm-workspace.yaml";
 
-const findWorkspaceRoot = (start: string): string | undefined => {
-  const { root } = parse(start);
-  let dir = start;
-
-  while (true) {
-    if (existsSync(join(dir, WORKSPACE_MARKER))) return dir;
-    if (dir === root) return undefined;
-    dir = dirname(dir);
-  }
+// `dirname` of a filesystem root is that root, which is where the walk stops.
+const findWorkspaceRoot = (dir: string): string | undefined => {
+  if (existsSync(join(dir, WORKSPACE_MARKER))) return dir;
+  const parent = dirname(dir);
+  return parent === dir ? undefined : findWorkspaceRoot(parent);
 };
 
 /**
