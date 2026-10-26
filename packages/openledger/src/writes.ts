@@ -3,11 +3,13 @@ import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { QuestionsAnswerSummary } from "@aquartier/openledger/contract";
+import { EXIT, QuestionsAnswerSummary } from "@aquartier/openledger/contract";
+import { attemptAsync } from "es-toolkit";
 import { z } from "zod/v4";
 
 import type { OledError } from "./errors";
 import type { OledCommandListener, OledLane } from "./exec";
+import type { ListPage } from "./ndjson";
 import type { Result } from "./result";
 import type {
   AccountAdjustResult,
@@ -42,9 +44,10 @@ import type {
   TransactionUpdateInput,
   TransactionUpdateResult,
 } from "./schemas";
+import { parseAs } from "./errors";
 import { formatOledCommand, runOled, runOledConfig, toFlagArgs } from "./exec";
 import { parseNdjsonRows, parseSingle } from "./ndjson";
-import { err, ok } from "./result";
+import { andThen, err, map, ok } from "./result";
 import {
   accountAdjustResultSchema,
   accountCreatedResultSchema,
@@ -81,10 +84,11 @@ import {
   transactionUpdateResultSchema,
 } from "./schemas";
 
-const toInvalidInput = (error: z.ZodError, label: string): OledError => ({
-  kind: "invalid",
-  message: `${label}: ${z.prettifyError(error)}`,
-});
+const validate = <T>(
+  schema: z.ZodType<T>,
+  input: unknown,
+  label: string,
+): Result<T, OledError> => parseAs(schema, input, "invalid", label);
 
 const malformedFileId = (label: string, fileId: string): OledError => ({
   kind: "invalid",
@@ -117,10 +121,9 @@ const toBatchOutcome = <
   TRow extends { ok: boolean },
   TSummary extends { failed: number },
 >(
-  page: { rows: TRow[]; summary: TSummary | undefined },
+  { rows, summary }: ListPage<TRow, TSummary>,
   label: string,
 ): Result<BatchOutcome<TRow, TSummary>, OledError> => {
-  const { rows, summary } = page;
   if (!summary) {
     return err<OledError>({
       kind: "parse_failed",
@@ -133,7 +136,7 @@ const toBatchOutcome = <
     return err<OledError>({
       kind: "partial",
       message: `${label}: ${String(summary.failed)} of ${String(rows.length)} rows failed`,
-      exitCode: 7,
+      exitCode: EXIT.PARTIAL,
       failures: failed,
     });
   }
@@ -238,7 +241,7 @@ const DONE_FLAGS = {
   closingBalance: "--closing-balance",
 } as const satisfies Record<keyof IngestDoneOptions, string>;
 
-export interface WritesOptions {
+interface WritesOptions {
   configPath: string;
   onCommand?: OledCommandListener;
 }
@@ -256,15 +259,13 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
   /** The shared tail of every single-row command: run, parse, stamp the command. */
   const runSingle = async <T extends object>(
     args: string[],
-    schema: Parameters<typeof parseSingle<T>>[0],
+    schema: z.ZodType<T>,
     opts: Parameters<typeof exec>[1] = {},
   ): Promise<Result<WithCommand<T>, OledError>> => {
-    const out = await exec(args, opts);
-    if (!out.ok) return out;
-
-    const parsed = parseSingle(schema, out.value);
-    if (!parsed.ok) return parsed;
-    return ok({ ...parsed.value, command: toCommand(args) });
+    const parsed = andThen(await exec(args, opts), (stdout) =>
+      parseSingle(schema, stdout),
+    );
+    return map(parsed, (value) => ({ ...value, command: toCommand(args) }));
   };
 
   /**
@@ -275,21 +276,21 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
   const configInit = async (
     input: ConfigInitInput,
   ): Promise<Result<ConfigInitResult, OledError>> => {
-    const validated = configInitInputSchema.safeParse(input);
-    if (!validated.success)
-      return err(toInvalidInput(validated.error, "config init"));
+    const validated = validate(configInitInputSchema, input, "config init");
+    if (!validated.ok) return validated;
 
     const out = await runOledConfig(
       [
         "config",
-        validated.data.configPath,
+        validated.value.configPath,
         "--init",
-        ...toFlagArgs(CONFIG_FLAGS, validated.data),
+        ...toFlagArgs(CONFIG_FLAGS, validated.value),
       ],
       { onCommand },
     );
-    if (!out.ok) return out;
-    return parseSingle(configInitResultSchema, out.value);
+    return andThen(out, (stdout) =>
+      parseSingle(configInitResultSchema, stdout),
+    );
   };
 
   /**
@@ -301,11 +302,10 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
   const configSet = async (
     input: ConfigSetInput,
   ): Promise<Result<ConfigView, OledError>> => {
-    const validated = configSetInputSchema.safeParse(input);
-    if (!validated.success)
-      return err(toInvalidInput(validated.error, "config set"));
+    const validated = validate(configSetInputSchema, input, "config set");
+    if (!validated.ok) return validated;
 
-    const flags = toFlagArgs(CONFIG_SET_FLAGS, validated.data);
+    const flags = toFlagArgs(CONFIG_SET_FLAGS, validated.value);
     if (flags.length === 0) {
       return err<OledError>({
         kind: "invalid",
@@ -323,8 +323,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     const out = await runOledConfig(["config", configPath, ...flags], {
       onCommand,
     });
-    if (!out.ok) return out;
-    return parseSingle(configViewSchema, out.value);
+    return andThen(out, (stdout) => parseSingle(configViewSchema, stdout));
   };
 
   const accountsCreateBatch = async (
@@ -332,55 +331,56 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
   ): Promise<
     Result<BatchOutcome<AccountCreateResult, AccountCreateSummary>, OledError>
   > => {
-    const validated = z.array(accountCreateInputSchema).min(1).safeParse(rows);
-    if (!validated.success) {
-      return err(toInvalidInput(validated.error, "accounts create"));
-    }
+    const validated = validate(
+      z.array(accountCreateInputSchema).min(1),
+      rows,
+      "accounts create",
+    );
+    if (!validated.ok) return validated;
 
     // The batch form reads a file path; unlike `ingest commit` it has no stdin mode.
     const file = join(tmpdir(), `oled-accounts-${randomUUID()}.ndjson`);
-    try {
-      await writeFile(file, toNdjson(validated.data), "utf8");
-    } catch (cause) {
+    const [stageError] = await attemptAsync<void, Error>(() =>
+      writeFile(file, toNdjson(validated.value), "utf8"),
+    );
+    if (stageError !== null) {
       return err<OledError>({
         kind: "cli_error",
-        message: `accounts create: could not stage ${file}: ${String(cause)}`,
+        message: `accounts create: could not stage ${file}: ${String(stageError)}`,
       });
     }
 
-    try {
-      const out = await exec(["accounts", "create", "--input", file], {
-        allowPartial: true,
-      });
-      if (!out.ok) return out;
-
-      const page = parseNdjsonRows(
+    const out = await exec(["accounts", "create", "--input", file], {
+      allowPartial: true,
+    }).finally(() => rm(file, { force: true }));
+    const page = andThen(out, (stdout) =>
+      parseNdjsonRows(
         accountCreateResultSchema,
-        out.value,
+        stdout,
         accountCreateSummarySchema,
-      );
-      if (!page.ok) return page;
-      return toBatchOutcome(page.value, "accounts create");
-    } finally {
-      await rm(file, { force: true });
-    }
+      ),
+    );
+    return andThen(page, (value) => toBatchOutcome(value, "accounts create"));
   };
 
   const merchantsUpsert = async (
     input: MerchantUpsertInput,
   ): Promise<Result<MerchantUpsertResult, OledError>> => {
-    const validated = merchantUpsertInputSchema.safeParse(input);
-    if (!validated.success) {
-      return err(toInvalidInput(validated.error, "merchants upsert"));
-    }
+    const validated = validate(
+      merchantUpsertInputSchema,
+      input,
+      "merchants upsert",
+    );
+    if (!validated.ok) return validated;
 
     const out = await exec([
       "merchants",
       "upsert",
-      ...toFlagArgs(MERCHANT_FLAGS, validated.data),
+      ...toFlagArgs(MERCHANT_FLAGS, validated.value),
     ]);
-    if (!out.ok) return out;
-    return parseSingle(merchantUpsertResultSchema, out.value);
+    return andThen(out, (stdout) =>
+      parseSingle(merchantUpsertResultSchema, stdout),
+    );
   };
 
   /**
@@ -415,9 +415,12 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
   ): Promise<
     Result<WithCommand<BatchOutcome<IngestResult, IngestSummary>>, OledError>
   > => {
-    const validated = z.array(ingestRowInputSchema).min(1).safeParse(rows);
-    if (!validated.success)
-      return err(toInvalidInput(validated.error, "ingest commit"));
+    const validated = validate(
+      z.array(ingestRowInputSchema).min(1),
+      rows,
+      "ingest commit",
+    );
+    if (!validated.ok) return validated;
     if (opts.fileId !== undefined && !FILE_ID_PATTERN.test(opts.fileId)) {
       return err(malformedFileId("ingest commit", opts.fileId));
     }
@@ -429,21 +432,16 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     ];
 
     const out = await exec(args, {
-      stdin: toNdjson(validated.data),
+      stdin: toNdjson(validated.value),
       allowPartial: true,
     });
-    if (!out.ok) return out;
-
-    const page = parseNdjsonRows(
-      ingestResultSchema,
-      out.value,
-      ingestSummarySchema,
+    const page = andThen(out, (stdout) =>
+      parseNdjsonRows(ingestResultSchema, stdout, ingestSummarySchema),
     );
-    if (!page.ok) return page;
-
-    const outcome = toBatchOutcome(page.value, "ingest commit");
-    if (!outcome.ok) return outcome;
-    return ok({ ...outcome.value, command: toCommand(args) });
+    const outcome = andThen(page, (value) =>
+      toBatchOutcome(value, "ingest commit"),
+    );
+    return map(outcome, (value) => ({ ...value, command: toCommand(args) }));
   };
 
   const ingestDone = async (
@@ -505,10 +503,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     opts: { also?: string[] } = {},
   ): Promise<
     Result<
-      WithCommand<{
-        rows: QuestionAnswerRow[];
-        summary: QuestionsAnswerSummary | undefined;
-      }>,
+      WithCommand<ListPage<QuestionAnswerRow, QuestionsAnswerSummary>>,
       OledError
     >
   > => {
@@ -534,20 +529,10 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       ...(also.length === 0 ? [] : ["--also", also.join(",")]),
     ];
 
-    const out = await exec(args);
-    if (!out.ok) return out;
-
-    const page = parseNdjsonRows(
-      questionAnswerRowSchema,
-      out.value,
-      QuestionsAnswerSummary,
+    const page = andThen(await exec(args), (stdout) =>
+      parseNdjsonRows(questionAnswerRowSchema, stdout, QuestionsAnswerSummary),
     );
-    if (!page.ok) return page;
-    return ok({
-      rows: page.value.rows,
-      summary: page.value.summary,
-      command: toCommand(args),
-    });
+    return map(page, (value) => ({ ...value, command: toCommand(args) }));
   };
 
   const questionDefer = async (
@@ -569,15 +554,17 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
   const transactionAdd = async (
     input: TransactionAddInput,
   ): Promise<Result<WithCommand<TransactionAddResult>, OledError>> => {
-    const validated = transactionAddInputSchema.safeParse(input);
-    if (!validated.success) {
-      return err(toInvalidInput(validated.error, "transactions add"));
-    }
+    const validated = validate(
+      transactionAddInputSchema,
+      input,
+      "transactions add",
+    );
+    if (!validated.ok) return validated;
 
     const args = [
       "transactions",
       "add",
-      ...toFlagArgs(TRANSACTION_ADD_FLAGS, validated.data),
+      ...toFlagArgs(TRANSACTION_ADD_FLAGS, validated.value),
     ];
     return runSingle(args, transactionAddResultSchema);
   };
@@ -589,16 +576,18 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     if (id.trim() === "") {
       return err(emptyInput("transactions update", "transaction id"));
     }
-    const validated = transactionUpdateInputSchema.safeParse(patch);
-    if (!validated.success) {
-      return err(toInvalidInput(validated.error, "transactions update"));
-    }
+    const validated = validate(
+      transactionUpdateInputSchema,
+      patch,
+      "transactions update",
+    );
+    if (!validated.ok) return validated;
 
     const args = [
       "transactions",
       "update",
       id,
-      ...toFlagArgs(TRANSACTION_UPDATE_FLAGS, validated.data),
+      ...toFlagArgs(TRANSACTION_UPDATE_FLAGS, validated.value),
     ];
     return runSingle(args, transactionUpdateResultSchema);
   };
@@ -619,18 +608,20 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     from: string;
     to: string;
   }): Promise<Result<WithCommand<RecategorizeResult>, OledError>> => {
-    const validated = accountPairSchema.safeParse(input);
-    if (!validated.success) {
-      return err(toInvalidInput(validated.error, "transactions recategorize"));
-    }
+    const validated = validate(
+      accountPairSchema,
+      input,
+      "transactions recategorize",
+    );
+    if (!validated.ok) return validated;
 
     const args = [
       "transactions",
       "recategorize",
       "--filter-account",
-      validated.data.from,
+      validated.value.from,
       "--set-account",
-      validated.data.to,
+      validated.value.to,
     ];
     return runSingle(args, recategorizeResultSchema);
   };
@@ -664,15 +655,17 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
   const accountsCreate = async (
     input: AccountCreateInput,
   ): Promise<Result<WithCommand<AccountCreatedResult>, OledError>> => {
-    const validated = accountCreateInputSchema.safeParse(input);
-    if (!validated.success) {
-      return err(toInvalidInput(validated.error, "accounts create"));
-    }
+    const validated = validate(
+      accountCreateInputSchema,
+      input,
+      "accounts create",
+    );
+    if (!validated.ok) return validated;
 
     const args = [
       "accounts",
       "create",
-      ...toFlagArgs(ACCOUNT_CREATE_FLAGS, validated.data),
+      ...toFlagArgs(ACCOUNT_CREATE_FLAGS, validated.value),
     ];
     return runSingle(args, accountCreatedResultSchema);
   };
@@ -684,16 +677,18 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     if (id.trim() === "") {
       return err(emptyInput("accounts update", "account id"));
     }
-    const validated = accountUpdateInputSchema.safeParse(patch);
-    if (!validated.success) {
-      return err(toInvalidInput(validated.error, "accounts update"));
-    }
+    const validated = validate(
+      accountUpdateInputSchema,
+      patch,
+      "accounts update",
+    );
+    if (!validated.ok) return validated;
 
     const args = [
       "accounts",
       "update",
       id,
-      ...toFlagArgs(ACCOUNT_UPDATE_FLAGS, validated.data),
+      ...toFlagArgs(ACCOUNT_UPDATE_FLAGS, validated.value),
     ];
     return runSingle(args, accountUpdateResultSchema);
   };
@@ -702,18 +697,16 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     from: string;
     to: string;
   }): Promise<Result<WithCommand<AccountMergeResult>, OledError>> => {
-    const validated = accountPairSchema.safeParse(input);
-    if (!validated.success) {
-      return err(toInvalidInput(validated.error, "accounts merge"));
-    }
+    const validated = validate(accountPairSchema, input, "accounts merge");
+    if (!validated.ok) return validated;
 
     const args = [
       "accounts",
       "merge",
       "--from",
-      validated.data.from,
+      validated.value.from,
       "--to",
-      validated.data.to,
+      validated.value.to,
       "--yes",
     ];
     return runSingle(args, accountMergeResultSchema);
