@@ -58,7 +58,18 @@ export const clampDay = (monthKey: string, day: number): number =>
   Math.min(day, daysInMonth(monthKey));
 
 export const lastDayOf = (monthKey: string): string =>
-  `${monthKey}-${String(daysInMonth(monthKey)).padStart(2, "0")}`;
+  `${monthKey}-${pad(daysInMonth(monthKey))}`;
+
+/**
+ * Where the ledger's own story ends: its newest activity, or today for a ledger
+ * kept current. A post-dated row never carries it past today.
+ */
+export const asOfFor = (newest: string | undefined, today: string): string =>
+  newest !== undefined && newest < today ? newest : today;
+
+/** True when the ledger's story ends before the current month began. */
+export const isStale = (asOf: string, today: string): boolean =>
+  monthOf(asOf) !== monthOf(today);
 
 /** A year of history: long enough for a trailing average, short enough to still describe now. */
 const WINDOW_MONTHS = 12;

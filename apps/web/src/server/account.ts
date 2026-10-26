@@ -14,6 +14,7 @@ import {
   interestLegsFor,
 } from "~/domain/loans";
 import {
+  asOfFor,
   clampDay,
   dayOf,
   firstDayOf,
@@ -352,8 +353,7 @@ export const loadAccount = cache(
     const rows = await caller.ledger.transactions.listAll({ account: id });
 
     const today = isoToday();
-    const newest = span(rows).last;
-    const asOf = newest !== undefined && newest < today ? newest : today;
+    const asOf = asOfFor(span(rows).last, today);
     const { from, to, months } = windowOf(asOf);
     // Totals run to the present, so the columns cover the postings listed below them.
     const axis = monthsThrough(asOf);

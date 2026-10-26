@@ -4,7 +4,7 @@ import { ok } from "@openledger-cfo/openledger";
 
 import type { LedgerLoad } from "~/server/head";
 import { overdueCount } from "~/domain/action";
-import { isoToday, monthOf } from "~/domain/period";
+import { asOfFor, isoToday, isStale } from "~/domain/period";
 import { ledgerHead, toFailure } from "~/server/head";
 import { caller } from "~/trpc/server";
 
@@ -28,11 +28,10 @@ export const loadChrome = cache(async (): Promise<LedgerLoad<Chrome>> => {
   const today = isoToday();
   try {
     const { status, newest } = await ledgerHead();
-    // Clamped like the dashboard's, so both sides run the same staleness test.
-    const asOf = newest !== undefined && newest < today ? newest : today;
+    const asOf = asOfFor(newest, today);
     return ok({
       asOf,
-      stale: monthOf(asOf) !== monthOf(today),
+      stale: isStale(asOf, today),
       transactions: status.counts?.transactions ?? 0,
       accounts: status.counts?.accounts ?? 0,
     });

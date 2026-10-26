@@ -27,8 +27,10 @@ import { runInsights } from "~/domain/insights/engine";
 import { selectRuleInput } from "~/domain/insights/select";
 import { MAX_CLOSED_LOANS } from "~/domain/loans";
 import {
+  asOfFor,
   firstDayOf,
   isoToday,
+  isStale,
   monthOf,
   shiftDays,
   shiftMonth,
@@ -175,7 +177,7 @@ const buildDashboard = async (): Promise<Dashboard> => {
     ledgerHead(),
     caller.ledger.accounts.list(),
   ]);
-  const asOf = newest !== undefined && newest < today ? newest : today;
+  const asOf = asOfFor(newest, today);
   // The one trailing window every figure on this page is measured over.
   const windowStart = windowOf(asOf).from;
 
@@ -322,7 +324,7 @@ const buildDashboard = async (): Promise<Dashboard> => {
 
   return {
     today,
-    stale: monthOf(asOf) !== monthOf(today),
+    stale: isStale(asOf, today),
     input,
     insights: runInsights(input),
     insightState: Object.fromEntries(
