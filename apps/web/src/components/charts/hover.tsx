@@ -16,23 +16,16 @@ const STEP: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1 };
  */
 export const useSnapIndex = (count: number) => {
   const [index, setIndex] = useState<number | null>(null);
-  const current = useRef<number | null>(null);
   const box = useRef<DOMRect | null>(null);
   const clientX = useRef(0);
   const frame = useRef(0);
-
-  const commit = (next: number | null) => {
-    if (next === current.current) return;
-    current.current = next;
-    setIndex(next);
-  };
 
   const snap = () => {
     frame.current = 0;
     const rect = box.current;
     if (rect === null || rect.width === 0) return;
     const share = (clientX.current - rect.left) / rect.width;
-    commit(clamp(Math.round(share * (count - 1)), 0, count - 1));
+    setIndex(clamp(Math.round(share * (count - 1)), 0, count - 1));
   };
 
   const cancel = () => {
@@ -45,33 +38,35 @@ export const useSnapIndex = (count: number) => {
       box.current = event.currentTarget.getBoundingClientRect();
     },
     onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
-      box.current ??= event.currentTarget.getBoundingClientRect();
+      // Not `??=`: the React Compiler skips any hook that uses it.
+      const rect = box.current ?? event.currentTarget.getBoundingClientRect();
+      box.current = rect;
       clientX.current = event.clientX;
       if (frame.current === 0) frame.current = requestAnimationFrame(snap);
     },
     onPointerLeave: () => {
       cancel();
       box.current = null;
-      commit(null);
+      setIndex(null);
     },
-    onFocus: () => commit(count - 1),
+    onFocus: () => setIndex(count - 1),
     onBlur: () => {
       cancel();
-      commit(null);
+      setIndex(null);
     },
     onKeyDown: (event: React.KeyboardEvent) => {
       // Escape only belongs to the chart while it has something to clear;
       // otherwise it is the enclosing dialog's to act on.
       if (event.key === "Escape") {
-        if (current.current === null) return;
+        if (index === null) return;
         event.preventDefault();
-        commit(null);
+        setIndex(null);
         return;
       }
       const step = STEP[event.key];
       if (step === undefined) return;
       event.preventDefault();
-      commit(clamp((current.current ?? count - 1) + step, 0, count - 1));
+      setIndex((current) => clamp((current ?? count - 1) + step, 0, count - 1));
     },
   };
 
