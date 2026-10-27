@@ -1,7 +1,10 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { attemptAsync, range } from "es-toolkit";
 
+import type { Result } from "@openledger-cfo/openledger";
 import { ledger } from "@openledger-cfo/api";
+import { err, ok } from "@openledger-cfo/openledger";
 
 import { fail } from "~/app/api/ingest/reply";
 import { UPLOAD_TYPE_ERROR, uploadExtensionOf } from "~/domain/ingest-files";
@@ -32,30 +35,28 @@ const errnoOf = (cause: unknown): string | undefined =>
 /**
  * `wx` is the claim: the first writer of a name wins and a second dropped copy
  * gets its own file rather than overwriting a statement waiting to be ingested.
+ * The name written, or undefined once every suffix is taken.
  */
 const writeUnique = async (
   dir: string,
   stem: string,
   extension: string,
   bytes: Buffer,
-): Promise<string | undefined> => {
-  for (let attempt = 0; attempt <= MAX_SUFFIX; attempt++) {
+): Promise<Result<string | undefined, string>> => {
+  for (const suffix of range(MAX_SUFFIX + 1)) {
     const name =
-      attempt === 0
-        ? `${stem}.${extension}`
-        : `${stem}-${attempt}.${extension}`;
-    try {
-      await writeFile(join(dir, name), bytes, { flag: "wx" });
-      return name;
-    } catch (failure) {
-      if (errnoOf(failure) !== "EEXIST") {
-        throw failure instanceof Error
-          ? failure
-          : new Error(`Could not write ${name}`);
-      }
+      suffix === 0 ? `${stem}.${extension}` : `${stem}-${suffix}.${extension}`;
+    const [failure] = await attemptAsync<void, unknown>(() =>
+      writeFile(join(dir, name), bytes, { flag: "wx" }),
+    );
+    if (failure === null) return ok(name);
+    if (errnoOf(failure) !== "EEXIST") {
+      return err(
+        failure instanceof Error ? failure.message : `Could not write ${name}`,
+      );
     }
   }
-  return undefined;
+  return ok(undefined);
 };
 
 export async function POST(request: Request) {
@@ -91,17 +92,20 @@ export async function POST(request: Request) {
     // The validated extension is written back lowercase so the ledger's walk
     // sees one spelling of each name.
     const stem = name.slice(0, name.length - extension.length - 1);
-    const relPath = await writeUnique(
+    const written = await writeUnique(
       dir.value,
       stem,
       extension,
       Buffer.from(await file.arrayBuffer()),
     );
-    if (relPath === undefined) {
+    if (!written.ok) {
+      return fail(500, written.error);
+    }
+    if (written.value === undefined) {
       return fail(409, `${name} already exists, and so do its 20 copies`);
     }
 
-    return Response.json({ ok: true, relPath });
+    return Response.json({ ok: true, relPath: written.value });
   } catch (cause) {
     return fail(500, cause instanceof Error ? cause.message : "Upload failed");
   }
