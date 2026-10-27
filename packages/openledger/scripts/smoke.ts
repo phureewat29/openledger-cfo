@@ -19,64 +19,82 @@ interface Check {
   detail: string;
 }
 
-const checks: Check[] = [];
-
-const record = (name: string, ok: boolean, detail = ""): boolean => {
-  checks.push({ name, ok, detail });
-  return ok;
-};
-
 const describeError = (error: OledError): string =>
   `${error.kind}: ${error.message}`;
 
-/** Asserts a Result succeeded, recording the CLI error verbatim when it did not. */
-const expectOk = <T>(
-  name: string,
-  result: Result<T, OledError>,
-): T | undefined => {
-  if (!result.ok) {
-    record(name, false, describeError(result.error));
-    return undefined;
-  }
-  record(name, true);
-  return result.value;
-};
+/** One run's verdicts: every expectation records into the list it closes over. */
+const createChecklist = () => {
+  const checks: Check[] = [];
 
-const expectEqual = (
-  name: string,
-  actual: unknown,
-  expected: unknown,
-): void => {
-  const ok = JSON.stringify(actual) === JSON.stringify(expected);
-  record(
-    name,
-    ok,
-    ok
-      ? ""
-      : `expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
-  );
-};
+  const record = (name: string, ok: boolean, detail = ""): boolean => {
+    checks.push({ name, ok, detail });
+    return ok;
+  };
 
-const expectIncludes = (name: string, actual: string, needle: string): void => {
-  const ok = actual.includes(needle);
-  record(name, ok, ok ? "" : `expected ${needle} in ${actual}`);
-};
+  /** Asserts a Result succeeded, recording the CLI error verbatim when it did not. */
+  const expectOk = <T>(
+    name: string,
+    result: Result<T, OledError>,
+  ): T | undefined => {
+    if (!result.ok) {
+      record(name, false, describeError(result.error));
+      return undefined;
+    }
+    record(name, true);
+    return result.value;
+  };
 
-const expectErrorKind = <T>(
-  name: string,
-  result: Result<T, OledError>,
-  kinds: OledError["kind"][],
-): void => {
-  if (result.ok) {
-    record(name, false, "expected a failure, got success");
-    return;
-  }
-  const ok = kinds.includes(result.error.kind);
-  record(
-    name,
-    ok,
-    ok ? "" : `expected ${kinds.join("|")}, got ${describeError(result.error)}`,
-  );
+  const expectEqual = (
+    name: string,
+    actual: unknown,
+    expected: unknown,
+  ): void => {
+    const ok = JSON.stringify(actual) === JSON.stringify(expected);
+    record(
+      name,
+      ok,
+      ok
+        ? ""
+        : `expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+    );
+  };
+
+  const expectIncludes = (
+    name: string,
+    actual: string,
+    needle: string,
+  ): void => {
+    const ok = actual.includes(needle);
+    record(name, ok, ok ? "" : `expected ${needle} in ${actual}`);
+  };
+
+  const expectErrorKind = <T>(
+    name: string,
+    result: Result<T, OledError>,
+    kinds: OledError["kind"][],
+  ): void => {
+    if (result.ok) {
+      record(name, false, "expected a failure, got success");
+      return;
+    }
+    const ok = kinds.includes(result.error.kind);
+    record(
+      name,
+      ok,
+      ok
+        ? ""
+        : `expected ${kinds.join("|")}, got ${describeError(result.error)}`,
+    );
+  };
+
+  return {
+    checks,
+    record,
+    expectOk,
+    expectEqual,
+    expectIncludes,
+    expectErrorKind,
+  };
 };
 
 const CHART = [
@@ -212,7 +230,7 @@ const STATEMENT_TAIL = [
 
 const CARD_CLOSING_BALANCE = 300;
 
-const printTable = (): void => {
+const printTable = (checks: Check[]): void => {
   const nameWidth = Math.max(...checks.map((check) => check.name.length));
   for (const check of checks) {
     const status = check.ok ? "PASS" : "FAIL";
@@ -227,7 +245,15 @@ const printTable = (): void => {
   );
 };
 
-const main = async (): Promise<void> => {
+const main = async (): Promise<Check[]> => {
+  const {
+    checks,
+    record,
+    expectOk,
+    expectEqual,
+    expectIncludes,
+    expectErrorKind,
+  } = createChecklist();
   await rm(LEDGER_DIR, { recursive: true, force: true });
 
   const oled = createOpenLedger({ configPath: CONFIG_PATH });
@@ -778,7 +804,7 @@ const main = async (): Promise<void> => {
     ["partial"],
   );
 
-  // --- The correction verbs the CFO agent drives, on probe-* accounts. ---
+  // The correction verbs the CFO agent drives, on probe-* accounts.
 
   const createdA = expectOk(
     "accounts.create single via flags",
@@ -1010,9 +1036,11 @@ const main = async (): Promise<void> => {
     await oled.accounts.delete("thb:expense:probe-x"),
     ["invalid"],
   );
+
+  return checks;
 };
 
-await main();
-printTable();
+const results = await main();
+printTable(results);
 
-if (checks.some((check) => !check.ok)) process.exitCode = 1;
+if (results.some((check) => !check.ok)) process.exitCode = 1;
