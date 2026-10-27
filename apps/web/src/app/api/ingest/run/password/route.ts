@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 
+import { fail } from "~/app/api/ingest/reply";
 import { skipWaiting, submitPassword } from "~/server/ingest-run";
 
 export const dynamic = "force-dynamic";
@@ -17,13 +18,9 @@ export async function POST(request: Request) {
   const body: unknown = await request.json().catch(() => null);
   const parsed = BodySchema.safeParse(body);
   if (!parsed.success) {
-    return Response.json(
-      {
-        ok: false,
-        error:
-          "The password request was malformed — type the password again and resubmit.",
-      },
-      { status: 400 },
+    return fail(
+      400,
+      "The password request was malformed — type the password again and resubmit.",
     );
   }
 
@@ -31,11 +28,6 @@ export async function POST(request: Request) {
     "skip" in parsed.data
       ? await skipWaiting()
       : await submitPassword(parsed.data.password);
-  if (!applied.ok) {
-    return Response.json(
-      { ok: false, error: applied.error.message },
-      { status: 404 },
-    );
-  }
+  if (!applied.ok) return fail(404, applied.error.message);
   return Response.json({ ok: true });
 }

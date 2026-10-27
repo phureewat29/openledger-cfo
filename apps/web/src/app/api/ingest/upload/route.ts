@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { ledger } from "@openledger-cfo/api";
 
+import { fail } from "~/app/api/ingest/reply";
+
 const MAX_BYTES = 30 * 1024 * 1024;
 
 /** What `oled ingest prepare` can read: a statement PDF or a photo of one. */
@@ -10,9 +12,6 @@ const EXTENSIONS = new Set(["pdf", "png", "jpg", "jpeg", "webp"]);
 
 /** Names collide when the same statement is dropped twice; past this it is a loop. */
 const MAX_SUFFIX = 20;
-
-const fail = (status: number, error: string) =>
-  Response.json({ ok: false, error }, { status });
 
 const extensionOf = (name: string): string | undefined => {
   const dot = name.lastIndexOf(".");

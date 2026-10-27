@@ -6,6 +6,7 @@ import type { OledErrorKind } from "@openledger-cfo/openledger";
 import { FILE_ID_PATTERN, ledger } from "@openledger-cfo/api";
 
 import type { IngestFile } from "~/domain/ingest-files";
+import { fail } from "~/app/api/ingest/reply";
 
 /**
  * How a row leaves the queue, by the status it was listed with. A file the
@@ -33,9 +34,6 @@ const DROP_STATUS: Partial<Record<OledErrorKind, number>> = {
   not_found: 404,
   invalid: 400,
 };
-
-const fail = (status: number, error: string) =>
-  Response.json({ ok: false, error }, { status });
 
 export async function DELETE(request: Request) {
   try {

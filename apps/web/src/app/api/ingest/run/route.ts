@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 
 import type { RunScope, StartFailure } from "~/server/ingest-run";
+import { fail } from "~/app/api/ingest/reply";
 import { RUN_MODES } from "~/domain/ingest-run";
 import { listEntries } from "~/server/ingest-journal";
 import { cancelRun, readRun, startRun } from "~/server/ingest-run";
@@ -30,9 +31,6 @@ const START_STATUS: Record<StartFailure, number> = {
   busy: 409,
   unavailable: 503,
 };
-
-const fail = (status: number, error: string) =>
-  Response.json({ ok: false, error }, { status });
 
 export async function POST(request: Request) {
   const body: unknown = await request.json().catch(() => null);
