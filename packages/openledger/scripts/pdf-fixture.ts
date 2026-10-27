@@ -4,6 +4,8 @@
  * addresses bytes, and a multi-byte character would shift every offset after it.
  */
 
+import { range } from "es-toolkit";
+
 const WIDTH = 612;
 const HEIGHT = 792;
 
@@ -36,9 +38,8 @@ const streamObject = (content: string): string =>
 
 // 20 lines clears the character bar that decides a page carries a real text layer.
 const pageContent = (page: number): string => {
-  const lines = Array.from(
-    { length: 20 },
-    (_, line) =>
+  const lines = range(20).map(
+    (line) =>
       `(page${String(page)} line ${String(line).padStart(2, "0")} 1234.56 THB DEBIT ACME) Tj T*\n`,
   );
   return `BT /F1 11 Tf 36 756 Td 14 TL\n${lines.join("")}ET\n`;
@@ -48,23 +49,19 @@ const pageContent = (page: number): string => {
 export const textPdf = (pageCount: number): Buffer => {
   const firstPage = 3;
   const fontNumber = firstPage + pageCount * 2;
-  const kids = Array.from(
-    { length: pageCount },
-    (_, index) => `${String(firstPage + index * 2)} 0 R`,
-  ).join(" ");
+  const pages = range(pageCount);
+  const kids = pages
+    .map((index) => `${String(firstPage + index * 2)} 0 R`)
+    .join(" ");
 
-  const objects = [
+  return buildPdf([
     "<</Type/Catalog/Pages 2 0 R>>",
     `<</Type/Pages/Kids[${kids}]/Count ${String(pageCount)}>>`,
-  ];
-  for (let index = 0; index < pageCount; index++) {
-    objects.push(
+    ...pages.flatMap((index) => [
       `<</Type/Page/Parent 2 0 R/MediaBox[0 0 ${String(WIDTH)} ${String(HEIGHT)}]` +
         `/Resources<</Font<</F1 ${String(fontNumber)} 0 R>>>>/Contents ${String(firstPage + index * 2 + 1)} 0 R>>`,
-    );
-    objects.push(streamObject(pageContent(index + 1)));
-  }
-  objects.push("<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>");
-
-  return buildPdf(objects);
+      streamObject(pageContent(index + 1)),
+    ]),
+    "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
+  ]);
 };
