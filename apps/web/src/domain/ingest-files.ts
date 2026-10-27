@@ -21,6 +21,34 @@ export const WORKABLE = new Set<IngestFile["status"]>([
 /** Closed either way — and closing deletes the extraction cache with it. */
 export const SETTLED = new Set<IngestFile["status"]>(["ingested", "failed"]);
 
+/** What `oled ingest prepare` can read: a statement PDF or a photo of one. */
+const UPLOAD_EXTENSIONS: ReadonlySet<string> = new Set([
+  "pdf",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+]);
+
+/** The file picker's `accept` list, spelled from the set the route enforces. */
+export const UPLOAD_ACCEPT = [...UPLOAD_EXTENSIONS]
+  .map((extension) => `.${extension}`)
+  .join(",");
+
+export const UPLOAD_TYPE_ERROR =
+  "Only PDF, PNG, JPG and WEBP files can be ingested.";
+
+/**
+ * A name's extension, lowercased, when the ledger can read it. A leading dot
+ * marks a hidden file, not an extension.
+ */
+export const uploadExtensionOf = (name: string): string | undefined => {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return undefined;
+  const extension = name.slice(dot + 1).toLowerCase();
+  return UPLOAD_EXTENSIONS.has(extension) ? extension : undefined;
+};
+
 /** Encrypted and untouched: nothing can read it until the operator unlocks it. */
 export const isLocked = (row: IngestFile): boolean =>
   row.encrypted && row.status === "new";

@@ -4,19 +4,12 @@ import { join } from "node:path";
 import { ledger } from "@openledger-cfo/api";
 
 import { fail } from "~/app/api/ingest/reply";
+import { UPLOAD_TYPE_ERROR, uploadExtensionOf } from "~/domain/ingest-files";
 
 const MAX_BYTES = 30 * 1024 * 1024;
 
-/** What `oled ingest prepare` can read: a statement PDF or a photo of one. */
-const EXTENSIONS = new Set(["pdf", "png", "jpg", "jpeg", "webp"]);
-
 /** Names collide when the same statement is dropped twice; past this it is a loop. */
 const MAX_SUFFIX = 20;
-
-const extensionOf = (name: string): string | undefined => {
-  const dot = name.lastIndexOf(".");
-  return dot <= 0 ? undefined : name.slice(dot + 1).toLowerCase();
-};
 
 /**
  * The upload names a file in the ledger's data dir, so the browser's string is
@@ -80,9 +73,9 @@ export async function POST(request: Request) {
       return fail(413, "That file is larger than the 30 MB limit.");
     }
 
-    const extension = extensionOf(file.name);
-    if (extension === undefined || !EXTENSIONS.has(extension)) {
-      return fail(415, "Only PDF, PNG, JPG and WEBP files can be ingested.");
+    const extension = uploadExtensionOf(file.name);
+    if (extension === undefined) {
+      return fail(415, UPLOAD_TYPE_ERROR);
     }
 
     const name = safeName(file.name);
