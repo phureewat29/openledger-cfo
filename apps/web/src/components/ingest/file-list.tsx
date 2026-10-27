@@ -175,32 +175,24 @@ export function FileList({
     );
   };
 
-  const closeFiles = useMutation({
-    mutationFn: async (targets: readonly IngestFile[]) => {
-      const failures: string[] = [];
-      for (const row of targets) {
-        if (row.file_id === null) continue;
+  /** What a confirmed press does to one file: null when it landed, else why not. */
+  const act: Record<ConfirmKind, (row: IngestFile) => Promise<string | null>> =
+    {
+      close: async (row) => {
+        if (row.file_id === null) return null;
         const closed = await client.ledger.ingest.done.mutate({
           fileId: row.file_id,
         });
-        if (!closed.ok) failures.push(runLine(row.rel_path, closed.message));
-      }
-      return failures;
-    },
-    onSuccess: (failures) => {
-      refresh();
-      clear();
-      setConfirming(null);
-      setErrors(failures);
-    },
-    onError: (cause: Error) => setErrors([cause.message]),
-  });
+        return closed.ok ? null : runLine(row.rel_path, closed.message);
+      },
+      delete: removeFile,
+    };
 
-  const removeFiles = useMutation({
-    mutationFn: async (targets: readonly IngestFile[]) => {
+  const confirm = useMutation({
+    mutationFn: async ({ kind, targets }: Confirming) => {
       const failures: string[] = [];
       for (const row of targets) {
-        const failure = await removeFile(row);
+        const failure = await act[kind](row);
         if (failure !== null) failures.push(failure);
       }
       return failures;
@@ -231,7 +223,7 @@ export function FileList({
     delete: (targets) => setConfirming({ kind: "delete", targets }),
   };
 
-  const busy = closeFiles.isPending || removeFiles.isPending;
+  const busy = confirm.isPending;
   const actions = actionsFor(rows, selected, openQuestions).filter(
     (action) => enabled || !NEEDS_AGENT[action.kind],
   );
@@ -326,11 +318,7 @@ export function FileList({
             /* The run lock holds here too: a confirm staged before a run must
                not execute into it. Cancel stays open — a way out never locks. */
             disabled={busy || live}
-            onClick={() =>
-              (confirming.kind === "close" ? closeFiles : removeFiles).mutate(
-                confirming.targets,
-              )
-            }
+            onClick={() => confirm.mutate(confirming)}
           >
             {busy
               ? CONFIRM_BUSY[confirming.kind]
