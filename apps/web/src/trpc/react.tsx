@@ -1,6 +1,5 @@
 "use client";
 
-import type { QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -9,23 +8,27 @@ import {
   loggerLink,
 } from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
+import { once } from "es-toolkit";
 import SuperJSON from "superjson";
 
 import type { AppRouter } from "@openledger-cfo/api";
 
 import { createQueryClient } from "./query-client";
 
-let clientQueryClientSingleton: QueryClient | undefined = undefined;
-const getQueryClient = () => {
-  if (typeof window === "undefined") return createQueryClient();
-  return (clientQueryClientSingleton ??= createQueryClient());
-};
-
 /**
- * The validated `env` is the rule everywhere else; this module ships to the
- * browser, and importing it would carry the schema — and the validator behind
- * it — into every page's first load. The bundler folds this read to a literal.
+ * The browser keeps one cache for the whole session; each server render gets
+ * its own, so no request ever reads another's data.
  */
+const browserQueryClient = once(createQueryClient);
+const getQueryClient = () =>
+  typeof window === "undefined" ? createQueryClient() : browserQueryClient();
+
+const getBaseUrl = () =>
+  typeof window === "undefined"
+    ? "http://localhost:3001"
+    : window.location.origin;
+
+/** The app's one environment read, which the bundler folds to a literal. */
 // eslint-disable-next-line no-restricted-properties
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
 
@@ -46,11 +49,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
         httpBatchStreamLink({
           transformer: SuperJSON,
           url: getBaseUrl() + "/api/trpc",
-          headers() {
-            const headers = new Headers();
-            headers.set("x-trpc-source", "nextjs-react");
-            return headers;
-          },
+          headers: { "x-trpc-source": "nextjs-react" },
         }),
       ],
     }),
@@ -64,8 +63,3 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
     </QueryClientProvider>
   );
 }
-
-const getBaseUrl = () => {
-  if (typeof window !== "undefined") return window.location.origin;
-  return "http://localhost:3001";
-};
