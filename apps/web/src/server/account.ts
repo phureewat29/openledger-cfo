@@ -19,6 +19,7 @@ import {
   dayOf,
   firstDayOf,
   isoToday,
+  latestOf,
   monthOf,
   monthsThrough,
   shiftDays,
@@ -132,10 +133,8 @@ interface MetaInput {
   readonly units: readonly TransactionRow[];
 }
 
-const span = (rows: readonly TransactionRow[]) => {
-  const dates = rows.map((row) => row.date).toSorted();
-  return { first: dates[0], last: dates.at(-1) };
-};
+const lastDateOf = (rows: readonly TransactionRow[]) =>
+  latestOf(rows.map((row) => row.date));
 
 const debits = (rows: readonly TransactionRow[], id: string) =>
   rows.filter((row) => row.debit_account_id === id);
@@ -223,7 +222,7 @@ const cashMeta = ({ row, rows, asOf }: MetaInput): AccountMeta => {
       ),
     ),
     year,
-    lastActivity: span(rows).last,
+    lastActivity: lastDateOf(rows),
     received: row.debits_posted,
     sent: row.credits_posted,
   };
@@ -253,7 +252,7 @@ const positionMeta = ({
   return {
     kind: "position",
     buys: inWindow.length,
-    lastBuy: span(buys).last,
+    lastBuy: lastDateOf(buys),
     invested12m,
     avgMonthly: invested12m / axis.length,
     shares: position?.quantity,
@@ -267,7 +266,7 @@ const basicMeta = ({ row, rows }: MetaInput): AccountMeta => ({
   totalIn: row.debits_posted,
   totalOut: row.credits_posted,
   transactions: rows.length,
-  lastActivity: span(rows).last,
+  lastActivity: lastDateOf(rows),
 });
 
 /** `<type>:<third segment>` — what the ledger's own taxonomy calls this account. */
@@ -353,7 +352,7 @@ export const loadAccount = cache(
     const rows = await caller.ledger.transactions.listAll({ account: id });
 
     const today = isoToday();
-    const asOf = asOfFor(span(rows).last, today);
+    const asOf = asOfFor(lastDateOf(rows), today);
     const { from, to, months } = windowOf(asOf);
     // Totals run to the present, so the columns cover the postings listed below them.
     const axis = monthsThrough(asOf);

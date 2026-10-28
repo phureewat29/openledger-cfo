@@ -23,6 +23,7 @@ import {
   clampDay,
   dayOf,
   daysInMonth,
+  latestOf,
   monthOf,
   MONTHS_PER_YEAR,
   monthsBefore,
@@ -356,11 +357,7 @@ export const selectRuleInput = (snapshot: LedgerSnapshot): RuleInput => {
           entry.debit_account_id === row.id ||
           entry.credit_account_id === row.id,
       );
-      const closedOn = history.reduce<string | undefined>(
-        (latest, entry) =>
-          latest === undefined || entry.date > latest ? entry.date : latest,
-        undefined,
-      );
+      const closedOn = latestOf(history.map((entry) => entry.date));
       if (closedOn === undefined) return undefined;
       const payments = history
         .filter((entry) => entry.debit_account_id === row.id)

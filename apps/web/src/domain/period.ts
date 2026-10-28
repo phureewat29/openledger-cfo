@@ -67,6 +67,13 @@ export const lastDayOf = (monthKey: string): string =>
 export const asOfFor = (newest: string | undefined, today: string): string =>
   newest !== undefined && newest < today ? newest : today;
 
+/** ISO dates order as strings, so the newest is the greatest; undefined for none. */
+export const latestOf = (dates: readonly string[]): string | undefined =>
+  dates.reduce<string | undefined>(
+    (latest, date) => (latest === undefined || date > latest ? date : latest),
+    undefined,
+  );
+
 /** True when the ledger's story ends before the current month began. */
 export const isStale = (asOf: string, today: string): boolean =>
   monthOf(asOf) !== monthOf(today);
