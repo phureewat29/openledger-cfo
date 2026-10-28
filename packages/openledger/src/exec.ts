@@ -264,7 +264,7 @@ const runObserved = (
     return outcome.result;
   });
 
-export interface RunOledOptions {
+interface RunOledOptions {
   configPath: string;
   stdin?: string;
   /** Return stdout instead of an error when the command exits 7 (partial). */
