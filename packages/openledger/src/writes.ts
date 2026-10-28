@@ -55,8 +55,8 @@ import {
   accountCreateResultSchema,
   accountCreateSummarySchema,
   accountDeleteResultSchema,
-  accountIdSchema,
   accountMergeResultSchema,
+  accountPairSchema,
   accountUpdateInputSchema,
   accountUpdateResultSchema,
   configInitInputSchema,
@@ -205,16 +205,6 @@ const TRANSACTION_UPDATE_FLAGS = {
   description: "--description",
   merchant: "--merchant",
 } as const satisfies Partial<Record<keyof TransactionUpdateInput, string>>;
-
-/** Both sides of a move or merge must name the same ledger. */
-const accountPairSchema = z
-  .object({ from: accountIdSchema, to: accountIdSchema })
-  .refine((pair) => pair.from !== pair.to, {
-    message: "from and to are the same account",
-  })
-  .refine((pair) => pair.from.slice(0, 3) === pair.to.slice(0, 3), {
-    message: "accounts are on different currency ledgers",
-  });
 
 export interface IngestPrepareOptions {
   /** Only a locked PDF needs one; it never reaches an event, a log or an error. */

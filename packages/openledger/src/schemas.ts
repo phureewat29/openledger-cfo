@@ -457,6 +457,16 @@ export const merchantUpsertResultSchema = z.looseObject({
 });
 export type MerchantUpsertResult = z.infer<typeof merchantUpsertResultSchema>;
 
+/** Both sides of a move or merge must name the same ledger. */
+export const accountPairSchema = z
+  .object({ from: accountIdSchema, to: accountIdSchema })
+  .refine((pair) => pair.from !== pair.to, {
+    message: "from and to are the same account",
+  })
+  .refine((pair) => currencyPrefix(pair.from) === currencyPrefix(pair.to), {
+    message: "accounts are on different currency ledgers",
+  });
+
 export const transactionAddInputSchema = z
   .object({
     debit_account: accountIdSchema,
