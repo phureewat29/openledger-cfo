@@ -183,6 +183,14 @@ export function RunFeed({
   const cancelling = pressed !== null && pressed.error === null;
   const cancelError = pressed === null ? null : pressed.error;
 
+  // The mode rides along because it changes what "finished" means: an auto run
+  // answered the questions, a normal run left them for the operator.
+  const meta = () => {
+    if (!hydrated) return undefined;
+    if (run === null) return "idle";
+    return runLine(run.mode, STATUS_META[run.status]);
+  };
+
   const body = () => {
     // AI OFF in the footer is the remedy pointer on every viewport; the chat
     // pane's own CTA joins it at `lg` — a button here would be the third.
@@ -217,15 +225,7 @@ export function RunFeed({
   return (
     <Pane
       title="Run"
-      /* The mode rides along because it changes what "finished" means: an auto
-         run answered the questions, a normal run left them for the operator. */
-      meta={
-        !hydrated
-          ? undefined
-          : run === null
-            ? "idle"
-            : runLine(run.mode, STATUS_META[run.status])
-      }
+      meta={meta()}
       actions={
         !live ? null : (
           <span className="flex items-center gap-2">

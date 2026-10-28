@@ -253,6 +253,66 @@ export function FileList({
     .filter((row) => isLocked(row) && selected.has(row.rel_path))
     .map((row) => row.rel_path);
 
+  const askStrip = () => {
+    if (firstAsk === null) return null;
+    if (agentAnswering) {
+      return (
+        <div className="border-border flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
+          <p className="text-muted-foreground min-w-0 flex-1 text-[11px]">
+            {countNoun(openCount, "question")} open — the run is answering these
+            itself.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="border-border bg-accent/10 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
+        <p className="text-accent min-w-0 flex-1 text-[11px]">
+          {countNoun(openCount, "question")}{" "}
+          {openCount === 1 ? "waits" : "wait"} for you — the files stay open
+          until you answer.
+        </p>
+        <Button
+          size="sm"
+          className="shrink-0"
+          onClick={() => view(firstAsk, "questions")}
+        >
+          Answer
+        </Button>
+      </div>
+    );
+  };
+
+  const queueBody = () => {
+    if (query.isPending) {
+      return (
+        <p className="px-3 py-2">
+          <LoadingLine />
+        </p>
+      );
+    }
+    // The failure already leads the error strip above.
+    if (query.isError) return null;
+    if (rows.length === 0) {
+      return (
+        <p className="text-muted-foreground px-3 py-2 text-xs">
+          Nothing in the queue. Drop a file above to start.
+        </p>
+      );
+    }
+    return (
+      <ul className="divide-border divide-y">
+        {rows.map((row) => (
+          <FileRow
+            key={row.path}
+            row={row}
+            openQuestions={openCountOf(openQuestions, row)}
+          />
+        ))}
+      </ul>
+    );
+  };
+
   return (
     <Pane
       title="Files"
@@ -373,51 +433,9 @@ export function FileList({
         </div>
       )}
 
-      {firstAsk === null ? null : agentAnswering ? (
-        <div className="border-border flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
-          <p className="text-muted-foreground min-w-0 flex-1 text-[11px]">
-            {countNoun(openCount, "question")} open — the run is answering these
-            itself.
-          </p>
-        </div>
-      ) : (
-        <div className="border-border bg-accent/10 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
-          <p className="text-accent min-w-0 flex-1 text-[11px]">
-            {countNoun(openCount, "question")}{" "}
-            {openCount === 1 ? "waits" : "wait"} for you — the files stay open
-            until you answer.
-          </p>
-          <Button
-            size="sm"
-            className="shrink-0"
-            onClick={() => view(firstAsk, "questions")}
-          >
-            Answer
-          </Button>
-        </div>
-      )}
+      {askStrip()}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {query.isPending ? (
-          <p className="px-3 py-2">
-            <LoadingLine />
-          </p>
-        ) : query.isError ? null : rows.length === 0 ? (
-          <p className="text-muted-foreground px-3 py-2 text-xs">
-            Nothing in the queue. Drop a file above to start.
-          </p>
-        ) : (
-          <ul className="divide-border divide-y">
-            {rows.map((row) => (
-              <FileRow
-                key={row.path}
-                row={row}
-                openQuestions={openCountOf(openQuestions, row)}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">{queueBody()}</div>
 
       <ModeDialog
         open={pending !== null}

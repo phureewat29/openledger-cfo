@@ -32,6 +32,14 @@ export function PlanForm({
   added: string | undefined;
   children: React.ReactNode;
 }) {
+  const status = () => {
+    if (error) {
+      return <p className="text-destructive text-[10px]">{error.message}</p>;
+    }
+    if (added === undefined) return null;
+    return <p className="text-accent text-[10px]">{added}</p>;
+  };
+
   return (
     <AddDisclosure label={label} open={open} onOpen={onOpen} onClose={onClose}>
       <form
@@ -52,11 +60,7 @@ export function PlanForm({
             </Button>
           </div>
 
-          {error ? (
-            <p className="text-destructive text-[10px]">{error.message}</p>
-          ) : added === undefined ? null : (
-            <p className="text-accent text-[10px]">{added}</p>
-          )}
+          {status()}
         </div>
       </form>
     </AddDisclosure>

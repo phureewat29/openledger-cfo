@@ -75,7 +75,34 @@ export function StatusBar({
   aiConfigured: boolean;
 }) {
   const entry = newestUseful(useCliLog().entries);
-  const exitCode = entry?.exitCode ?? null;
+
+  const exitChip = () => {
+    if (entry === undefined) return null;
+    if (entry.exitCode === null) {
+      return (
+        <span className="text-muted-foreground flex shrink-0 items-center gap-1.5">
+          <span
+            aria-hidden
+            className="bg-accent size-1 animate-pulse rounded-full"
+          />
+          running
+        </span>
+      );
+    }
+    return (
+      <span
+        className={cn(
+          "shrink-0",
+          entry.exitCode === 0 ? "text-muted-foreground" : "text-destructive",
+        )}
+      >
+        exit {entry.exitCode}
+        {entry.durationMs === null
+          ? null
+          : ` · ${(entry.durationMs / 1000).toFixed(1)}s`}
+      </span>
+    );
+  };
 
   return (
     <footer className="border-border bg-card flex h-6 items-center gap-4 border-t px-3 text-[10px] tabular-nums">
@@ -107,27 +134,7 @@ export function StatusBar({
           : `$ ${entry.line.replace(TRANSPORT_FLAGS, "").trim()}`}
       </span>
 
-      {entry === undefined ? null : entry.exitCode === null ? (
-        <span className="text-muted-foreground flex shrink-0 items-center gap-1.5">
-          <span
-            aria-hidden
-            className="bg-accent size-1 animate-pulse rounded-full"
-          />
-          running
-        </span>
-      ) : (
-        <span
-          className={cn(
-            "shrink-0",
-            exitCode === 0 ? "text-muted-foreground" : "text-destructive",
-          )}
-        >
-          exit {entry.exitCode}
-          {entry.durationMs === null
-            ? null
-            : ` · ${(entry.durationMs / 1000).toFixed(1)}s`}
-        </span>
-      )}
+      {exitChip()}
 
       <AiWord configured={aiConfigured} ledgerOk={chrome.ok} />
     </footer>
