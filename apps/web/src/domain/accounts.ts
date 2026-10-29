@@ -1,3 +1,4 @@
+import { attempt } from "es-toolkit";
 import { z } from "zod";
 
 import type { RouterOutputs } from "@openledger-cfo/api";
@@ -49,15 +50,6 @@ const accountMetadata = z.object({
 
 type AccountMetadata = Readonly<z.infer<typeof accountMetadata>>;
 
-/** A column written by another process may be anything at all, including nothing. */
-const readJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-};
-
 /**
  * The CLI hands back the raw column, so reading it is a parse, not a cast — a
  * silently defaulted scale (falling back to 1) would misprice a position by orders of magnitude.
@@ -65,8 +57,10 @@ const readJson = (text: string): unknown => {
 export const parseAccountMetadata = (row: {
   readonly metadata_json: string | null;
 }): AccountMetadata | null => {
-  if (row.metadata_json === null) return null;
-  const parsed = accountMetadata.safeParse(readJson(row.metadata_json));
+  const { metadata_json } = row;
+  if (metadata_json === null) return null;
+  const [, json] = attempt<unknown, unknown>(() => JSON.parse(metadata_json));
+  const parsed = accountMetadata.safeParse(json);
   return parsed.success ? parsed.data : null;
 };
 
