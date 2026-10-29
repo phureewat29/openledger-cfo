@@ -3,9 +3,15 @@
 import { useId, useState } from "react";
 import { partition } from "es-toolkit";
 
+import { messageOf } from "@openledger-cfo/openledger/result";
 import { cn } from "@openledger-cfo/ui";
 
 import { RemoveButton } from "~/components/plan/remove-button";
+import {
+  UPLOAD_ACCEPT,
+  UPLOAD_TYPE_ERROR,
+  uploadExtensionOf,
+} from "~/domain/ingest-files";
 
 type UploadReply =
   | { readonly ok: true }
@@ -22,16 +28,6 @@ interface Outcome {
   readonly total: number;
   readonly failures: readonly UploadFailure[];
 }
-
-/** Mirrors the upload route's gate, so a wrong type fails before the wire. */
-const ALLOWED = new Set(["pdf", "png", "jpg", "jpeg", "webp"]);
-const TYPE_ERROR = "Only PDF, PNG, JPG and WEBP files can be ingested.";
-
-const extensionOf = (name: string): string =>
-  name.split(".").pop()?.toLowerCase() ?? "";
-
-const messageOf = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : "Upload failed";
 
 const upload = async (file: File): Promise<UploadReply> => {
   const body = new FormData();
@@ -58,13 +54,15 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
   const send = async (picked: FileList | null) => {
     const files = Array.from(picked ?? []);
     if (files.length === 0) return;
-    // The `accept` attribute only guards the picker; a drop bypasses it.
-    const [supported, rejected] = partition(files, (file) =>
-      ALLOWED.has(extensionOf(file.name)),
+    // The `accept` attribute only guards the picker; a drop bypasses it, so
+    // the route's own rule runs here and a wrong type fails before the wire.
+    const [supported, rejected] = partition(
+      files,
+      (file) => uploadExtensionOf(file.name) !== undefined,
     );
     const failed: UploadFailure[] = rejected.map((file) => ({
       name: file.name,
-      error: TYPE_ERROR,
+      error: UPLOAD_TYPE_ERROR,
     }));
     setOutcome(null);
     if (supported.length === 0) {
@@ -121,7 +119,7 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
       <input
         id={inputId}
         type="file"
-        accept=".pdf,.png,.jpg,.jpeg,.webp"
+        accept={UPLOAD_ACCEPT}
         multiple
         disabled={busy}
         className="sr-only"
