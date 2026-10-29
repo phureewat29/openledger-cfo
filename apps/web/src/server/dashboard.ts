@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { groupBy, orderBy } from "es-toolkit";
+import { groupBy, mapValues, orderBy, union } from "es-toolkit";
 
 import type { RouterOutputs } from "@openledger-cfo/api";
 
@@ -128,37 +128,33 @@ const groupLabel = (
 };
 
 /**
- * The window's rows re-filed under the accounts they touch. A replay only
- * makes sense against one account's own legs, and re-scanning every row per
- * account is the same walk done once per bank.
+ * The window's rows re-filed under each account they touch, in one walk. A
+ * replay only makes sense against one account's own legs, and re-scanning
+ * every row per account is the same walk done once per bank.
  */
 const rowsByAccount = (
   rows: readonly TransactionRow[],
-  ids: ReadonlySet<string>,
-): Record<string, TransactionRow[]> => {
-  const index: Record<string, TransactionRow[]> = {};
-  for (const row of rows) {
-    for (const id of [row.debit_account_id, row.credit_account_id]) {
-      if (!ids.has(id)) continue;
-      (index[id] ??= []).push(row);
-    }
-  }
-  return index;
-};
+): Record<string, TransactionRow[]> =>
+  mapValues(
+    groupBy(
+      rows.flatMap((row) => [
+        { account: row.debit_account_id, row },
+        { account: row.credit_account_id, row },
+      ]),
+      (leg) => leg.account,
+    ),
+    (legs) => legs.map((leg) => leg.row),
+  );
 
 /** Newest date each account moved, which is what makes a dormant account visible. */
 const lastActivity = (
-  rows: readonly TransactionRow[],
-): Record<string, string> => {
-  const seen: Record<string, string> = {};
-  for (const row of rows) {
-    for (const id of [row.debit_account_id, row.credit_account_id]) {
-      const previous = seen[id];
-      if (previous === undefined || row.date > previous) seen[id] = row.date;
-    }
-  }
-  return seen;
-};
+  byAccount: Readonly<Record<string, readonly TransactionRow[]>>,
+): Record<string, string> =>
+  mapValues(byAccount, (rows) =>
+    rows
+      .map((row) => row.date)
+      .reduce((newest, date) => (date > newest ? date : newest)),
+  );
 
 export const loadDashboard = cache(
   (): Promise<LedgerLoad<Dashboard>> => asLedgerLoad(buildDashboard()),
@@ -253,12 +249,10 @@ const buildDashboard = async (): Promise<Dashboard> => {
   );
   // A limit set against a category outside the picker still has to be measured.
   const categorySpend = Object.fromEntries(
-    [
-      ...new Set([
-        ...budgetable.map((row) => row.id),
-        ...budgets.map((row) => row.category),
-      ]),
-    ].map((category) => [
+    union(
+      budgetable.map((row) => row.id),
+      budgets.map((row) => row.category),
+    ).map((category) => [
       category,
       monthToDateSpend(postings, category, input.month, input.dayOfMonth),
     ]),
@@ -288,16 +282,12 @@ const buildDashboard = async (): Promise<Dashboard> => {
     })
     .filter((option): option is PrefixOption => option !== undefined);
 
-  const banks = splitPortfolio(leaves).banks;
-  const bankRows = rowsByAccount(
-    transactions,
-    new Set(banks.map((row) => row.id)),
-  );
+  const byAccount = rowsByAccount(transactions);
   const sparks = Object.fromEntries(
-    banks.map((row) => [
+    splitPortfolio(leaves).banks.map((row) => [
       row.id,
       weeklyBalance(
-        bankRows[row.id] ?? [],
+        byAccount[row.id] ?? [],
         row.id,
         asOf,
         row.balance,
@@ -309,12 +299,10 @@ const buildDashboard = async (): Promise<Dashboard> => {
   // A goal already pointed at a debt names a prefix the picker never offers.
   const movement = netMovement(transactions, asOf);
   const facts = Object.fromEntries(
-    [
-      ...new Set([
-        ...prefixOptions.map((option) => option.value),
-        ...goalRows.map((row) => row.accountPrefix),
-      ]),
-    ].map((prefix) => [prefix, prefixFacts(prefix, accounts.rows, movement)]),
+    union(
+      prefixOptions.map((option) => option.value),
+      goalRows.map((row) => row.accountPrefix),
+    ).map((prefix) => [prefix, prefixFacts(prefix, accounts.rows, movement)]),
   );
 
   return {
@@ -353,7 +341,7 @@ const buildDashboard = async (): Promise<Dashboard> => {
       .toSorted((left, right) => right.date.localeCompare(left.date))
       .slice(0, LATEST_ROWS),
     accounts: leaves,
-    activity: lastActivity(transactions),
+    activity: lastActivity(byAccount),
     sparks,
   };
 };
