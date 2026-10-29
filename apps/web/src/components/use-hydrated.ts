@@ -1,10 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { noop } from "es-toolkit";
 
 // Nothing to subscribe to: the value flips once, when React finishes hydrating.
-const unsubscribe = () => undefined;
-const subscribe = () => unsubscribe;
+const subscribe = () => noop;
 
 /**
  * False through the server render and the hydration pass, true immediately

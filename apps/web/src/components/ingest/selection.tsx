@@ -3,7 +3,7 @@
 import { createContext, useContext, useMemo, useState } from "react";
 
 /** Which face of a file the info pane is showing. */
-export type InfoMode = "document" | "questions";
+type InfoMode = "document" | "questions";
 
 interface Selection {
   /**

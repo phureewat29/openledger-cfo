@@ -19,7 +19,7 @@ const PICK_COUNT = 4;
  * in its hands. Short enough to read whole at the pane's narrowest, and phrased
  * as an ask rather than a question so the strip stays quiet.
  */
-export const SUGGESTION_POOL: readonly string[] = [
+const SUGGESTION_POOL: readonly string[] = [
   "How am I doing this month",
   "Where is the money going",
   "What should I cut",

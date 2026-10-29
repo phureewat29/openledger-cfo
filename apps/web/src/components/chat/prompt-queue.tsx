@@ -5,7 +5,7 @@ import { head, tail } from "es-toolkit";
 
 import { RemoveButton } from "~/components/plan/remove-button";
 
-export interface Prompt {
+interface Prompt {
   readonly id: string;
   readonly text: string;
   /** The route the question was asked from, not the one it may land on. */
