@@ -1,17 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-
 import { cn } from "@openledger-cfo/ui";
 import { Pane } from "@openledger-cfo/ui/pane";
 
 import { useCliLog } from "~/components/cli-log-provider";
 import { useHydrated } from "~/components/use-hydrated";
+import { useTailFollow } from "~/components/use-tail-follow";
 import { NO_ENTRIES } from "~/domain/cli-log";
 import { countNoun } from "~/domain/format";
-
-/** Below this the reader is at the tail and new commands should follow. */
-const STUCK_PX = 40;
 
 const timeOf = (startedAt: number) =>
   new Date(startedAt).toLocaleTimeString("en-GB", { hour12: false });
@@ -19,8 +15,6 @@ const timeOf = (startedAt: number) =>
 export function CliLog({ className }: { className?: string }) {
   const hydrated = useHydrated();
   const log = useCliLog();
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const stuckRef = useRef(true);
 
   /**
    * Both gated on hydrated, not just on what the poll holds: the provider polls
@@ -30,12 +24,7 @@ export function CliLog({ className }: { className?: string }) {
    */
   const entries = hydrated ? log.entries : NO_ENTRIES;
   const error = hydrated ? log.error : null;
-
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (element === null || !stuckRef.current) return;
-    element.scrollTop = element.scrollHeight;
-  }, [entries]);
+  const { ref: scrollRef, onScroll } = useTailFollow(entries);
 
   return (
     <Pane
@@ -46,12 +35,7 @@ export function CliLog({ className }: { className?: string }) {
     >
       <div
         ref={scrollRef}
-        onScroll={(event) => {
-          const element = event.currentTarget;
-          stuckRef.current =
-            element.scrollHeight - element.scrollTop - element.clientHeight <=
-            STUCK_PX;
-        }}
+        onScroll={onScroll}
         className="h-full overflow-y-auto px-3 py-2"
       >
         {error !== null ? (

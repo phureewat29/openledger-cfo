@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { cn } from "@openledger-cfo/ui";
 import { Button } from "@openledger-cfo/ui/button";
@@ -17,10 +17,8 @@ import { useSelection } from "~/components/ingest/selection";
 import { LoadingLine } from "~/components/loading-line";
 import { Field } from "~/components/plan/field";
 import { useHydrated } from "~/components/use-hydrated";
+import { useTailFollow } from "~/components/use-tail-follow";
 import { isRunLive, NO_RUN_ENTRIES, runLine } from "~/domain/ingest-run";
-
-/** Below this the reader is at the tail and new steps should follow. */
-const STUCK_PX = 40;
 
 const STATUS_META: Record<RunStatus, string> = {
   running: "working",
@@ -142,8 +140,6 @@ export function RunFeed({
 }) {
   const hydrated = useHydrated();
   const feed = useIngestRun();
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const stuckRef = useRef(true);
   /**
    * Which run the Cancel press belongs to, so the pressed state cannot leak
    * onto the next run: a cancel is settled by the poll flipping the status,
@@ -163,12 +159,7 @@ export function RunFeed({
   const entries = hydrated ? feed.entries : NO_RUN_ENTRIES;
   const run = hydrated ? feed.run : null;
   const live = run !== null && isRunLive(run.status);
-
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (element === null || !stuckRef.current) return;
-    element.scrollTop = element.scrollHeight;
-  }, [entries]);
+  const { ref: scrollRef, onScroll } = useTailFollow(entries);
 
   const cancel = async (runId: string) => {
     setCancelState({ runId, error: null });
@@ -262,12 +253,7 @@ export function RunFeed({
 
       <div
         ref={scrollRef}
-        onScroll={(event) => {
-          const element = event.currentTarget;
-          stuckRef.current =
-            element.scrollHeight - element.scrollTop - element.clientHeight <=
-            STUCK_PX;
-        }}
+        onScroll={onScroll}
         className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
       >
         {body()}
