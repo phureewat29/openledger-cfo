@@ -110,7 +110,7 @@ export interface ClosedLoan {
   readonly monthsSinceClosed: number;
 }
 
-export interface Payday {
+interface Payday {
   readonly typicalDay: number | undefined;
   readonly landed: boolean;
   readonly incomeToDate: number;

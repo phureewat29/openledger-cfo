@@ -41,12 +41,12 @@ export type RunScope =
 
 export type StartFailure = "disabled" | "busy" | "unavailable";
 
-export type StartResult = Result<
+type StartResult = Result<
   { runId: string },
   { reason: StartFailure; message: string }
 >;
 
-export type RunCommandResult = Result<undefined, { message: string }>;
+type RunCommandResult = Result<undefined, { message: string }>;
 
 /** The two names a locked file answers to, and neither of them is its password. */
 interface Lockable {

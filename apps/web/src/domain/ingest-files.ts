@@ -7,7 +7,7 @@ type IngestQuestions = RouterOutputs["ledger"]["questions"]["list"];
 export type IngestFile = IngestFiles["rows"][number];
 export type IngestCounts = NonNullable<IngestFiles["summary"]>;
 export type IngestQuestion = IngestQuestions["rows"][number];
-export type IngestFileTransaction =
+type IngestFileTransaction =
   RouterOutputs["ledger"]["transactions"]["listByFile"][number];
 
 /** Anything but a closed file is still work the agent can pick up. */
@@ -154,7 +154,7 @@ export const fileImpactOf = (
 
 export type FileActionKind = "ingest" | "delete" | "done";
 
-export interface FileAction {
+interface FileAction {
   readonly kind: FileActionKind;
   /** The rows this action can actually work on, which is what its count says. */
   readonly targets: readonly IngestFile[];
