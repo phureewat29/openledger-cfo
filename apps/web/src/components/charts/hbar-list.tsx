@@ -1,29 +1,13 @@
-import { orderBy, sumBy } from "es-toolkit";
+import { sumBy } from "es-toolkit";
 
 import type { CategoryTotal } from "~/domain/series/types";
 import { flipTipClassName, shouldFlipTip } from "~/components/charts/flip-tip";
+import { foldTail } from "~/components/charts/fold";
 import { ChartTip } from "~/components/charts/tooltip";
 import { formatPercent, moneyOf } from "~/domain/format";
 
 /** Past eight rows the tail stops being worth a line of its own. */
 const TOP_ROWS = 8;
-
-const fold = (
-  rows: readonly CategoryTotal[],
-  limit: number,
-): CategoryTotal[] => {
-  const ranked = orderBy(
-    rows.filter((row) => row.value > 0),
-    [(row) => row.value],
-    ["desc"],
-  );
-  const rest = ranked.slice(limit);
-  if (rest.length === 0) return ranked;
-  return [
-    ...ranked.slice(0, limit),
-    { key: "other", label: "Other", value: sumBy(rest, (row) => row.value) },
-  ];
-};
 
 /**
  * The form that is readable by construction: every bar carries its own label
@@ -45,7 +29,7 @@ export function HBarList({
   empty?: string;
 }) {
   const format = moneyOf(currency);
-  const lines = fold(rows, expanded ? Number.POSITIVE_INFINITY : TOP_ROWS);
+  const lines = foldTail(rows, expanded ? Number.POSITIVE_INFINITY : TOP_ROWS);
   const peak = lines[0]?.value ?? 0;
   const total = sumBy(lines, (line) => line.value);
 

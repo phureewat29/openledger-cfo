@@ -1,8 +1,10 @@
-import { orderBy, sumBy } from "es-toolkit";
+import { sumBy } from "es-toolkit";
 
 import { cn } from "@openledger-cfo/ui";
 
 import type { Portfolio } from "~/domain/portfolio";
+import type { CategoryTotal } from "~/domain/series/types";
+import { foldTail } from "~/components/charts/fold";
 import { toneOf } from "~/components/charts/tone";
 import { ChartTip } from "~/components/charts/tooltip";
 import { formatPercent, formatThb } from "~/domain/format";
@@ -15,26 +17,6 @@ const TOP_SEGMENTS = 6;
  * renders at, so the name goes to the tooltip rather than into a truncation.
  */
 const LABEL_SHARE = 0.1;
-
-interface Slice {
-  readonly key: string;
-  readonly label: string;
-  readonly value: number;
-}
-
-const fold = (slices: readonly Slice[]): Slice[] => {
-  const ranked = orderBy(
-    slices.filter((slice) => slice.value > 0),
-    [(slice) => slice.value],
-    ["desc"],
-  );
-  const rest = ranked.slice(TOP_SEGMENTS);
-  if (rest.length === 0) return ranked;
-  return [
-    ...ranked.slice(0, TOP_SEGMENTS),
-    { key: "other", label: "Other", value: sumBy(rest, (row) => row.value) },
-  ];
-};
 
 /**
  * What the money is made of, as one bar. The totals above say how much there
@@ -49,19 +31,22 @@ export function CompositionStrip({
   portfolio: Portfolio;
   className?: string;
 }) {
-  const slices = fold([
-    { key: "banks", label: "Banks & cash", value: thbTotal(portfolio.banks) },
-    ...portfolio.holdings.map((holding) => ({
-      key: holding.key,
-      label: holding.label,
-      value: thbTotal(holding.rows),
-    })),
-  ]);
+  const slices = foldTail(
+    [
+      { key: "banks", label: "Banks & cash", value: thbTotal(portfolio.banks) },
+      ...portfolio.holdings.map((holding) => ({
+        key: holding.key,
+        label: holding.label,
+        value: thbTotal(holding.rows),
+      })),
+    ],
+    TOP_SEGMENTS,
+  );
   const total = sumBy(slices, (slice) => slice.value);
 
   if (total <= 0) return null;
 
-  const width = (slice: Slice) => `${(slice.value / total) * 100}%`;
+  const width = (slice: CategoryTotal) => `${(slice.value / total) * 100}%`;
   // Where each segment's middle falls along the bar, which is the side its tip
   // has room to open toward.
   const middles = slices.map(
