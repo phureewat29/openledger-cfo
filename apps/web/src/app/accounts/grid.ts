@@ -1,10 +1,8 @@
 /**
  * One authority for the accounts grid: the loading skeleton renders first and
- * the page streams in over it, so a spans mismatch reads as a jump.
- */
-/**
- * Four explicit rows at the wide tier — totals, strip, a 280px group row, and
- * the fraction Investments takes — so the skeleton and the loaded page resolve
+ * the page streams in over it, so a spans mismatch reads as a jump. Four
+ * explicit rows at the wide tier — totals, strip, a 280px group row, and the
+ * fraction Investments takes — so the skeleton and the loaded page resolve
  * the same geometry from the template, whatever the data holds.
  */
 export const ACCOUNTS_GRID =
