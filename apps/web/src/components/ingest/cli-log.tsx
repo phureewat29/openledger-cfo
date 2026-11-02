@@ -6,7 +6,7 @@ import { Pane } from "@openledger-cfo/ui/pane";
 import { useCliLog } from "~/components/cli-log-provider";
 import { useHydrated } from "~/components/use-hydrated";
 import { useTailFollow } from "~/components/use-tail-follow";
-import { NO_ENTRIES } from "~/domain/cli-log";
+import { exitLine, NO_ENTRIES } from "~/domain/cli-log";
 import { countNoun } from "~/domain/format";
 
 const timeOf = (startedAt: number) =>
@@ -76,10 +76,7 @@ export function CliLog({ className }: { className?: string }) {
                       entry.exitCode === 0 && "text-muted-foreground",
                     )}
                   >
-                    exit {entry.exitCode}
-                    {entry.durationMs === null
-                      ? null
-                      : ` · ${(entry.durationMs / 1000).toFixed(1)}s`}
+                    {exitLine(entry)}
                   </span>
                 )}
               </li>

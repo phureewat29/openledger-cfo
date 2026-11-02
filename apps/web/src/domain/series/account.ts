@@ -138,6 +138,21 @@ const pointsOf = (labels: readonly string[], values: readonly number[]) =>
 export const hasMovement = (points: readonly Point[]): boolean =>
   points.some((point) => point.y !== points[0]?.y);
 
+/** The span a flat series is lent, having none of its own to be drawn against. */
+const MIN_SPAN = 1;
+
+/**
+ * The band a series is drawn in. One too flat to fill MIN_SPAN is lent the
+ * shortfall evenly at both ends, so it reads as level down the middle rather
+ * than sitting on the frame.
+ */
+export const paddedDomain = (bottom: number, top: number) => {
+  const raw = top - bottom;
+  const span = Math.max(raw, MIN_SPAN);
+  const pad = (span - raw) / 2;
+  return { low: bottom - pad, high: top + pad };
+};
+
 /** The window's complete months, then the month still running. */
 const sampleMonths = (months: readonly string[], asOf: string) => {
   const keys = [...months, monthOf(asOf)];

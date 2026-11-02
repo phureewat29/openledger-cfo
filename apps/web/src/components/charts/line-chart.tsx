@@ -21,15 +21,13 @@ import {
   useSnapIndex,
 } from "~/components/charts/hover";
 import { compactOf } from "~/domain/format";
-import { hasMovement } from "~/domain/series/account";
+import { hasMovement, paddedDomain } from "~/domain/series/account";
 
 /**
  * The band the data plots into. A dot on an extreme carries a 2px ring, and a
  * clipped ring reads as a square, so the extremes sit a dot's radius inside.
  */
 const INSET = 6;
-/** The span a flat series is lent, having none of its own to be drawn against. */
-const MIN_SPAN = 1;
 const AXIS = "text-muted-foreground text-[10px] tabular-nums";
 const TICKS = 3;
 const EXPANDED_TICKS = 5;
@@ -54,19 +52,6 @@ const pointScale = (count: number, width: number) =>
 const extremesOf = (points: readonly Point[], tail: readonly Point[]) => {
   const [low, high] = extent([...points, ...tail], (point) => point.y);
   return { bottom: low ?? 0, top: high ?? 0 };
-};
-
-/**
- * The band the plot and the axis both work in. A series too flat to fill
- * MIN_SPAN is lent the shortfall evenly at both ends, so it sits down the
- * middle rather than against an edge, and the axis reads the band it was
- * actually drawn in.
- */
-const domainOf = (bottom: number, top: number) => {
-  const raw = top - bottom;
-  const span = Math.max(raw, MIN_SPAN);
-  const pad = (span - raw) / 2;
-  return { low: bottom - pad, high: top + pad };
 };
 
 const shareOf = (tick: number, ticks: number) => tick / (ticks - 1);
@@ -114,7 +99,7 @@ function Plot({
   // can never reach the layout.
   const geometry = useMemo(() => {
     const { top, bottom } = extremesOf(points, projection);
-    const { low, high } = domainOf(bottom, top);
+    const { low, high } = paddedDomain(bottom, top);
     // No `.nice()`: the axis beside it prints this domain rather than round
     // numbers of its own, so there is nothing for a rounded one to line up with.
     const yOf = scaleLinear()
@@ -289,7 +274,7 @@ export function LineChart({
   }
 
   const { top, bottom } = extremesOf(points, projection);
-  const { low, high } = domainOf(bottom, top);
+  const { low, high } = paddedDomain(bottom, top);
   const ticks = expanded ? EXPANDED_TICKS : TICKS;
   const marked = hover.index ?? points.length - 1;
   const point = points[marked];

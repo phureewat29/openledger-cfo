@@ -3,12 +3,11 @@ import { scaleLinear } from "d3-scale";
 import { line as toLine } from "d3-shape";
 
 import type { Point } from "~/domain/series/types";
+import { paddedDomain } from "~/domain/series/account";
 
 const STROKE = 1.25;
 /** Half of the 3px dot that says which end is now. */
 const DOT = 1.5;
-/** The span a flat run is lent, having none of its own to be drawn against. */
-const MIN_SPAN = 1;
 
 /**
  * A shape beside a figure the reader already has — no axis, no hover, no
@@ -31,14 +30,10 @@ export function Sparkline({
   const [low, high] = extent(points, (point) => point.y);
   const bottom = low ?? 0;
   const top = high ?? 0;
-  // A run too flat to fill MIN_SPAN is lent the shortfall evenly at both ends,
-  // so it reads as level down the middle rather than sitting on the frame.
-  const raw = top - bottom;
-  const span = Math.max(raw, MIN_SPAN);
-  const pad = (span - raw) / 2;
+  const { low: floor, high: ceiling } = paddedDomain(bottom, top);
   const inset = DOT + STROKE;
   const y = scaleLinear()
-    .domain([bottom - pad, top + pad])
+    .domain([floor, ceiling])
     .range([height - inset, inset]);
   const x = scaleLinear()
     .domain([0, points.length - 1])

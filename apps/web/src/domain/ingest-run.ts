@@ -1,4 +1,4 @@
-import { takeRight } from "es-toolkit";
+import { mergeById } from "~/domain/cli-log";
 
 export type RunStatus =
   | "running"
@@ -39,8 +39,7 @@ export interface RunSnapshot {
   readonly runId: string;
   readonly status: RunStatus;
   readonly scope: string;
-  /** Optional: a run started before this field shipped has none. */
-  readonly mode?: RunMode;
+  readonly mode: RunMode;
   readonly currentFile?: string;
   readonly waiting?: RunWaiting;
   readonly startedAt: number;
@@ -134,16 +133,7 @@ export const RUN_JOURNAL_CAPACITY = 300;
 
 export const NO_RUN_ENTRIES: RunEntry[] = [];
 
-/**
- * A step is rewritten in place when it lands, so the same id arrives twice and
- * the later read takes the earlier one's slot rather than appending.
- */
 export const mergeRunEntries = (
   current: readonly RunEntry[],
   delta: readonly RunEntry[],
-): RunEntry[] => {
-  const byId = new Map(
-    [...current, ...delta].map((entry) => [entry.id, entry]),
-  );
-  return takeRight([...byId.values()], RUN_JOURNAL_CAPACITY);
-};
+): RunEntry[] => mergeById(current, delta, RUN_JOURNAL_CAPACITY);

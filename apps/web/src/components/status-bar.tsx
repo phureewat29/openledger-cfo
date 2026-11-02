@@ -8,6 +8,7 @@ import type { LedgerLoad } from "~/server/head";
 import { useCliLog } from "~/components/cli-log-provider";
 import { useConfigDialog } from "~/components/config/config-dialog-provider";
 import { useAiStatus, verdictOf } from "~/components/config/use-ai-status";
+import { exitLine } from "~/domain/cli-log";
 import { formatStamp } from "~/domain/format";
 
 /** Transport flags say nothing about the work; the title keeps the full argv. */
@@ -96,10 +97,7 @@ export function StatusBar({
           entry.exitCode === 0 ? "text-muted-foreground" : "text-destructive",
         )}
       >
-        exit {entry.exitCode}
-        {entry.durationMs === null
-          ? null
-          : ` · ${(entry.durationMs / 1000).toFixed(1)}s`}
+        {exitLine(entry)}
       </span>
     );
   };
