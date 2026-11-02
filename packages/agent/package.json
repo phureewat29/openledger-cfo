@@ -8,7 +8,8 @@
       "types": "./dist/index.d.ts",
       "default": "./src/index.ts"
     },
-    "./sanitize": "./src/sanitize.ts"
+    "./sanitize": "./src/sanitize.ts",
+    "./untyped": "./src/untyped.ts"
   },
   "license": "AGPL-3.0-only",
   "scripts": {

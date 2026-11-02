@@ -1,11 +1,17 @@
 import type { UIMessage } from "ai";
 import { TRPCError } from "@trpc/server";
-import { attempt, partition, uniqBy } from "es-toolkit";
+import { partition, uniqBy } from "es-toolkit";
 
 import type { GatewayConfig, LangGraphEvent } from "@openledger-cfo/agent";
 import type { Result } from "@openledger-cfo/openledger";
 import { createAgent, nsDepth, textOf, unwrap } from "@openledger-cfo/agent";
-import { appRouter, createTRPCContext, readGateway } from "@openledger-cfo/api";
+import { asRecord, asString, parseJson } from "@openledger-cfo/agent/untyped";
+import {
+  appRouter,
+  createTRPCContext,
+  perProcess,
+  readGateway,
+} from "@openledger-cfo/api";
 import { err, messageOf, ok } from "@openledger-cfo/openledger";
 
 import type { IngestFile } from "~/domain/ingest-files";
@@ -118,10 +124,9 @@ interface Run {
 }
 
 /** One slot per process: a second start is refused rather than queued. */
-const forSlot = globalThis as unknown as {
-  ingestRun?: { run: Run | null };
-};
-const slot = (forSlot.ingestRun ??= { run: null });
+const slot = perProcess<{ run: Run | null }>("ingestRun", () => ({
+  run: null,
+}));
 
 /** Graph supersteps, not model turns: one statement costs a dozen round trips. */
 const recursionLimitFor = (files: number): number =>
@@ -134,21 +139,12 @@ const BUDGETED_FILES = 6;
 const budgetFor = (files: number): number =>
   Math.min(files, BUDGETED_FILES) * FILE_BUDGET_MS;
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : {};
-
-const asString = (value: unknown): string =>
-  typeof value === "string" ? value : "";
-
 /** The graph hands a tool's arguments over as a JSON string nested in `input`. */
 const inputOf = (event: LangGraphEvent): Record<string, unknown> => {
   const wrapper = asRecord(event.data?.input);
   const raw = wrapper.input;
   if (typeof raw !== "string") return wrapper;
-  const [, parsed] = attempt<unknown, unknown>(() => JSON.parse(raw));
-  return asRecord(parsed);
+  return asRecord(parseJson(raw));
 };
 
 /**
