@@ -5,7 +5,7 @@ import { attempt, delay, isPlainObject } from "es-toolkit";
 import type { OledError } from "./errors";
 import type { Result } from "./result";
 import { EXIT_KIND, parseCliErrorLine } from "./errors";
-import { err, ok } from "./result";
+import { err, messageOf, ok } from "./result";
 import { createSerialQueue } from "./serial";
 
 // Spawning a CLI is impossible in a browser bundle; fail at import rather than at first call.
@@ -201,11 +201,11 @@ const run = async (
   allowPartial: boolean,
 ): Promise<RunOutcome> => {
   const outcome = await spawnRetryingBusy(argv, stdin).catch(
-    (): SpawnOutcome => ({
+    (cause: unknown): SpawnOutcome => ({
       stdout: "",
       stderr: "",
       exitCode: -1,
-      spawnError: "ESPAWN",
+      spawnError: `ESPAWN: ${messageOf(cause)}`,
     }),
   );
 
