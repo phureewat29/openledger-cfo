@@ -1,5 +1,7 @@
 import { takeRight } from "es-toolkit";
 
+import { perProcess } from "@openledger-cfo/api";
+
 import type { RunEntry } from "~/domain/ingest-run";
 import { RUN_JOURNAL_CAPACITY } from "~/domain/ingest-run";
 
@@ -45,12 +47,9 @@ const patched = (journal: Journal, id: string, patch: EntryPatch): Journal => {
  * copies would leave the reader watching an empty one. The seq lives in the
  * same value so a re-evaluated module cannot hand out one already used.
  */
-const forJournal = globalThis as unknown as {
-  ingestRunJournal?: { current: Journal };
-};
-const holder = (forJournal.ingestRunJournal ??= {
+const holder = perProcess<{ current: Journal }>("ingestRunJournal", () => ({
   current: { entries: [], seq: 0 },
-});
+}));
 
 export const appendEntry = (entry: NewEntry): void => {
   holder.current = appended(holder.current, entry, Date.now());
