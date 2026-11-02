@@ -44,11 +44,12 @@ const inLane = createLanes();
 /** Flags whose following argument must never reach a log, a UI, or an error. */
 const SECRET_FLAGS = new Set(["--password", "--ocr-api-key"]);
 
-const MASK = "•••";
+/** What stands in for a secret in a log, a UI, or an error. */
+export const SECRET_MASK = "•••";
 
 const maskArgv = (argv: string[]): string[] =>
   argv.map((arg, index) =>
-    SECRET_FLAGS.has(argv[index - 1] ?? "") ? MASK : arg,
+    SECRET_FLAGS.has(argv[index - 1] ?? "") ? SECRET_MASK : arg,
   );
 
 export interface OledCommandEvent {

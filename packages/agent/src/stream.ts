@@ -2,6 +2,8 @@ import type { UIMessageChunk } from "ai";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { attemptAsync, mapValues } from "es-toolkit";
 
+import { SECRET_MASK } from "@openledger-cfo/openledger";
+
 import { asRecord, asString, parseJson, textOf } from "./untyped";
 
 /** A LangGraph v2 stream event. Kept structural so we never import graph internals. */
@@ -12,9 +14,6 @@ export interface LangGraphEvent {
   data?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
-
-/** Masks a secret the same way the connector masks it in a command line. */
-const MASK = "•••";
 
 /**
  * LangChain objects arrive as class instances in-process but as
@@ -76,7 +75,7 @@ const parseInput = (args: string): unknown => {
 
 const maskSecrets = (input: unknown, secrets: readonly string[]): unknown =>
   mapValues(asRecord(input), (value, field) =>
-    secrets.includes(field) ? MASK : value,
+    secrets.includes(field) ? SECRET_MASK : value,
   );
 
 type SecretInputs = Readonly<Record<string, readonly string[]>>;
