@@ -238,8 +238,6 @@ export function FileList({
   const firstAsk = asking[0]?.file_id ?? null;
   // An auto run answers its own questions; calling for the operator during one
   // would be false, and its Answer press would race the agent for the row.
-  // Strict equality: an unknown mode over-prompts, which beats telling the
-  // operator to ignore questions a normal run genuinely left for them.
   const agentAnswering = live && run.mode === "auto";
 
   const showSelectAll = rows.length > 0 && selected.size < rows.length;
