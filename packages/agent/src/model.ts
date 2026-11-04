@@ -31,36 +31,29 @@ type RedactorProvider = () => Promise<Redactor>;
 type VocabSource = () => Promise<VocabEntry[]>;
 
 /**
- * A ledger read that fails contributes nothing rather than ending the turn.
- * The residual is deliberate: in a fresh process with an unreachable ledger
- * there is no last-good vocabulary to fall back on, so the re-POSTed history
- * is redacted by pattern only and earlier turns' real names go out in the
- * clear. An answerable turn is worth more than a perfectly hidden one.
- */
-const guarded = async (read: VocabSource): Promise<VocabEntry[]> => {
-  const [, entries] = await attemptAsync(read);
-  return entries ?? [];
-};
-
-/**
  * Read fresh for each model call: a model call follows tool execution, so an
  * account the agent just created is already hidden on the turn that reports it.
- * Calls that overlap within a turn share the one read, and the provider owns
- * the last good redactor for as long as it lives.
+ * Calls that overlap within a turn share the one read.
+ *
+ * A source whose read fails contributes what its last good read did rather than
+ * ending the turn, so one busy ledger read cannot un-hide names an earlier turn
+ * sent as placeholders. The residual is deliberate: a source that has never read
+ * cleanly in this process has nothing to fall back on, and the names it would
+ * have hidden go out redacted by pattern only. An answerable turn is worth more
+ * than a perfectly hidden one.
  */
 export const createRedactorSource = (
   sources: readonly VocabSource[],
 ): RedactorProvider => {
   let inFlight: Promise<Redactor> | undefined;
-  let lastGood: Redactor | undefined;
+  let lastGood: VocabEntry[][] = sources.map(() => []);
 
   const build = async (): Promise<Redactor> => {
-    const batches = await Promise.all(sources.map(guarded));
-    const entries = batches.flat();
-    // Every source failing at once must not quietly send a turn out in the clear.
-    if (entries.length === 0 && lastGood !== undefined) return lastGood;
-    lastGood = createRedactor(entries);
-    return lastGood;
+    const reads = await Promise.all(sources.map((read) => attemptAsync(read)));
+    lastGood = reads.map(
+      ([, entries], index) => entries ?? lastGood[index] ?? [],
+    );
+    return createRedactor(lastGood.flat());
   };
 
   return () => {

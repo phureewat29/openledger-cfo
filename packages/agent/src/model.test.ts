@@ -70,23 +70,42 @@ describe("createRedactorSource", () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
-  it("drops a failed source and keeps the rest", async () => {
+  it("keeps the rest when a source has never read cleanly", async () => {
     const redactorOf = createRedactorSource([broken, vocab]);
     const redactor = await redactorOf();
 
     expect(redactor.redactText(ACCOUNT)).not.toContain(ACCOUNT);
   });
 
-  it("reuses the last good redactor when every source fails", async () => {
+  it("keeps a failed source's last good names hidden beside fresh reads", async () => {
+    const user = vi.fn(() =>
+      Promise.resolve<VocabEntry[]>([{ category: "U", value: USER }]),
+    );
+    const accounts = vi.fn(() =>
+      Promise.resolve<VocabEntry[]>([{ category: "A", value: ACCOUNT }]),
+    );
+    const redactorOf = createRedactorSource([user, accounts]);
+    const line = `${USER} holds ${ACCOUNT}`;
+    const first = (await redactorOf()).redactText(line);
+
+    accounts.mockImplementation(broken);
+    const second = (await redactorOf()).redactText(line);
+
+    expect(user).toHaveBeenCalledTimes(2);
+    expect(second).toBe(first);
+    expect(second).not.toContain(ACCOUNT);
+  });
+
+  it("keeps every last good name hidden when every source fails", async () => {
     const read = vi.fn(vocab);
     const redactorOf = createRedactorSource([read]);
-    const good = await redactorOf();
+    await redactorOf();
 
     read.mockImplementation(broken);
     const fallback = await redactorOf();
 
-    expect(fallback).toBe(good);
     expect(fallback.redactText(USER)).not.toContain(USER);
+    expect(fallback.redactText(ACCOUNT)).not.toContain(ACCOUNT);
   });
 
   it("falls back to patterns alone with no good read behind it", async () => {
