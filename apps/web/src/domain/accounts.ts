@@ -28,6 +28,19 @@ export const LIQUID_GROUPS = new Set(["bank", "wallet", "cash"]);
  */
 export const CASH_DISPLAY_GROUPS = new Set([...LIQUID_GROUPS, "brokerage"]);
 
+/** Expense groups nobody can decide their way out of in a single month. */
+export const COMMITTED_GROUPS: ReadonlySet<string> = new Set([
+  "donation",
+  "family",
+  "fees",
+  "health",
+  "housing",
+  "insurance",
+  "interest",
+  "tax",
+  "utilities",
+]);
+
 /** A row's currency against the ledger's primary, which ids spell lowercase. */
 export const isPrimaryCurrency = (currency: string): boolean =>
   currency.toLowerCase() === PRIMARY;

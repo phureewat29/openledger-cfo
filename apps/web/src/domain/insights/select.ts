@@ -16,7 +16,7 @@ import type {
   SpendLine,
   Subscriptions,
 } from "./types";
-import { LIQUID_GROUPS, PRIMARY } from "../accounts";
+import { COMMITTED_GROUPS, LIQUID_GROUPS, PRIMARY } from "../accounts";
 import { accountLabel } from "../format";
 import { interestAccountFor, interestPaidFor } from "../loans";
 import {
@@ -64,19 +64,6 @@ const TRAILING_MONTHS = 6;
 const TOP_LINES = 3;
 const DISCRETIONARY_LIMIT = 8;
 const SUBSCRIPTION_HISTORY = 5;
-
-/** Groups nobody can decide their way out of in a single month. */
-const COMMITTED = new Set([
-  "donation",
-  "family",
-  "fees",
-  "health",
-  "housing",
-  "insurance",
-  "interest",
-  "tax",
-  "utilities",
-]);
 
 const toSpendLine = (posting: Posting): SpendLine => ({
   date: posting.date,
@@ -262,7 +249,7 @@ export const selectRuleInput = (snapshot: LedgerSnapshot): RuleInput => {
 
   const discretionary = orderBy(
     upToDay(inMonth(expenses, month), dayOfMonth).filter(
-      (posting) => posting.signed > 0 && !COMMITTED.has(posting.group),
+      (posting) => posting.signed > 0 && !COMMITTED_GROUPS.has(posting.group),
     ),
     [(posting) => posting.amount],
     ["desc"],

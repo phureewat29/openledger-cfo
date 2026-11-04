@@ -9,7 +9,7 @@ import type {
   FlowNode,
   IncomeLine,
 } from "./types";
-import { PRIMARY } from "../accounts";
+import { COMMITTED_GROUPS, PRIMARY } from "../accounts";
 import { accountLabel } from "../format";
 import { windowOf } from "../period";
 import { toPostings } from "../postings";
@@ -20,19 +20,6 @@ const HUB_ID = "hub:cash-in";
 const SAVED_ID = "outcome:saved";
 const OTHER_KEY = "other";
 const OTHER_ID = `${PRIMARY}:expense:${OTHER_KEY}`;
-
-/** Groups nobody can decide their way out of in a single month. */
-const COMMITTED = new Set([
-  "donation",
-  "family",
-  "fees",
-  "health",
-  "housing",
-  "insurance",
-  "interest",
-  "tax",
-  "utilities",
-]);
 
 const node = (
   id: string,
@@ -130,7 +117,7 @@ export const toBaseline = (
         id: `${PRIMARY}:expense:${key}`,
         label: accountLabel(`${PRIMARY}:expense:${key}`),
         monthly: perMonth(group),
-        committed: COMMITTED.has(key),
+        committed: COMMITTED_GROUPS.has(key),
       }),
     ),
     [(line) => line.monthly],
