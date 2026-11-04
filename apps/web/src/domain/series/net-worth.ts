@@ -52,11 +52,11 @@ export const netWorthSeries = (
     (posting) => posting.month,
   );
 
-  let value = current;
-  const points = months.toReversed().map((key): Point => {
-    const point = { x: formatMonthYear(key), y: Math.round(value) };
-    value -= netChange(byMonth[key] ?? []);
-    return point;
-  });
-  return points.reverse();
+  return months.reduceRight<{ value: number; points: Point[] }>(
+    ({ value, points }, key) => ({
+      value: value - netChange(byMonth[key] ?? []),
+      points: [{ x: formatMonthYear(key), y: Math.round(value) }, ...points],
+    }),
+    { value: current, points: [] },
+  ).points;
 };

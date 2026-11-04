@@ -1,4 +1,4 @@
-import { groupBy, orderBy, sumBy } from "es-toolkit";
+import { groupBy, orderBy, sumBy, takeWhile } from "es-toolkit";
 
 import type { TransactionRow } from "../postings";
 import type { BarSeries, CategoryTotal, Point } from "./types";
@@ -92,6 +92,13 @@ export const loanSplit = (
   };
 };
 
+interface Rewind {
+  readonly balance: number;
+  /** Rows already rewound, counted from the newest. */
+  readonly index: number;
+  readonly balances: readonly number[];
+}
+
 /**
  * The ledger stores one balance, not a history of them, so every earlier
  * balance is today's minus everything that has happened since.
@@ -102,7 +109,7 @@ const replay = (
   dates: readonly string[],
   current: number,
   debitAdds: boolean,
-): number[] => {
+): readonly number[] => {
   const newestFirst = rows.toSorted((left, right) =>
     right.date.localeCompare(left.date),
   );
@@ -112,18 +119,23 @@ const replay = (
       : -row.amount;
 
   // Walked newest to oldest so each sample only rewinds what the last one left.
-  let balance = current;
-  let index = 0;
-  const balances = dates.toReversed().map((date) => {
-    while (index < newestFirst.length) {
-      const row = newestFirst[index];
-      if (row === undefined || row.date <= date) break;
-      balance -= deltaOf(row);
-      index += 1;
-    }
-    return balance;
-  });
-  return balances.reverse();
+  const rewindTo = (
+    { balance, index, balances }: Rewind,
+    date: string,
+  ): Rewind => {
+    const since = takeWhile(newestFirst.slice(index), (row) => row.date > date);
+    const rewound = since.reduce((left, row) => left - deltaOf(row), balance);
+    return {
+      balance: rewound,
+      index: index + since.length,
+      balances: [rewound, ...balances],
+    };
+  };
+  return dates.reduceRight(rewindTo, {
+    balance: current,
+    index: 0,
+    balances: [],
+  }).balances;
 };
 
 const pointsOf = (labels: readonly string[], values: readonly number[]) =>
