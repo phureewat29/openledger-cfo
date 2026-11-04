@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   if (!start.success) {
     return fail(
       400,
-      'Send {"all":true}, {"pathOrId":"…"} or {"pathOrIds":["…"]}, with an optional {"mode":"auto"|"normal"}',
+      'Send {"pathOrId":"…"} or {"pathOrIds":["…"]}, with an optional {"mode":"auto"|"normal"}',
     );
   }
 
