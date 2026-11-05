@@ -96,7 +96,10 @@ interface Tally {
   readonly rows: number;
 }
 
-/** Everything one run knows. Its phase and tally are values, replaced whole. */
+/**
+ * Everything one run knows. Its phase, tally and transcript are values,
+ * replaced whole; its maps and sets are changed in place.
+ */
 interface Run {
   readonly runId: string;
   readonly scope: string;
