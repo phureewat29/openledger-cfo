@@ -345,6 +345,13 @@ const targetOfName = async (
   return { relPath: name, status: "new", fileId: null, prepared: false };
 };
 
+/** The ingest queue's rows, or undefined when the ledger did not answer. */
+const listQueue = (): Promise<IngestFile[] | undefined> =>
+  caller.ledger.ingest.list().then(
+    (page) => page.rows,
+    () => undefined,
+  );
+
 /** Named files are worked whatever state they are in; a locked one parks the run. */
 const selectTargets = async (
   scope: RunScope,
@@ -361,10 +368,7 @@ const selectTargets = async (
  */
 const noteClarifications = async (): Promise<void> => {
   const [files, questions] = await Promise.all([
-    caller.ledger.ingest.list().then(
-      (page) => page.rows,
-      () => undefined,
-    ),
+    listQueue(),
     caller.ledger.questions.list({}).then(
       (page) => page.rows,
       () => undefined,
@@ -592,8 +596,8 @@ interface LockedScan {
 
 /** This run's encrypted files, split by whether their text is already served. */
 const scanLocked = async (run: Run): Promise<LockedScan> => {
-  const page = await caller.ledger.ingest.list().catch(() => null);
-  const mine = (page?.rows ?? []).filter(
+  const rows = await listQueue();
+  const mine = (rows ?? []).filter(
     (row) =>
       row.encrypted &&
       WORKABLE.has(row.status) &&
@@ -921,11 +925,8 @@ const labelOf = (scope: RunScope): string =>
 const readQueue = async (
   scope: RunScope,
 ): Promise<Result<{ rows: IngestFile[]; targets: RunTarget[] }, string>> => {
-  const rows = await caller.ledger.ingest.list().then(
-    (page) => page.rows,
-    () => null,
-  );
-  if (rows === null) return err("The ingest queue could not be read.");
+  const rows = await listQueue();
+  if (rows === undefined) return err("The ingest queue could not be read.");
   return selectTargets(scope, rows).then(
     (targets) => ok({ rows, targets }),
     (cause: unknown) =>
