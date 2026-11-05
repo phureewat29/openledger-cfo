@@ -1,3 +1,5 @@
+import type { AccountType } from "@openledger-cfo/openledger";
+
 export type Severity = "info" | "warn" | "crit";
 
 export type RuleKey =
@@ -25,17 +27,10 @@ export interface Insight {
   readonly action: string;
 }
 
-export type AccountKind =
-  | "asset"
-  | "liability"
-  | "income"
-  | "expense"
-  | "equity";
-
 export interface AccountSummary {
   readonly id: string;
   readonly name: string;
-  readonly kind: AccountKind;
+  readonly kind: AccountType;
   readonly currency: string;
   readonly balance: number;
   readonly debitsPosted: number;
