@@ -1,6 +1,6 @@
 import type { UIMessageChunk } from "ai";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
-import { attemptAsync, mapValues } from "es-toolkit";
+import { attemptAsync, isPlainObject, mapValues } from "es-toolkit";
 
 import { SECRET_MASK } from "@openledger-cfo/openledger";
 
@@ -67,16 +67,25 @@ interface ToolCallEntry {
   args: string;
 }
 
+/** Where text that never parsed as JSON rides, whole. */
+const RAW_FIELD = "_raw";
+
 const parseInput = (args: string): unknown => {
   if (!args) return {};
   const parsed = parseJson(args);
-  return parsed === undefined ? { _raw: args } : parsed;
+  return parsed === undefined ? { [RAW_FIELD]: args } : parsed;
 };
 
-const maskSecrets = (input: unknown, secrets: readonly string[]): unknown =>
-  mapValues(asRecord(input), (value, field) =>
-    secrets.includes(field) ? SECRET_MASK : value,
+/**
+ * Only an object's fields can be masked one by one. Anything else is opaque,
+ * and so is the unparsed text under `_raw`: a secret may sit anywhere in it.
+ */
+const maskSecrets = (input: unknown, secrets: readonly string[]): unknown => {
+  if (!isPlainObject(input)) return { [RAW_FIELD]: SECRET_MASK };
+  return mapValues(asRecord(input), (value, field) =>
+    secrets.includes(field) || field === RAW_FIELD ? SECRET_MASK : value,
   );
+};
 
 type SecretInputs = Readonly<Record<string, readonly string[]>>;
 

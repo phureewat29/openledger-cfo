@@ -184,6 +184,34 @@ describe("toUIMessageStreamResponse", () => {
     });
   });
 
+  it.each([
+    ["is cut off", `{"pathOrId":"2026-01.pdf","password":"${SECRET}"`],
+    ["is not an object", `["2026-01.pdf","${SECRET}"]`],
+  ])(
+    "masks a secret call's arguments whole when the call %s",
+    async (_shape, args) => {
+      const turn: LangGraphEvent[] = [
+        { event: "on_chat_model_start", run_id: "turn-1" },
+        modelStream({
+          content: "",
+          tool_call_chunks: [
+            { index: 0, id: "call-cut", name: "ingestPrepare", args },
+          ],
+        }),
+        { event: "on_chat_model_end", run_id: "turn-1" },
+      ];
+      const { wire, message } = await receive(
+        toUIMessageStreamResponse(replay(turn), OPTIONS),
+      );
+
+      expect(wire).not.toContain(SECRET);
+      expect(message?.parts[1]).toMatchObject({
+        toolCallId: "call-cut",
+        input: { _raw: "•••" },
+      });
+    },
+  );
+
   it("keeps a hidden tool out, its result included", async () => {
     const { wire } = await bridge();
 
