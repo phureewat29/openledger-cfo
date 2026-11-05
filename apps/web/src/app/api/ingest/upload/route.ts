@@ -32,31 +32,44 @@ const safeName = (raw: string): string | undefined => {
 const errnoOf = (cause: unknown): string | undefined =>
   cause instanceof Error ? (cause as NodeJS.ErrnoException).code : undefined;
 
+type WriteFailure = "exhausted" | "io";
+
+const WRITE_STATUS: Record<WriteFailure, number> = { exhausted: 409, io: 500 };
+
 /**
  * `wx` is the claim: the first writer of a name wins and a second dropped copy
  * gets its own file rather than overwriting a statement waiting to be ingested.
- * The name written, or undefined once every suffix is taken.
+ * The validated extension is written back lowercase so the ledger's walk sees
+ * one spelling of each name.
  */
 const writeUnique = async (
   dir: string,
-  stem: string,
+  name: string,
   extension: string,
   bytes: Buffer,
-): Promise<Result<string | undefined, string>> => {
+): Promise<Result<string, { reason: WriteFailure; message: string }>> => {
+  const stem = name.slice(0, name.length - extension.length - 1);
   for (const suffix of range(MAX_SUFFIX + 1)) {
-    const name =
+    const candidate =
       suffix === 0 ? `${stem}.${extension}` : `${stem}-${suffix}.${extension}`;
     const [failure] = await attemptAsync<void, unknown>(() =>
-      writeFile(join(dir, name), bytes, { flag: "wx" }),
+      writeFile(join(dir, candidate), bytes, { flag: "wx" }),
     );
-    if (failure === null) return ok(name);
+    if (failure === null) return ok(candidate);
     if (errnoOf(failure) !== "EEXIST") {
-      return err(
-        failure instanceof Error ? failure.message : `Could not write ${name}`,
-      );
+      return err({
+        reason: "io",
+        message:
+          failure instanceof Error
+            ? failure.message
+            : `Could not write ${candidate}`,
+      });
     }
   }
-  return ok(undefined);
+  return err({
+    reason: "exhausted",
+    message: `${name} already exists, and so do its ${String(MAX_SUFFIX)} copies`,
+  });
 };
 
 export async function POST(request: Request) {
@@ -89,20 +102,14 @@ export async function POST(request: Request) {
       return fail(503, dir.error.message);
     }
 
-    // The validated extension is written back lowercase so the ledger's walk
-    // sees one spelling of each name.
-    const stem = name.slice(0, name.length - extension.length - 1);
     const written = await writeUnique(
       dir.value,
-      stem,
+      name,
       extension,
       Buffer.from(await file.arrayBuffer()),
     );
     if (!written.ok) {
-      return fail(500, written.error);
-    }
-    if (written.value === undefined) {
-      return fail(409, `${name} already exists, and so do its 20 copies`);
+      return fail(WRITE_STATUS[written.error.reason], written.error.message);
     }
 
     return Response.json({ ok: true, relPath: written.value });
