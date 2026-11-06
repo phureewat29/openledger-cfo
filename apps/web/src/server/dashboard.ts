@@ -30,6 +30,7 @@ import {
   firstDayOf,
   isoToday,
   isStale,
+  latestOf,
   monthOf,
   shiftDays,
   shiftMonth,
@@ -97,7 +98,7 @@ export interface Dashboard {
    */
   readonly accounts: readonly AccountRow[];
   /** Account id to the newest date it moved inside the window. */
-  readonly activity: Readonly<Record<string, string>>;
+  readonly activity: Readonly<Record<string, string | undefined>>;
   /**
    * Recent weekly balances per bank leaf, for the shape beside each row. It is
    * a fold over rows this page already holds, so it costs no ledger read.
@@ -149,12 +150,8 @@ const rowsByAccount = (
 /** Newest date each account moved, which is what makes a dormant account visible. */
 const lastActivity = (
   byAccount: Readonly<Record<string, readonly TransactionRow[]>>,
-): Record<string, string> =>
-  mapValues(byAccount, (rows) =>
-    rows
-      .map((row) => row.date)
-      .reduce((newest, date) => (date > newest ? date : newest)),
-  );
+): Record<string, string | undefined> =>
+  mapValues(byAccount, (rows) => latestOf(rows.map((row) => row.date)));
 
 export const loadDashboard = cache(
   (): Promise<LedgerLoad<Dashboard>> => asLedgerLoad(buildDashboard()),

@@ -53,7 +53,7 @@ export function BanksPane({
   className,
 }: {
   rows: readonly PortfolioAccount[];
-  activity: Readonly<Record<string, string>>;
+  activity: Readonly<Record<string, string | undefined>>;
   /** Recent weekly balances per row, for the shape beside the date. */
   sparks: Readonly<Record<string, readonly Point[]>>;
   className?: string;
