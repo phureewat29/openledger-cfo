@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { clamp } from "es-toolkit";
 
 import { cn } from "@openledger-cfo/ui";
 
-/** Within this of the end, the reader is at the tail and new content follows. */
-const STUCK_PX = 40;
+import { isAtTail } from "~/components/use-tail-follow";
+
 /** What a turn must still leave clear before the question is pinned instead. */
 const GAP = 24;
 /** The pinned question sits just off the top edge rather than against it. */
@@ -36,8 +37,7 @@ export function Conversation({
    * for the reader scrolling away — more tokens land before the event fires.
    */
   const scrollTo = useCallback((view: HTMLDivElement, top: number) => {
-    const limit = view.scrollHeight - view.clientHeight;
-    const target = Math.max(0, Math.min(top, limit));
+    const target = clamp(top, 0, view.scrollHeight - view.clientHeight);
     if (Math.abs(target - view.scrollTop) < 1) return;
     scripted.current = true;
     view.scrollTop = target;
@@ -89,9 +89,7 @@ export function Conversation({
           scripted.current = false;
           return;
         }
-        const view = event.currentTarget;
-        attached.current =
-          view.scrollHeight - view.scrollTop - view.clientHeight <= STUCK_PX;
+        attached.current = isAtTail(event.currentTarget);
       }}
       /* The browser's own anchoring fights every scroll above for the same
          pixels, and `offsetTop` is only measurable against a positioned box. */

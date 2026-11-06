@@ -5,6 +5,9 @@ import { useEffect, useRef } from "react";
 /** Below this the reader is at the tail and new lines should follow. */
 const STUCK_PX = 40;
 
+export const isAtTail = (element: HTMLElement): boolean =>
+  element.scrollHeight - element.scrollTop - element.clientHeight <= STUCK_PX;
+
 /**
  * Keeps a log pinned to its newest line while the reader sits at the tail, and
  * lets go once they scroll up to read.
@@ -21,10 +24,7 @@ export function useTailFollow(lines: readonly unknown[]) {
   }, [lines]);
 
   const onScroll = (event: React.UIEvent<HTMLDivElement>) => {
-    const element = event.currentTarget;
-    stuck.current =
-      element.scrollHeight - element.scrollTop - element.clientHeight <=
-      STUCK_PX;
+    stuck.current = isAtTail(event.currentTarget);
   };
 
   return { ref, onScroll };
