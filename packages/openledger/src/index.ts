@@ -95,7 +95,7 @@ export { EXIT_KIND } from "./errors";
 export type { OledError, OledErrorKind } from "./errors";
 export { quoteShellArg, SECRET_MASK } from "./exec";
 export type { OledCommandEvent, OledCommandListener } from "./exec";
-export { andThen, err, map, mapErr, messageOf, ok, unwrapOr } from "./result";
+export { andThen, err, map, messageOf, ok, unwrapOr } from "./result";
 export type { Result } from "./result";
 export type { ListPage } from "./ndjson";
 export type {

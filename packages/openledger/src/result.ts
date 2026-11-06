@@ -9,11 +9,6 @@ export const map = <T, U, E>(
   f: (value: T) => U,
 ): Result<U, E> => (result.ok ? ok(f(result.value)) : result);
 
-export const mapErr = <T, E, F>(
-  result: Result<T, E>,
-  f: (error: E) => F,
-): Result<T, F> => (result.ok ? result : err(f(result.error)));
-
 export const andThen = <T, U, E, F>(
   result: Result<T, E>,
   f: (value: T) => Result<U, F>,
