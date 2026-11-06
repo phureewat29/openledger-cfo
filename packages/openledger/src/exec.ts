@@ -23,10 +23,12 @@ const MAX_BUFFER = 64 * 1024 * 1024;
 export type OledLane = "fast" | "slow";
 
 /**
- * Process-wide on purpose: every connector reaches the same ledger file, so
- * all of them share the lanes that serialize it, and one id sequence keeps a
- * listener shared between connectors from pairing one command's start with
- * another's end.
+ * Module scope on purpose: every connector reaches the same ledger file, so all
+ * the connectors one instance of this module builds share the lanes that
+ * serialize it, and one id sequence keeps a listener shared between them from
+ * pairing one command's start with another's end. A bundler that evaluates the
+ * module twice makes a second set of lanes, so a caller that needs one queue
+ * per process holds one connector per process.
  *
  * Two lanes, not one: `ingest prepare` can hold a statement for minutes under
  * OCR, and a single queue would block every read behind it — overlaps can

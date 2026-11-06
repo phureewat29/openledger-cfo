@@ -10,9 +10,11 @@ import { recordCliCommand } from "./cli-log";
 import { perProcess } from "./per-process";
 
 /**
- * The connector's queues only serialize the `oled` spawns that share an
- * instance. Two instances means two processes contending for the ledger's
- * SQLite lock: needless ~5s busy waits and exit-8 retries.
+ * The lanes that serialize `oled` spawns live at the connector module's scope,
+ * and Next can evaluate that module more than once. One connector per process
+ * keeps every spawn on one set of lanes; two sets mean two `oled` processes
+ * contending for the ledger's SQLite lock: needless ~5s busy waits and exit-8
+ * retries.
  */
 export const ledger: OpenLedger = perProcess("oledConnector", () =>
   createOpenLedger({ onCommand: recordCliCommand }),
