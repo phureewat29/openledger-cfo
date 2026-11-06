@@ -47,7 +47,7 @@ import type {
 import { parseAs } from "./errors";
 import { formatOledCommand, runOled, runOledConfig, toFlagArgs } from "./exec";
 import { parseNdjsonRows, parseSingle } from "./ndjson";
-import { andThen, err, map, ok } from "./result";
+import { andThen, err, map, messageOf, ok } from "./result";
 import {
   accountAdjustResultSchema,
   accountCreatedResultSchema,
@@ -336,7 +336,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     if (stageError !== null) {
       return err<OledError>({
         kind: "cli_error",
-        message: `accounts create: could not stage ${file}: ${String(stageError)}`,
+        message: `accounts create: could not stage ${file}: ${messageOf(stageError)}`,
       });
     }
 

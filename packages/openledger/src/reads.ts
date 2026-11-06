@@ -28,7 +28,7 @@ import type {
 import { notConfigured, readOledConfigFile } from "./config";
 import { runOled, toFlagArgs } from "./exec";
 import { parseNdjsonRows, parseSingle } from "./ndjson";
-import { andThen, err, map, ok } from "./result";
+import { andThen, err, map, messageOf, ok } from "./result";
 import {
   accountMatchRowSchema,
   accountMatchSummarySchema,
@@ -127,7 +127,7 @@ const readDocument = (
           }
         : {
             kind: "cli_error",
-            message: `Cannot read ${path}: ${String(cause)}`,
+            message: `Cannot read ${path}: ${messageOf(cause)}`,
           },
     ),
   );
