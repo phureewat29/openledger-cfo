@@ -8,10 +8,10 @@ import type { Result } from "./result";
 import { parseAs, safeJsonParse } from "./errors";
 import { err } from "./result";
 
-const WORKSPACE_MARKER = "pnpm-workspace.yaml";
+export const WORKSPACE_MARKER = "pnpm-workspace.yaml";
 
 // `dirname` of a filesystem root is that root, which is where the walk stops.
-const findWorkspaceRoot = (dir: string): string | undefined => {
+export const findWorkspaceRoot = (dir: string): string | undefined => {
   if (existsSync(join(dir, WORKSPACE_MARKER))) return dir;
   const parent = dirname(dir);
   return parent === dir ? undefined : findWorkspaceRoot(parent);

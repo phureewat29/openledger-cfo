@@ -1,9 +1,12 @@
-import { cpSync, existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { cpSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { FilesystemBackend } from "deepagents";
 import { memoize } from "es-toolkit";
 
-const WORKSPACE_MARKER = "pnpm-workspace.yaml";
+import {
+  findWorkspaceRoot,
+  WORKSPACE_MARKER,
+} from "@openledger-cfo/openledger";
 
 /** Skill sources live with the code; the agent reads copies, never the sources. */
 const SKILL_SOURCES = "packages/agent/src/skills";
@@ -14,12 +17,6 @@ const SKILLS_MOUNT = "skills";
 
 /** POSIX path, relative to the backend root, that the skills middleware scans. */
 export const SKILLS_PATH = `/${SKILLS_MOUNT}/`;
-
-const findWorkspaceRoot = (dir: string): string | undefined => {
-  if (existsSync(join(dir, WORKSPACE_MARKER))) return dir;
-  const parent = dirname(dir);
-  return parent === dir ? undefined : findWorkspaceRoot(parent);
-};
 
 /**
  * Every app in the monorepo reaches the same agent workspace, so its path is

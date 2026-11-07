@@ -81,7 +81,11 @@ export const createOpenLedger = (opts: CreateOpenLedgerOptions = {}) => {
 
 export type OpenLedger = ReturnType<typeof createOpenLedger>;
 
-export { resolveOledConfig } from "./config";
+export {
+  findWorkspaceRoot,
+  resolveOledConfig,
+  WORKSPACE_MARKER,
+} from "./config";
 export type { OledConfigFile } from "./config";
 /**
  * Re-exported for callers that already hold the client. Both modules are pure

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 
 const WORKSPACE_MARKER = "pnpm-workspace.yaml";
 
+// A copy of openledger's walk: db is a leaf that imports no workspace package.
 // `dirname` of a filesystem root is that root, which is where the walk stops.
 const findWorkspaceRoot = (dir: string): string | undefined => {
   if (existsSync(join(dir, WORKSPACE_MARKER))) return dir;

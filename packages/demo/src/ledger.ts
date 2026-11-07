@@ -10,7 +10,7 @@ import type {
   OpenLedger,
   Result,
 } from "@openledger-cfo/openledger";
-import { err, ok } from "@openledger-cfo/openledger";
+import { err, ok, WORKSPACE_MARKER } from "@openledger-cfo/openledger";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..", "..");
 
@@ -26,7 +26,7 @@ export const LEDGER = {
 } as const;
 
 const guardDemoLedger = (): Result<true, OledError> => {
-  if (!existsSync(join(REPO_ROOT, "pnpm-workspace.yaml"))) {
+  if (!existsSync(join(REPO_ROOT, WORKSPACE_MARKER))) {
     return err<OledError>({
       kind: "invalid",
       message: `Refusing to touch ${LEDGER.root}: ${REPO_ROOT} is not the workspace root.`,
