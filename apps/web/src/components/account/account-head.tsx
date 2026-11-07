@@ -98,8 +98,8 @@ const CELLS: {
   ],
 };
 
-// The kind rides apart from the meta: only a generic key ties a table entry
-// to the argument it is called with.
+// The generic key is what lets `CELLS[kind]` take a `MetaOf<K>`. It cannot
+// pair them for a caller, where K is the whole union: pass the meta's own kind.
 const cellsOf = <K extends MetaKind>(
   kind: K,
   meta: MetaOf<K>,

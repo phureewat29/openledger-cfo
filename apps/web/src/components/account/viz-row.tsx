@@ -293,8 +293,8 @@ const VIZ: {
   basic: BasicViz,
 };
 
-// The kind rides apart from the series: only a generic key ties a table entry
-// to the props it is rendered with.
+// The generic key is what lets `VIZ[kind]` take a `SeriesOf<K>`. It cannot pair
+// them for a caller, where K is the whole union: pass the series' own kind.
 const vizOf = <K extends AccountKind>(
   kind: K,
   account: AccountView,
