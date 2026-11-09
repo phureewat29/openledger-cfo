@@ -1,9 +1,8 @@
 import { EXIT } from "@aquartier/openledger/contract";
-import { attempt } from "es-toolkit";
 import { z } from "zod/v4";
 
 import type { Result } from "./result";
-import { err, ok } from "./result";
+import { err, ok, parseJson } from "./result";
 
 export type OledErrorKind =
   | "spawn_failed"
@@ -50,12 +49,6 @@ const cliErrorLineSchema = z.object({
 
 type CliErrorLine = z.infer<typeof cliErrorLineSchema>["error"];
 
-/** JSON has no `undefined`, so it doubles as the parse-failure signal. */
-export const safeJsonParse = (text: string): unknown => {
-  const [error, value] = attempt<unknown, unknown>(() => JSON.parse(text));
-  return error === null ? value : undefined;
-};
-
 /** Zod's verdict as a Result, every issue folded into one message after `context`. */
 export const parseAs = <T>(
   schema: z.ZodType<T>,
@@ -74,5 +67,5 @@ export const parseCliErrorLine = (stderr: string): CliErrorLine | undefined =>
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.startsWith("{"))
-    .map((line) => cliErrorLineSchema.safeParse(safeJsonParse(line)).data)
+    .map((line) => cliErrorLineSchema.safeParse(parseJson(line)).data)
     .find((parsed) => parsed !== undefined)?.error;

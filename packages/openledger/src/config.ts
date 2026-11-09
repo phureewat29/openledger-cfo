@@ -5,8 +5,8 @@ import { z } from "zod/v4";
 
 import type { OledError } from "./errors";
 import type { Result } from "./result";
-import { parseAs, safeJsonParse } from "./errors";
-import { err } from "./result";
+import { parseAs } from "./errors";
+import { err, parseJson } from "./result";
 
 export const WORKSPACE_MARKER = "pnpm-workspace.yaml";
 
@@ -72,7 +72,7 @@ export const readOledConfigFile = async (
 
   return parseAs(
     oledConfigFileSchema,
-    safeJsonParse(text),
+    parseJson(text),
     "parse_failed",
     configPath,
   );

@@ -3,8 +3,8 @@ import { isPlainObject } from "es-toolkit";
 
 import type { OledError } from "./errors";
 import type { Result } from "./result";
-import { parseAs, safeJsonParse } from "./errors";
-import { err, ok } from "./result";
+import { parseAs } from "./errors";
+import { err, ok, parseJson } from "./result";
 
 const PREVIEW = 200;
 
@@ -43,7 +43,7 @@ export const parseNdjsonRows = <TRow, TSummary = unknown>(
   let summary: TSummary | undefined;
 
   for (const line of nonEmptyLines(stdout)) {
-    const value = safeJsonParse(line);
+    const value = parseJson(line);
     if (value === undefined) {
       return err(parseFailed(`Expected NDJSON, got: ${preview(line)}`));
     }
@@ -78,7 +78,7 @@ export const parseSingle = <T>(
   if (line === undefined)
     return err(parseFailed("Expected one JSON object, got no output"));
 
-  const value = safeJsonParse(line);
+  const value = parseJson(line);
   if (value === undefined) {
     return err(parseFailed(`Expected one JSON object, got: ${preview(line)}`));
   }

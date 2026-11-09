@@ -1,4 +1,6 @@
-import { attempt, isString } from "es-toolkit";
+import { isString } from "es-toolkit";
+
+export { parseJson } from "@openledger-cfo/openledger/result";
 
 /**
  * Any object reads as a record, class instances included: LangChain hands its
@@ -11,12 +13,6 @@ export const asRecord = (value: unknown): Record<string, unknown> =>
 
 export const asString = (value: unknown): string =>
   isString(value) ? value : "";
-
-/** Valid JSON never parses to `undefined`, so it doubles as the failure signal. */
-export const parseJson = (text: string): unknown => {
-  const [error, value] = attempt<unknown, unknown>(() => JSON.parse(text));
-  return error === null ? value : undefined;
-};
 
 /** Pulls plain text out of string content or a content-block array. */
 export const textOf = (content: unknown): string => {
