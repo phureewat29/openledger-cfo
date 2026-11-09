@@ -75,7 +75,7 @@ const unitLedgersOf = (life: Life): UnitLedger[] =>
         account.type === "asset" && account.metadata?.kind === "unit",
     )
     .map((account) => ({
-      code: account.id.slice(0, 3).toUpperCase(),
+      code: currencyOf(account.id),
       ticker: metadataText(account, "ticker") || account.id,
       account: account.id,
     }));

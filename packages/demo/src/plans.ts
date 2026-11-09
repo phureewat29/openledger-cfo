@@ -272,23 +272,19 @@ const buildCardReminders = (
   const cards = life.accounts.filter((account) =>
     account.id.startsWith(CREDIT_CARD_PREFIX),
   );
-  const undated = cards.find((account) => account.due_day === undefined);
-  if (undated) return err(`card ${undated.id} has no due_day in the dataset`);
-
-  return ok(
-    cards.flatMap((account) =>
-      account.due_day === undefined
-        ? []
-        : [
-            {
-              title: `Pay ${account.name}`,
-              dueDate: nextMonthlyOccurrence(today, account.due_day),
-              monthly: true,
-              note: null,
-            },
-          ],
-    ),
-  );
+  const reminders: ReminderInsert[] = [];
+  for (const card of cards) {
+    if (card.due_day === undefined) {
+      return err(`card ${card.id} has no due_day in the dataset`);
+    }
+    reminders.push({
+      title: `Pay ${card.name}`,
+      dueDate: nextMonthlyOccurrence(today, card.due_day),
+      monthly: true,
+      note: null,
+    });
+  }
+  return ok(reminders);
 };
 
 const buildMortgageReminder = (

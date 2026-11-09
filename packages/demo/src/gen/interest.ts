@@ -39,15 +39,16 @@ export const applyInterest = (ctx: SeedContext, rows: SeedRow[]): SeedRow[] => {
   const out: SeedRow[] = [];
   let cursor = 0;
 
-  const creditInterest = (date: string): SeedRow[] =>
-    (schedule.get(date) ?? []).flatMap((bank) => {
+  // Interest compounds: a credit is part of the balance the next period earns on.
+  const creditInterest = (date: string): void => {
+    for (const bank of schedule.get(date) ?? []) {
       const balanceUnits = balances.get(bank.account) ?? 0;
       const interestUnits = Math.round(
         (balanceUnits * bank.annualRate) / PERIODS[bank.cadence],
       );
-      if (interestUnits <= 0) return [];
+      if (interestUnits <= 0) continue;
       balances.set(bank.account, balanceUnits + interestUnits);
-      return [
+      out.push(
         row({
           date,
           description: `Interest — ${bank.name}`,
@@ -55,15 +56,16 @@ export const applyInterest = (ctx: SeedContext, rows: SeedRow[]): SeedRow[] => {
           credit: ACCOUNT.interestIncome,
           amount: fromUnits(interestUnits),
         }),
-      ];
-    });
+      );
+    }
+  };
 
   const flushBefore = (limit: string | undefined): void => {
     const due = takeWhile(
       dates.slice(cursor),
       (date) => limit === undefined || date < limit,
     );
-    out.push(...due.flatMap(creditInterest));
+    due.forEach(creditInterest);
     cursor += due.length;
   };
 
