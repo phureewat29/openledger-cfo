@@ -11,7 +11,6 @@ export type { RouterInputs, RouterOutputs };
 
 export type { ProbeReason } from "./config/probe";
 export { readGateway } from "./config/store";
-export { perProcess } from "./per-process";
 export { oledCauseOf } from "./result";
 export { ledger } from "./trpc";
 export {

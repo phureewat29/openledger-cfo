@@ -3,11 +3,11 @@ import superjson from "superjson";
 import { z, ZodError } from "zod/v4";
 
 import type { OpenLedger } from "@openledger-cfo/openledger";
+import { perProcess } from "@openledger-cfo/db";
 import { db } from "@openledger-cfo/db/client";
 import { createOpenLedger } from "@openledger-cfo/openledger";
 
 import { recordCliCommand } from "./cli-log";
-import { perProcess } from "./per-process";
 
 /**
  * The lanes that serialize `oled` spawns live at the connector module's scope,

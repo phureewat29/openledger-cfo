@@ -1,6 +1,6 @@
 import { takeRight } from "es-toolkit";
 
-import { perProcess } from "@openledger-cfo/api";
+import { perProcess } from "@openledger-cfo/db";
 
 import type { RunEntry } from "~/domain/ingest-run";
 import { RUN_JOURNAL_CAPACITY } from "~/domain/ingest-run";

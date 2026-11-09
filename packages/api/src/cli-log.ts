@@ -1,6 +1,5 @@
 import type { OledCommandEvent } from "@openledger-cfo/openledger";
-
-import { perProcess } from "./per-process";
+import { perProcess } from "@openledger-cfo/db";
 
 /** Exported for declaration emit only: it prints inside `ledgerRouter`'s type. */
 export interface CliLogEntry {
