@@ -2,6 +2,7 @@ import type { StructuredToolInterface } from "@langchain/core/tools";
 import type { UIMessage } from "ai";
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import { createDeepAgent } from "deepagents";
+import { toolErrorMiddleware, ToolInvocationError } from "langchain";
 
 import type { GatewayConfig } from "./model";
 import type { AgentKind } from "./registry";
@@ -81,6 +82,21 @@ const toChatMessages = (messages: UIMessage[]): ChatMessage[] =>
     ];
   });
 
+/**
+ * langchain words a call its schema refuses with every argument and the
+ * error's stack, whose absolute paths name the OS account; the gateway reads
+ * that text. The schema's issues are all the model needs to correct the call.
+ * Any other tool error passes through untouched. deepagents keeps custom
+ * middleware off its general-purpose subagent, whose refusals rely on the
+ * redactor's home-directory entry instead.
+ */
+const refusedCalls = toolErrorMiddleware({
+  onError: (error) =>
+    ToolInvocationError.isInstance(error)
+      ? `Error invoking tool '${error.toolCall.name}': ${error.toolError.message}\n Please fix the error and try again.`
+      : undefined,
+});
+
 /** Stateless: the client's transcript is the whole history every run. */
 export const createAgent = (kind: AgentKind, opts: AgentOptions): Agent => {
   const spec = AGENTS[kind];
@@ -102,6 +118,7 @@ export const createAgent = (kind: AgentKind, opts: AgentOptions): Agent => {
     systemPrompt: spec.buildSystemPrompt(opts.system),
     backend: backendFor(spec),
     skills: [SKILLS_PATH],
+    middleware: [refusedCalls],
   });
 
   const events = (

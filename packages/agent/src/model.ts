@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
 import type { ChatModelStreamEvent } from "@langchain/core/language_models/event";
 import type { BaseMessage } from "@langchain/core/messages";
@@ -64,6 +65,13 @@ export const createRedactorSource = (
   };
 };
 
+/**
+ * Absolute paths reach the model in tool errors and stack traces, and each one
+ * under the home directory names the OS account.
+ */
+const homeDirectory = (): Promise<VocabEntry[]> =>
+  Promise.resolve([{ category: "U", value: homedir() }]);
+
 const userName = async (): Promise<VocabEntry[]> => {
   const status = await caller.ledger.status();
   return [{ category: "U", value: status.user_name }];
@@ -93,6 +101,7 @@ const statementNames = async (): Promise<VocabEntry[]> => {
 
 /** One per process, so the last good vocabulary outlives the turn that read it. */
 const currentRedactor = createRedactorSource([
+  homeDirectory,
   userName,
   accountLabels,
   statementNames,

@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { ChatResult } from "@langchain/core/outputs";
@@ -14,6 +16,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { VocabEntry } from "./redaction";
 import { chatModel, createRedactorSource, RedactingChatOpenAI } from "./model";
 import { createRedactor } from "./redaction";
+
+// The app's redactor reads names through the ledger, which a test must not spawn.
+vi.mock("./tools/caller", () => {
+  const offline = () => Promise.reject(new Error("no ledger in tests"));
+  return {
+    caller: {
+      ledger: {
+        status: offline,
+        accounts: { list: offline },
+        ingest: { list: offline },
+      },
+    },
+  };
+});
 
 const GATEWAY = {
   baseUrl: "http://127.0.0.1:9",
@@ -37,11 +53,35 @@ const asRedacting = (runnable: unknown): RedactingChatOpenAI => {
 };
 
 describe("chatModel", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("builds a redacting model only when the toggle is on", () => {
     expect(chatModel(GATEWAY)).toBeInstanceOf(RedactingChatOpenAI);
     expect(chatModel({ ...GATEWAY, redact: false })).not.toBeInstanceOf(
       RedactingChatOpenAI,
     );
+  });
+
+  it("hides the home directory, whose paths name the OS account", async () => {
+    const crossed: BaseMessage[] = [];
+    vi.spyOn(ChatOpenAI.prototype, "_generate").mockImplementation(
+      (messages: BaseMessage[]): Promise<ChatResult> => {
+        crossed.push(...messages);
+        return Promise.resolve({
+          generations: [{ text: "ok", message: new AIMessage("ok") }],
+        });
+      },
+    );
+
+    await asRedacting(chatModel(GATEWAY))._generate(
+      [new HumanMessage(`Read ${join(homedir(), "Downloads", "a.pdf")}`)],
+      {},
+    );
+
+    expect(crossed).toHaveLength(1);
+    expect(crossed[0]?.text).not.toContain(homedir());
   });
 });
 
