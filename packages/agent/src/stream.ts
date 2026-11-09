@@ -76,16 +76,26 @@ const parseInput = (args: string): unknown => {
   return parsed === undefined ? { [RAW_FIELD]: args } : parsed;
 };
 
+/** A model may wrap its arguments, so a secret field is masked at any depth. */
+const maskFields = (value: unknown, secrets: readonly string[]): unknown => {
+  if (Array.isArray(value))
+    return value.map((item) => maskFields(item, secrets));
+  if (!isPlainObject(value)) return value;
+  return mapValues(asRecord(value), (item, field) =>
+    secrets.includes(field) || field === RAW_FIELD
+      ? SECRET_MASK
+      : maskFields(item, secrets),
+  );
+};
+
 /**
  * Only an object's fields can be masked one by one. Anything else is opaque,
  * and so is the unparsed text under `_raw`: a secret may sit anywhere in it.
  */
-const maskSecrets = (input: unknown, secrets: readonly string[]): unknown => {
-  if (!isPlainObject(input)) return { [RAW_FIELD]: SECRET_MASK };
-  return mapValues(asRecord(input), (value, field) =>
-    secrets.includes(field) || field === RAW_FIELD ? SECRET_MASK : value,
-  );
-};
+const maskSecrets = (input: unknown, secrets: readonly string[]): unknown =>
+  isPlainObject(input)
+    ? maskFields(input, secrets)
+    : { [RAW_FIELD]: SECRET_MASK };
 
 type SecretInputs = Readonly<Record<string, readonly string[]>>;
 

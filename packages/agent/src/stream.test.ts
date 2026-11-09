@@ -141,6 +141,24 @@ const receive = async (
 const bridge = (options: BridgeOptions = OPTIONS) =>
   receive(toUIMessageStreamResponse(replay(TURN), options));
 
+/** A turn holding one secret-bearing call, its arguments sent in one piece. */
+const secretCall = (args: string) =>
+  receive(
+    toUIMessageStreamResponse(
+      replay([
+        { event: "on_chat_model_start", run_id: "turn-1" },
+        modelStream({
+          content: "",
+          tool_call_chunks: [
+            { index: 0, id: "call-secret", name: "ingestPrepare", args },
+          ],
+        }),
+        { event: "on_chat_model_end", run_id: "turn-1" },
+      ]),
+      OPTIONS,
+    ),
+  );
+
 describe("toUIMessageStreamResponse", () => {
   it("rebuilds into the parts a client renders", async () => {
     const { message } = await bridge();
@@ -190,27 +208,32 @@ describe("toUIMessageStreamResponse", () => {
   ])(
     "masks a secret call's arguments whole when the call %s",
     async (_shape, args) => {
-      const turn: LangGraphEvent[] = [
-        { event: "on_chat_model_start", run_id: "turn-1" },
-        modelStream({
-          content: "",
-          tool_call_chunks: [
-            { index: 0, id: "call-cut", name: "ingestPrepare", args },
-          ],
-        }),
-        { event: "on_chat_model_end", run_id: "turn-1" },
-      ];
-      const { wire, message } = await receive(
-        toUIMessageStreamResponse(replay(turn), OPTIONS),
-      );
+      const { wire, message } = await secretCall(args);
 
       expect(wire).not.toContain(SECRET);
       expect(message?.parts[1]).toMatchObject({
-        toolCallId: "call-cut",
+        toolCallId: "call-secret",
         input: { _raw: "•••" },
       });
     },
   );
+
+  it("masks a secret input the model nested deeper", async () => {
+    const { wire, message } = await secretCall(
+      JSON.stringify({
+        input: { pathOrId: "2026-01.pdf", password: SECRET },
+        retries: [{ password: SECRET }, { _raw: SECRET }],
+      }),
+    );
+
+    expect(wire).not.toContain(SECRET);
+    expect(message?.parts[1]).toMatchObject({
+      input: {
+        input: { pathOrId: "2026-01.pdf", password: "•••" },
+        retries: [{ password: "•••" }, { _raw: "•••" }],
+      },
+    });
+  });
 
   it("keeps a hidden tool out, its result included", async () => {
     const { wire } = await bridge();
