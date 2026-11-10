@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ACCOUNT_ID_PATTERN } from "@openledger-cfo/api";
 import { Pane } from "@openledger-cfo/ui/pane";
 
+import { SetupCard } from "~/app/_components/setup-card";
 import { ACCOUNT_GRID, POSTINGS_COL } from "~/app/accounts/[id]/grid";
 import { AccountHead } from "~/components/account/account-head";
 import { PAGE_SIZE } from "~/components/account/paging";
@@ -12,6 +13,7 @@ import { VizRow } from "~/components/account/viz-row";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { formatDay } from "~/domain/format";
 import { loadAccount } from "~/server/account";
+import { asLedgerLoad } from "~/server/head";
 import { HydrateClient, prefetch, trpc } from "~/trpc/server";
 
 // The ledger is read per request; a build-time snapshot would go stale.
@@ -26,8 +28,9 @@ export async function generateMetadata(props: {
   const id = await idOf(props.params);
   if (!ACCOUNT_ID_PATTERN.test(id))
     return { title: "Account · OpenLedger CFO" };
-  const account = await loadAccount(id);
-  return { title: `${account?.name ?? "Account"} · OpenLedger CFO` };
+  const loaded = await asLedgerLoad(loadAccount(id));
+  const name = loaded.ok ? loaded.value?.name : undefined;
+  return { title: `${name ?? "Account"} · OpenLedger CFO` };
 }
 
 export default async function AccountPage(props: {
@@ -36,7 +39,14 @@ export default async function AccountPage(props: {
   const id = await idOf(props.params);
   if (!ACCOUNT_ID_PATTERN.test(id)) notFound();
 
-  const account = await loadAccount(id);
+  const loaded = await asLedgerLoad(loadAccount(id));
+  if (!loaded.ok) {
+    return (
+      <SetupCard reason={loaded.error.reason} message={loaded.error.message} />
+    );
+  }
+
+  const account = loaded.value;
   if (account === null) notFound();
 
   // Not awaited: the charts above are already drawn from `account`, so the
