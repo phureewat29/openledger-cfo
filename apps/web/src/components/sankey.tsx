@@ -576,7 +576,7 @@ export function Sankey({
                   tabIndex={0}
                   role="img"
                   aria-label={`${node.label}, ${formatThb(node.total)} per month`}
-                  className="focus-visible:outline-ring outline-none focus-visible:outline-1"
+                  className="focus-visible:outline-ring outline-none focus-visible:outline-1 focus-visible:outline-solid"
                   onPointerEnter={enter(node.id, "node")}
                   onPointerLeave={() => setHot(null)}
                   onFocus={focus(node.id)}

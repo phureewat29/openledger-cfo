@@ -235,7 +235,7 @@ function Plot({
         {...handlers}
         tabIndex={0}
         aria-label="Step through the series with the left and right arrow keys"
-        className="focus-visible:outline-ring absolute inset-0 cursor-crosshair outline-none focus-visible:outline-1"
+        className="focus-visible:outline-ring absolute inset-0 cursor-crosshair outline-none focus-visible:outline-1 focus-visible:outline-solid"
       />
     </>
   );

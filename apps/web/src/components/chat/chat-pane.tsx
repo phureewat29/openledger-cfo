@@ -133,7 +133,7 @@ function ModelChip({
       aria-label={`${view.text} — ${view.state}`}
       title={view.title}
       onClick={dialog.open}
-      className="text-muted-foreground hover:text-foreground focus-visible:outline-ring flex min-w-0 shrink cursor-pointer items-center gap-1.5 bg-transparent text-[10px] outline-none focus-visible:outline-2"
+      className="text-muted-foreground hover:text-foreground focus-visible:outline-ring flex min-w-0 shrink cursor-pointer items-center gap-1.5 bg-transparent text-[10px] outline-none focus-visible:outline-2 focus-visible:outline-solid"
     >
       <span
         className={cn(
@@ -268,7 +268,7 @@ export function ChatPane({
               id={SETTINGS_TRIGGER_ID}
               aria-label="AI gateway setup"
               onClick={config.open}
-              className="text-muted-foreground hover:text-foreground focus-visible:outline-ring shrink-0 cursor-pointer outline-none focus-visible:outline-2"
+              className="text-muted-foreground hover:text-foreground focus-visible:outline-ring shrink-0 cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-solid"
             >
               <Settings size={13} strokeWidth={1.75} aria-hidden />
             </button>
