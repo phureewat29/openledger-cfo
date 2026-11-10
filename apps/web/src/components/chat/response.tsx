@@ -18,7 +18,9 @@ const MARKDOWN = [
   "[&_h1]:mt-4 [&_h1]:mb-2 [&_h1]:text-base [&_h1]:font-medium",
   "[&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-[15px] [&_h2]:font-medium",
   "[&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-sm [&_h3]:font-medium",
-  "[&_code]:rounded [&_code]:bg-secondary [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em]",
+  // The chip is for inline code: a fenced block's lines are blocks inside its
+  // <code>, which turn the padded ends into empty lines of their own.
+  "[&_:not(pre)>code]:rounded [&_:not(pre)>code]:bg-secondary [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em]",
   "[&_a]:underline [&_a]:underline-offset-2",
   // The column is a few hundred pixels at most, so anything unwrappable
   // scrolls inside itself.
