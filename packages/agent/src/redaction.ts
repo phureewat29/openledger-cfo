@@ -39,8 +39,8 @@ import { asRecord, parseJson, textOf } from "./untyped";
  */
 
 /**
- * A account name, K masked account number, U user name, F filename,
- * N digit-run pattern hit, E email pattern hit.
+ * A account name, K masked account number, U user name or home directory,
+ * F filename, N digit-run pattern hit, E email pattern hit.
  */
 export type Category = "A" | "K" | "U" | "F" | "N" | "E";
 

@@ -88,7 +88,8 @@ const toChatMessages = (messages: UIMessage[]): ChatMessage[] =>
  * that text. The schema's issues are all the model needs to correct the call.
  * Any other tool error passes through untouched. deepagents keeps custom
  * middleware off its general-purpose subagent, whose refusals rely on the
- * redactor's home-directory entry instead.
+ * redactor's home-directory entry instead — and so go out whole when
+ * redaction is off.
  */
 const refusedCalls = toolErrorMiddleware({
   onError: (error) =>
