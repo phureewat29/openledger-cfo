@@ -39,7 +39,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
             <IngestRunProvider>
               <ChatDock>
                 <ConfigDialogProvider>
-                  <div className="grid h-full grid-rows-[minmax(0,1fr)_1.5rem]">
+                  <div className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_1.5rem]">
                     {/* The chat column is sized so the data column clears the wide
                   tier (896px) at a 1280 viewport: 26vw left it five pixels
                   short, which dropped a whole laptop width onto the stacked
