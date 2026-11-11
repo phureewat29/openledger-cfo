@@ -33,7 +33,7 @@
     "d3-shape": "^3.2.1",
     "es-toolkit": "catalog:",
     "lucide-react": "^1.72.0",
-    "next": "^16.0.9",
+    "next": "^16.4.6",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "streamdown": "^1.4.0",

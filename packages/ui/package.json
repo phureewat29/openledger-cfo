@@ -37,7 +37,7 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "next": "^16.0.9",
+    "next": "^16.4.6",
     "react": "catalog:react19"
   },
   "peerDependenciesMeta": {
