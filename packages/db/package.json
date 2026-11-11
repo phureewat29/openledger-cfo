@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "better-sqlite3": "catalog:",
-    "drizzle-orm": "^0.44.7",
+    "drizzle-orm": "^0.45.4",
     "zod": "catalog:"
   },
   "devDependencies": {

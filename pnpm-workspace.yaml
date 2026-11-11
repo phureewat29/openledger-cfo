@@ -33,13 +33,10 @@ catalogs:
 linkWorkspacePackages: true
 
 allowBuilds:
-  "@prisma/client": false
-  "@prisma/engines": false
   "@tailwindcss/oxide": true
   better-sqlite3: true
   bufferutil: false
   esbuild: true
-  prisma: false
   sharp: false
   utf-8-validate: false
 
