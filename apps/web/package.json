@@ -36,7 +36,7 @@
     "next": "^16.4.6",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
-    "streamdown": "^1.4.0",
+    "streamdown": "^2.7.1",
     "superjson": "2.2.6",
     "zod": "catalog:"
   },
