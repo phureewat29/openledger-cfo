@@ -281,7 +281,7 @@ describe("the wire seam", () => {
           });
           yield chunk;
           // What the real provider does from inside its own generator, with
-          // the raw chunk (chat_models/completions.js:219).
+          // the raw chunk (chat_models/completions.js:232).
           await inner?.handleLLMNewToken(
             chunk.text,
             { prompt: 0, completion: 0 },

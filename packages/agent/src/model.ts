@@ -112,24 +112,24 @@ const TOKEN_INDICES = { prompt: 0, completion: 0 };
 
 /**
  * Redaction sits at the one boundary all gateway traffic crosses. Three escapes
- * in `@langchain/openai@1.5.6` would route around it; each override below shuts
+ * in `@langchain/openai@1.8.3` would route around it; each override below shuts
  * one, and the versions are pinned because the escapes are unversioned internals.
  */
 export class RedactingChatOpenAI extends ChatOpenAI {
   private readonly redactorOf: RedactorProvider;
 
   constructor(fields: ChatOpenAIFields, redactorOf: RedactorProvider) {
-    // Neither `true` nor `false` will do (chat_models/base.js:255-257): `true`
+    // Neither `true` nor `false` will do (chat_models/base.js:263-265): `true`
     // makes `_generate` stream internally on raw-token callbacks, while a
     // literal `false` sets `disableStreaming`, which turns every `.stream()`
-    // into one buffered `invoke` (core chat_models.js:131). Absent is both off.
+    // into one buffered `invoke` (core chat_models.js:133). Absent is both off.
     super({ ...fields, streaming: undefined });
     this.redactorOf = redactorOf;
   }
 
   /**
-   * `withConfig` hard-codes `new ChatOpenAI(this.fields)` (chat_models/index.js:605),
-   * and `bindTools` (chat_models/base.js:344) and `withStructuredOutput` route
+   * `withConfig` hard-codes `new ChatOpenAI(this.fields)` (chat_models/index.js:673),
+   * and `bindTools` (chat_models/base.js:353) and `withStructuredOutput` route
    * through it — deepagents reaches the model by `bindTools`, so without this
    * every real call would run on a plain, unredacted model.
    */
@@ -177,7 +177,7 @@ export class RedactingChatOpenAI extends ChatOpenAI {
 
     // Stream events are built from `handleLLMNewToken`, which the provider fires
     // from inside its own generator with the chunk it just yielded
-    // (chat_models/completions.js:219). Withholding the run manager from `super`
+    // (chat_models/completions.js:232). Withholding the run manager from `super`
     // leaves this the only emitter, so no placeholder reaches a listener.
     for await (const chunk of super._streamResponseChunks(
       redacted,
@@ -197,7 +197,7 @@ export class RedactingChatOpenAI extends ChatOpenAI {
 
   /**
    * ChatOpenAI's facade hands this straight to its completions client
-   * (chat_models/index.js:591), which never reaches the override above. Bridging
+   * (chat_models/index.js:659), which never reaches the override above. Bridging
    * through our own chunks is what core's default does. Nothing in this app takes
    * that path today; the override keeps it from opening one silently.
    */
