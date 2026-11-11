@@ -12,7 +12,7 @@ catalog:
   "@trpc/server": ^11.28.0
   "@trpc/tanstack-react-query": ^11.28.0
   "@types/node": ^22.20.5
-  ai: ^5.0.0
+  ai: ^7.0.169
   better-sqlite3: ^12.11.1
   es-toolkit: ^1.53.2
   eslint: ^9.39.5

@@ -367,7 +367,7 @@ async function* followUpData(
  * Converts LangGraph v2 events into AI SDK UI message chunks.
  *
  * Emits `start`/`finish` itself, so the output is byte-compatible with what
- * `streamText().toUIMessageStreamResponse()` produces.
+ * the SDK's own `toUIMessageStream` produces from a `streamText` run.
  */
 async function* toUIChunks(
   events: AsyncIterable<LangGraphEvent>,
