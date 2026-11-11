@@ -6,6 +6,7 @@
     "skipLibCheck": true,
     "target": "ES2023",
     "lib": ["ES2023"],
+    "types": ["node"],
     "allowJs": true,
     "resolveJsonModule": true,
     "moduleDetection": "force",
