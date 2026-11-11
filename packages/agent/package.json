@@ -47,6 +47,7 @@
     "prettier": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   },
   "prettier": "@openledger-cfo/prettier-config"
