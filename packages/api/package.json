@@ -22,7 +22,7 @@
     "@openledger-cfo/db": "workspace:*",
     "@openledger-cfo/openledger": "workspace:*",
     "@trpc/server": "catalog:",
-    "superjson": "2.2.3",
+    "superjson": "2.2.6",
     "zod": "catalog:"
   },
   "devDependencies": {

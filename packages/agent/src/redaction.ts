@@ -252,17 +252,14 @@ const transformOther = (message: BaseMessage, pass: TextPass): BaseMessage => {
   return new Constructor({
     ...message,
     content: transformContent(message.content, pass.text),
-  } as BaseMessageFields);
+  });
 };
 
 const rebuildProse =
   (Constructor: MessageConstructor) =>
   (message: BaseMessage, pass: TextPass): BaseMessage =>
     new Constructor(
-      commonFields(
-        message,
-        transformContent(message.content, pass.text),
-      ) as BaseMessageFields,
+      commonFields(message, transformContent(message.content, pass.text)),
     );
 
 const transformAI = (message: AIMessage, pass: TextPass): AIMessage =>
