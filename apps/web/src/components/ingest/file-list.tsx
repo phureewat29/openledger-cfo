@@ -18,7 +18,7 @@ import type {
   IngestFile,
 } from "~/domain/ingest-files";
 import type { RunMode } from "~/domain/ingest-run";
-import { startIngestRun, useIngestRun } from "~/components/ingest-run-provider";
+import { useIngestRun } from "~/components/ingest-run-provider";
 import { Dropzone } from "~/components/ingest/dropzone";
 import { FileRow } from "~/components/ingest/file-row";
 import { ModeDialog } from "~/components/ingest/mode-dialog";
@@ -143,7 +143,7 @@ export function FileList({
   const client = useTRPCClient();
   const queryClient = useQueryClient();
   const hydrated = useHydrated();
-  const { run } = useIngestRun();
+  const { run, start } = useIngestRun();
   const { selected, selectAll, clear, view } = useSelection();
   const [pending, setPending] = useState<PendingRun | null>(null);
   const [confirming, setConfirming] = useState<Confirming | null>(null);
@@ -206,12 +206,12 @@ export function FileList({
     onError: (cause: Error) => setErrors([cause.message]),
   });
 
-  const start = async (mode: RunMode) => {
+  const startPending = async (mode: RunMode) => {
     const scope = pending;
     setPending(null);
     if (scope === null) return;
-    const result = await startIngestRun({ pathOrIds: scope }, mode);
-    setErrors(result.ok ? [] : [result.message]);
+    const result = await start({ pathOrIds: scope }, mode);
+    setErrors(result.ok ? [] : [result.error]);
   };
 
   const perform: Record<
@@ -439,7 +439,7 @@ export function FileList({
         open={pending !== null}
         files={pending?.length ?? 0}
         locked={lockedBehind}
-        onPick={(mode) => void start(mode)}
+        onPick={(mode) => void startPending(mode)}
         onClose={() => setPending(null)}
       />
     </Pane>

@@ -8,11 +8,7 @@ import { Input } from "@openledger-cfo/ui/input";
 import { Pane } from "@openledger-cfo/ui/pane";
 
 import type { RunEntry, RunEntryKind, RunStatus } from "~/domain/ingest-run";
-import {
-  cancelIngestRun,
-  unlockIngestRun,
-  useIngestRun,
-} from "~/components/ingest-run-provider";
+import { useIngestRun } from "~/components/ingest-run-provider";
 import { useSelection } from "~/components/ingest/selection";
 import { LoadingLine } from "~/components/loading-line";
 import { Field } from "~/components/plan/field";
@@ -81,16 +77,17 @@ function EntryRow({ entry }: { entry: RunEntry }) {
 }
 
 function LockPanel({ relPath }: { relPath: string }) {
+  const { unlock } = useIngestRun();
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (body: { password: string } | { skip: true }) => {
     setBusy(true);
-    const result = await unlockIngestRun(body);
+    const result = await unlock(body);
     setPassword("");
     setBusy(false);
-    setError(result.ok ? null : result.message);
+    setError(result.ok ? null : result.error);
   };
 
   return (
@@ -163,8 +160,8 @@ export function RunFeed({
 
   const cancel = async (runId: string) => {
     setCancelState({ runId, error: null });
-    const result = await cancelIngestRun();
-    if (!result.ok) setCancelState({ runId, error: result.message });
+    const result = await feed.cancel();
+    if (!result.ok) setCancelState({ runId, error: result.error });
   };
 
   const pressed =

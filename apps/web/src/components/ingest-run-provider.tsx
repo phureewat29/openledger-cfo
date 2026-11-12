@@ -1,16 +1,13 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { isEqual } from "es-toolkit";
+import { createContext, useContext, useState } from "react";
+import { isEqual, noop } from "es-toolkit";
+
+import type { Result } from "@openledger-cfo/openledger/result";
+import { err, messageOf, ok } from "@openledger-cfo/openledger/result";
 
 import type { RunEntry, RunMode, RunSnapshot } from "~/domain/ingest-run";
+import { useRingPoll } from "~/components/use-ring-poll";
 import {
   isRunLive,
   mergeRunEntries,
@@ -24,55 +21,37 @@ const IDLE_MS = 10000;
 const RUN_URL = "/api/ingest/run";
 const PASSWORD_URL = "/api/ingest/run/password";
 
-interface IngestRunState {
-  readonly entries: readonly RunEntry[];
-  readonly run: RunSnapshot | null;
-  readonly error: string | null;
-}
-
-const IDLE: IngestRunState = {
-  entries: NO_RUN_ENTRIES,
-  run: null,
-  error: null,
-};
-
-const IngestRunContext = createContext<IngestRunState>(IDLE);
-
 interface RunPage {
   readonly entries: RunEntry[];
   readonly latest: number;
   readonly run: RunSnapshot | null;
 }
 
-export type RunCommand =
-  { readonly ok: true } | { readonly ok: false; readonly message: string };
-
-/**
- * The mounted provider's read, so a command can pull the next one forward: at
- * the idle pace a press of Ingest would sit there for ten seconds looking
- * like it missed.
- */
-const readers = new Set<() => void>();
+const readRun = async (after: number | undefined): Promise<RunPage> => {
+  const query = after === undefined ? "" : `?after=${String(after)}`;
+  const response = await fetch(`${RUN_URL}${query}`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`The run feed answered ${String(response.status)}`);
+  }
+  return (await response.json()) as RunPage;
+};
 
 /** Every command the page can send the runner answers in one shape. */
-const send = async (url: string, init: RequestInit): Promise<RunCommand> => {
-  try {
-    const response = await fetch(url, init);
-    const body = (await response.json()) as { error?: string };
-    // Refused or accepted, the run is not where the last poll left it.
-    for (const read of readers) read();
-    if (response.ok) return { ok: true };
-    return {
-      ok: false,
-      message: body.error ?? `The runner answered ${String(response.status)}`,
-    };
-  } catch (cause) {
-    return {
-      ok: false,
-      message: cause instanceof Error ? cause.message : String(cause),
-    };
-  }
-};
+type Reply = Result<undefined, string>;
+
+/** A run is always asked for by name; there is no whole-queue scope anywhere. */
+interface RunScope {
+  readonly pathOrIds: readonly string[];
+}
+
+interface RunCommands {
+  readonly start: (scope: RunScope, mode: RunMode) => Promise<Reply>;
+  readonly cancel: () => Promise<Reply>;
+  /** The password travels in the body and nowhere else — never in this URL. */
+  readonly unlock: (
+    body: { password: string } | { skip: true },
+  ) => Promise<Reply>;
+}
 
 const asJson = (body: unknown): RequestInit => ({
   method: "POST",
@@ -80,96 +59,71 @@ const asJson = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-/** A run is always asked for by name; there is no whole-queue scope anywhere. */
-export interface RunScopeInput {
-  readonly pathOrIds: readonly string[];
+/**
+ * Every command wakes the poll once the runner answers: at the idle pace a
+ * press of Ingest would sit there for ten seconds looking like it missed.
+ */
+const commandsFor = (wake: () => void): RunCommands => {
+  const send = async (url: string, init: RequestInit): Promise<Reply> => {
+    try {
+      const response = await fetch(url, init);
+      const body = (await response.json()) as { error?: string };
+      // Refused or accepted, the run is not where the last poll left it.
+      wake();
+      if (response.ok) return ok(undefined);
+      return err(
+        body.error ?? `The runner answered ${String(response.status)}`,
+      );
+    } catch (cause) {
+      return err(messageOf(cause));
+    }
+  };
+
+  return {
+    start: (scope, mode) => send(RUN_URL, asJson({ ...scope, mode })),
+    cancel: () => send(RUN_URL, { method: "DELETE" }),
+    unlock: (body) => send(PASSWORD_URL, asJson(body)),
+  };
+};
+
+interface IngestRun extends RunCommands {
+  readonly entries: readonly RunEntry[];
+  readonly run: RunSnapshot | null;
+  readonly error: string | null;
 }
 
-export const startIngestRun = (
-  scope: RunScopeInput,
-  mode: RunMode,
-): Promise<RunCommand> => send(RUN_URL, asJson({ ...scope, mode }));
-
-export const cancelIngestRun = (): Promise<RunCommand> =>
-  send(RUN_URL, { method: "DELETE" });
-
-/** The password travels in the body and nowhere else — never in this URL. */
-export const unlockIngestRun = (
-  body: { password: string } | { skip: true },
-): Promise<RunCommand> => send(PASSWORD_URL, asJson(body));
+const IngestRunContext = createContext<IngestRun>({
+  entries: NO_RUN_ENTRIES,
+  run: null,
+  error: null,
+  // No provider means no poll, so there is nothing to wake.
+  ...commandsFor(noop),
+});
 
 /**
  * The run is read once for the whole app, from the root layout: the rail's dot
  * and the feed are two views of one poll, and a run keeps reporting while the
- * operator is on another page. Every read asks for what changed since the last,
- * so an idle tick carries no entries and commits no state.
+ * operator is on another page.
  */
 export function IngestRunProvider({ children }: { children: React.ReactNode }) {
-  const [entries, setEntries] = useState<readonly RunEntry[]>(NO_RUN_ENTRIES);
   const [run, setRun] = useState<RunSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const cursor = useRef<number | undefined>(undefined);
-  const reading = useRef(false);
-  const period = run !== null && isRunLive(run.status) ? LIVE_MS : IDLE_MS;
-
-  useEffect(() => {
-    const read = async (after: number | undefined): Promise<RunPage> => {
-      const query = after === undefined ? "" : `?after=${String(after)}`;
-      const response = await fetch(`${RUN_URL}${query}`, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`The run feed answered ${String(response.status)}`);
-      }
-      return (await response.json()) as RunPage;
-    };
-
-    const poll = async () => {
-      if (reading.current || document.hidden) return;
-      reading.current = true;
-      try {
-        const page = await read(cursor.current);
-        setError(null);
-        // A fresh object every poll would re-render the whole app on a timer.
-        setRun((current) => (isEqual(current, page.run) ? current : page.run));
-        // A restarted server's seqs start low again, so a carried-over cursor outruns the new ring.
-        if (page.latest < (cursor.current ?? 0)) {
-          const whole = await read(undefined);
-          cursor.current = whole.latest;
-          setEntries(whole.entries);
-          return;
-        }
-        cursor.current = page.latest;
-        if (page.entries.length === 0) return;
-        setEntries((current) => mergeRunEntries(current, page.entries));
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      } finally {
-        reading.current = false;
-      }
-    };
-
-    const resume = () => {
-      if (!document.hidden) void poll();
-    };
-
-    void poll();
-    const ticker = setInterval(() => void poll(), period);
-    document.addEventListener("visibilitychange", resume);
-    readers.add(resume);
-
-    return () => {
-      clearInterval(ticker);
-      document.removeEventListener("visibilitychange", resume);
-      readers.delete(resume);
-    };
-  }, [period]);
-
-  const state = useMemo(() => ({ entries, run, error }), [entries, run, error]);
+  const { entries, error, wake } = useRingPoll({
+    read: readRun,
+    merge: mergeRunEntries,
+    empty: NO_RUN_ENTRIES,
+    period: run !== null && isRunLive(run.status) ? LIVE_MS : IDLE_MS,
+    // A fresh object every poll would re-render the whole app on a timer.
+    onPage: (page) =>
+      setRun((current) => (isEqual(current, page.run) ? current : page.run)),
+  });
 
   return (
-    <IngestRunContext.Provider value={state}>
+    <IngestRunContext.Provider
+      value={{ entries, run, error, ...commandsFor(wake) }}
+    >
       {children}
     </IngestRunContext.Provider>
   );
 }
 
-export const useIngestRun = (): IngestRunState => useContext(IngestRunContext);
+export const useIngestRun = (): IngestRun => useContext(IngestRunContext);
