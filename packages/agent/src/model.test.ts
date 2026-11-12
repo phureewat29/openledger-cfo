@@ -10,7 +10,11 @@ import {
   SystemMessage,
 } from "@langchain/core/messages";
 import { ChatGenerationChunk } from "@langchain/core/outputs";
-import { ChatOpenAI } from "@langchain/openai";
+import {
+  ChatOpenAI,
+  ChatOpenAICompletions,
+  ChatOpenAIResponses,
+} from "@langchain/openai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { VocabEntry } from "./redaction";
@@ -192,6 +196,69 @@ describe("RedactingChatOpenAI", () => {
     expect(model.disableStreaming).toBe(false);
     expect(asRedacting(model.bindTools([])).disableStreaming).toBe(false);
   });
+});
+
+/**
+ * The gateway contract is `/chat/completions`. Spying on the facade's two
+ * delegates shows which one a call lands on, without reaching the network.
+ */
+describe("the gateway route", () => {
+  // `_modelPrefersResponsesAPI` claims any id containing `gpt-5.6`.
+  const PREFERS_RESPONSES = "openai/gpt-5.6-mini";
+
+  const routes = () => {
+    const reply: ChatResult = {
+      generations: [{ text: "ok", message: new AIMessage("ok") }],
+    };
+    return {
+      completions: vi
+        .spyOn(ChatOpenAICompletions.prototype, "_generate")
+        .mockResolvedValue(reply),
+      responses: vi
+        .spyOn(ChatOpenAIResponses.prototype, "_generate")
+        .mockResolvedValue(reply),
+    };
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // The control: without it, a release that stops routing the id would leave
+  // the two cases below passing while they prove nothing.
+  it("is not where a plain ChatOpenAI sends the id", async () => {
+    const { completions, responses } = routes();
+    const plain = new ChatOpenAI({ model: PREFERS_RESPONSES, apiKey: "none" });
+
+    await plain.invoke("hi");
+
+    expect(responses).toHaveBeenCalledOnce();
+    expect(completions).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "redacting",
+      new RedactingChatOpenAI(
+        { model: PREFERS_RESPONSES, apiKey: "none" },
+        () => Promise.resolve(createRedactor(VOCAB)),
+      ),
+    ],
+    [
+      "plain",
+      chatModel({ ...GATEWAY, model: PREFERS_RESPONSES, redact: false }),
+    ],
+  ])(
+    "holds the %s model on chat completions with tools bound",
+    async (_kind, model) => {
+      const { completions, responses } = routes();
+
+      await model.bindTools([]).invoke("hi");
+
+      expect(completions).toHaveBeenCalledOnce();
+      expect(responses).not.toHaveBeenCalled();
+    },
+  );
 });
 
 /**

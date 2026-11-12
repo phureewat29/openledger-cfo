@@ -111,11 +111,44 @@ const currentRedactor = createRedactorSource([
 const TOKEN_INDICES = { prompt: 0, completion: 0 };
 
 /**
- * Redaction sits at the one boundary all gateway traffic crosses. Three escapes
- * in `@langchain/openai@1.8.3` would route around it; each override below shuts
- * one, and the versions are pinned because the escapes are unversioned internals.
+ * Every call goes to `/chat/completions`, the one route the gateway contract
+ * and its Test button speak. `ChatOpenAI` sends some model ids to `/responses`
+ * on its own — any containing `gpt-5.6` or `codex`, among others
+ * (utils/misc.js:89) — and `useResponsesApi: false` cannot stop it, because
+ * the flag is OR-ed with that check (chat_models/index.js:642).
  */
-export class RedactingChatOpenAI extends ChatOpenAI {
+export class CompletionsChatOpenAI extends ChatOpenAI {
+  protected override _useResponsesApi(): boolean {
+    return false;
+  }
+
+  /** This model with no call options bound; a subclass holding more than its fields says how. */
+  protected unbound(): CompletionsChatOpenAI {
+    return new CompletionsChatOpenAI(this.fields ?? {});
+  }
+
+  /**
+   * `withConfig` hard-codes `new ChatOpenAI(this.fields)` (chat_models/index.js:673),
+   * and `bindTools` (chat_models/base.js:353) and `withStructuredOutput` route
+   * through it — deepagents reaches the model by `bindTools`, so without this
+   * every real call would run on a plain model: routed by id, and unredacted.
+   */
+  override withConfig(
+    config: Partial<ChatOpenAICallOptions>,
+  ): CompletionsChatOpenAI {
+    const bound = this.unbound();
+    bound.defaultOptions = { ...this.defaultOptions, ...config };
+    return bound;
+  }
+}
+
+/**
+ * Redaction sits at the one boundary all gateway traffic crosses. Three escapes
+ * in `@langchain/openai@1.8.3` would route around it: `withConfig`, which the
+ * base class shuts, and the two stream entry points overridden below. The
+ * versions are pinned because the escapes are unversioned internals.
+ */
+export class RedactingChatOpenAI extends CompletionsChatOpenAI {
   private readonly redactorOf: RedactorProvider;
 
   constructor(fields: ChatOpenAIFields, redactorOf: RedactorProvider) {
@@ -127,18 +160,8 @@ export class RedactingChatOpenAI extends ChatOpenAI {
     this.redactorOf = redactorOf;
   }
 
-  /**
-   * `withConfig` hard-codes `new ChatOpenAI(this.fields)` (chat_models/index.js:673),
-   * and `bindTools` (chat_models/base.js:353) and `withStructuredOutput` route
-   * through it — deepagents reaches the model by `bindTools`, so without this
-   * every real call would run on a plain, unredacted model.
-   */
-  override withConfig(
-    config: Partial<ChatOpenAICallOptions>,
-  ): RedactingChatOpenAI {
-    const bound = new RedactingChatOpenAI(this.fields ?? {}, this.redactorOf);
-    bound.defaultOptions = { ...this.defaultOptions, ...config };
-    return bound;
+  protected override unbound(): RedactingChatOpenAI {
+    return new RedactingChatOpenAI(this.fields ?? {}, this.redactorOf);
   }
 
   override async _generate(
@@ -225,5 +248,5 @@ export const chatModel = (gateway: GatewayConfig): ChatOpenAI => {
   };
   return gateway.redact
     ? new RedactingChatOpenAI(fields, currentRedactor)
-    : new ChatOpenAI(fields);
+    : new CompletionsChatOpenAI(fields);
 };
