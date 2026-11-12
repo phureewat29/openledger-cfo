@@ -25,6 +25,7 @@ const MARKDOWN = [
   // The column is a few hundred pixels at most, so anything unwrappable
   // scrolls inside itself.
   "[&_pre]:overflow-x-auto [&_pre]:rounded-lg",
+  "[&_[data-streamdown=code-block-actions]]:border-transparent",
   "[&_table]:my-3 [&_table]:w-full [&_table]:text-xs [&_td]:border-t [&_td]:border-border [&_td]:py-1.5 [&_th]:py-1.5 [&_th]:text-left",
   "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground",
 ].join(" ");
