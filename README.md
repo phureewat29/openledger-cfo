@@ -34,7 +34,7 @@ You need three things. Check each one:
 
 ```bash
 node --version     # ^22.21 or >=24 (Node 23 is not supported)
-pnpm --version     # pnpm package management
+pnpm --version     # >= 11.28 — `corepack enable` picks up the pinned one
 oled --version     # >= 0.24.0 — npm install -g @aquartier/openledger
 ```
 
@@ -97,6 +97,7 @@ pnpm dev         # start local development
 pnpm typecheck   # builds the dist-publishing packages first, then checks everything
 pnpm lint        # eslint across the workspace
 pnpm format      # prettier check
+pnpm test        # vitest in agent and web, the connector smoke in openledger
 pnpm build       # full production build
 ```
 
