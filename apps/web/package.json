@@ -21,6 +21,7 @@
     "@openledger-cfo/db": "workspace:*",
     "@openledger-cfo/openledger": "workspace:*",
     "@openledger-cfo/ui": "workspace:*",
+    "@streamdown/code": "^2.0.0",
     "@tanstack/react-query": "catalog:",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
