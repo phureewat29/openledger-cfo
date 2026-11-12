@@ -72,8 +72,7 @@ const runAgent = async (
         event.event === "on_chain_end"
       ) {
         const output = event.data?.output as
-          | { skillsMetadata?: { name?: string }[] }
-          | undefined;
+          { skillsMetadata?: { name?: string }[] } | undefined;
         skills = output?.skillsMetadata ?? [];
       }
       yield event;

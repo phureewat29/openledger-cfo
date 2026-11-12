@@ -42,17 +42,16 @@ export const loadChrome = cache((): Promise<LedgerLoad<Chrome>> => {
  * paid for: `ledgerHead` is shared with `loadChrome`, and reminders come from
  * the control plane rather than another `oled` process.
  */
-export const loadRailBadges = cache(
-  (): Promise<LedgerLoad<RailBadges>> =>
-    asLedgerLoad(
-      Promise.all([ledgerHead(), caller.reminders.list()]).then(
-        ([{ status }, reminders]) => ({
-          monitor: overdueCount(reminders, isoToday()),
-          ingest:
-            status.files.new +
-            status.files.failed +
-            (status.questions?.open ?? 0),
-        }),
-      ),
+export const loadRailBadges = cache((): Promise<LedgerLoad<RailBadges>> =>
+  asLedgerLoad(
+    Promise.all([ledgerHead(), caller.reminders.list()]).then(
+      ([{ status }, reminders]) => ({
+        monitor: overdueCount(reminders, isoToday()),
+        ingest:
+          status.files.new +
+          status.files.failed +
+          (status.questions?.open ?? 0),
+      }),
     ),
+  ),
 );

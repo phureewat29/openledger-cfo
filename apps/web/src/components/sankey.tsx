@@ -257,14 +257,12 @@ const placeLabels = (
 
   const notes = labelled
     .filter((node) => node.mark !== "label")
-    .map(
-      (node): Note => ({
-        id: node.id,
-        glyph: node.note > 0 ? String(node.note) : UNMARKED,
-        label: node.label,
-        value: formatThb(node.total),
-      }),
-    );
+    .map((node): Note => ({
+      id: node.id,
+      glyph: node.note > 0 ? String(node.note) : UNMARKED,
+      label: node.label,
+      value: formatThb(node.total),
+    }));
 
   return { labelled, notes };
 };

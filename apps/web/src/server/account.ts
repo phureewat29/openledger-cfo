@@ -59,8 +59,7 @@ export type AccountMeta =
       readonly kind: "card";
       /** The newest payment funded from an asset account; undefined when there has been none. */
       readonly lastPayment:
-        | { readonly amount: number; readonly date: string }
-        | undefined;
+        { readonly amount: number; readonly date: string } | undefined;
       /** The day the open statement cycle began, which is what dates the spend. */
       readonly cycleFrom: string;
       readonly statementDay: number | null;

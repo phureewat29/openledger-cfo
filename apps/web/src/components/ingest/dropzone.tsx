@@ -14,8 +14,7 @@ import {
 } from "~/domain/ingest-files";
 
 type UploadReply =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly error: string };
+  { readonly ok: true } | { readonly ok: false; readonly error: string };
 
 interface UploadFailure {
   readonly name: string;

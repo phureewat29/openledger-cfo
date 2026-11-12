@@ -153,8 +153,8 @@ const lastActivity = (
 ): Record<string, string | undefined> =>
   mapValues(byAccount, (rows) => latestOf(rows.map((row) => row.date)));
 
-export const loadDashboard = cache(
-  (): Promise<LedgerLoad<Dashboard>> => asLedgerLoad(buildDashboard()),
+export const loadDashboard = cache((): Promise<LedgerLoad<Dashboard>> =>
+  asLedgerLoad(buildDashboard()),
 );
 
 const buildDashboard = async (): Promise<Dashboard> => {

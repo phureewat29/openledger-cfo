@@ -8,12 +8,7 @@ import { monthsUntil, shiftDays } from "./period";
  * for cannot be ahead of or behind one.
  */
 export type PaceVerdict =
-  | "done"
-  | "overdue"
-  | "ahead"
-  | "on-track"
-  | "behind"
-  | "no-date";
+  "done" | "overdue" | "ahead" | "on-track" | "behind" | "no-date";
 
 /**
  * Money gathering toward a target, or a debt coming down to nothing. The two

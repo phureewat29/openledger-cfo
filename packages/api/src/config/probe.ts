@@ -5,8 +5,7 @@ import { messageOf } from "@openledger-cfo/openledger";
 export type ProbeReason = "unauthorized" | "unreachable" | "rejected";
 
 export type ProbeOutcome =
-  | { ok: true }
-  | { ok: false; reason: ProbeReason; message: string };
+  { ok: true } | { ok: false; reason: ProbeReason; message: string };
 
 export type ProbeKind = "gateway" | "ocr";
 

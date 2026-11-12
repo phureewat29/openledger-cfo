@@ -9,10 +9,7 @@ import { caller } from "~/trpc/server";
 
 /** A missing CLI, an outdated one, an empty ledger and an unreachable one each need their own words. */
 export type LedgerFailureReason =
-  | "not-installed"
-  | "outdated"
-  | "not-initialized"
-  | "unavailable";
+  "not-installed" | "outdated" | "not-initialized" | "unavailable";
 
 interface LedgerFailure {
   readonly reason: LedgerFailureReason;

@@ -66,13 +66,13 @@ export const cardSpend = (
   const valuesOf = (group: readonly TransactionRow[]) =>
     months.map((month) => totalOf(inMonth(group, month)));
 
-  const top = ranked.slice(0, TOP_CATEGORIES).map(
-    ([key, group]): BarSeries => ({
+  const top = ranked
+    .slice(0, TOP_CATEGORIES)
+    .map(([key, group]): BarSeries => ({
       key,
       label: accountLabel(key),
       values: valuesOf(group),
-    }),
-  );
+    }));
   const rest = ranked.slice(TOP_CATEGORIES).flatMap(([, group]) => group);
   if (rest.length === 0) return top;
   return [...top, { key: OTHER_KEY, label: "Other", values: valuesOf(rest) }];
@@ -228,11 +228,8 @@ export const payoffPoints = (
   const months = payoffProjection(principal, current);
   if (months === undefined || months > balance.length) return [];
   const from = monthOf(asOf);
-  return Array.from(
-    { length: months },
-    (_, step): Point => ({
-      x: formatMonthYear(shiftMonth(from, step + 1)),
-      y: Math.max(current - (current / months) * (step + 1), 0),
-    }),
-  );
+  return Array.from({ length: months }, (_, step): Point => ({
+    x: formatMonthYear(shiftMonth(from, step + 1)),
+    y: Math.max(current - (current / months) * (step + 1), 0),
+  }));
 };

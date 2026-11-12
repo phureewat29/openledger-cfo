@@ -107,8 +107,7 @@ async function* replay(
 }
 
 type Parsed =
-  | { success: true; value: UIMessageChunk }
-  | { success: false; error: unknown };
+  { success: true; value: UIMessageChunk } | { success: false; error: unknown };
 
 /**
  * Reads the body back exactly as `useChat`'s default transport does: the SSE

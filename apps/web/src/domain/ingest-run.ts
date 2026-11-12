@@ -1,11 +1,7 @@
 import { mergeById } from "~/domain/cli-log";
 
 export type RunStatus =
-  | "running"
-  | "waiting-password"
-  | "done"
-  | "failed"
-  | "cancelled";
+  "running" | "waiting-password" | "done" | "failed" | "cancelled";
 
 /**
  * `tool` is a step the agent took; the rest are the runner's own voice — what

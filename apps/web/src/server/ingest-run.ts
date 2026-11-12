@@ -38,8 +38,7 @@ const caller = appRouter.createCaller(
 );
 
 export type RunScope =
-  | { readonly pathOrId: string }
-  | { readonly pathOrIds: readonly string[] };
+  { readonly pathOrId: string } | { readonly pathOrIds: readonly string[] };
 
 export type StartFailure = "disabled" | "busy" | "unavailable";
 

@@ -45,8 +45,7 @@ interface RunPage {
 }
 
 export type RunCommand =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly message: string };
+  { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 /**
  * The mounted provider's read, so a command can pull the next one forward: at
