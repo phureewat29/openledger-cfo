@@ -13,6 +13,7 @@ import { err, messageOf, ok } from "@openledger-cfo/openledger";
 import type { IngestFile } from "~/domain/ingest-files";
 import type {
   RunMode,
+  RunScope,
   RunSnapshot,
   RunStatus,
   RunTarget,
@@ -36,9 +37,6 @@ import { appendEntry, updateEntry } from "~/server/ingest-journal";
 const caller = appRouter.createCaller(
   createTRPCContext({ headers: new Headers() }),
 );
-
-export type RunScope =
-  { readonly pathOrId: string } | { readonly pathOrIds: readonly string[] };
 
 export type StartFailure = "disabled" | "busy" | "unavailable";
 
@@ -351,13 +349,11 @@ const listQueue = (): Promise<IngestFile[] | undefined> =>
   );
 
 /** Named files are worked whatever state they are in; a locked one parks the run. */
-const selectTargets = async (
+const selectTargets = (
   scope: RunScope,
   rows: IngestFile[],
-): Promise<RunTarget[]> => {
-  if ("pathOrId" in scope) return [await targetOfName(scope.pathOrId, rows)];
-  return Promise.all(scope.pathOrIds.map((name) => targetOfName(name, rows)));
-};
+): Promise<RunTarget[]> =>
+  Promise.all(scope.pathOrIds.map((name) => targetOfName(name, rows)));
 
 /**
  * What a Normal run leaves behind, said in the feed rather than left for the
@@ -915,9 +911,7 @@ const advance = (run: Run, text: string): void => {
 };
 
 const labelOf = (scope: RunScope): string =>
-  "pathOrId" in scope
-    ? scope.pathOrId
-    : `${String(scope.pathOrIds.length)} selected`;
+  `${String(scope.pathOrIds.length)} selected`;
 
 /** The queue as it stands, and the targets the scope names in it. */
 const readQueue = async (

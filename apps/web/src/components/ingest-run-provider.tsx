@@ -6,7 +6,12 @@ import { isEqual, noop } from "es-toolkit";
 import type { Result } from "@openledger-cfo/openledger/result";
 import { err, messageOf, ok } from "@openledger-cfo/openledger/result";
 
-import type { RunEntry, RunMode, RunSnapshot } from "~/domain/ingest-run";
+import type {
+  RunEntry,
+  RunMode,
+  RunScope,
+  RunSnapshot,
+} from "~/domain/ingest-run";
 import { useRingPoll } from "~/components/use-ring-poll";
 import {
   isRunLive,
@@ -38,11 +43,6 @@ const readRun = async (after: number | undefined): Promise<RunPage> => {
 
 /** Every command the page can send the runner answers in one shape. */
 type Reply = Result<undefined, string>;
-
-/** A run is always asked for by name; there is no whole-queue scope anywhere. */
-interface RunScope {
-  readonly pathOrIds: readonly string[];
-}
 
 interface RunCommands {
   readonly start: (scope: RunScope, mode: RunMode) => Promise<Reply>;

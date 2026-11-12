@@ -83,6 +83,11 @@ export const isRunLive = (status: RunStatus): boolean =>
 export const RUN_MODES = ["auto", "normal"] as const;
 export type RunMode = (typeof RUN_MODES)[number];
 
+/** A run is always asked for by name; there is no whole-queue scope anywhere. */
+export interface RunScope {
+  readonly pathOrIds: readonly string[];
+}
+
 /** What the runner can tell the agent about one file before it opens it. */
 export interface RunTarget {
   readonly relPath: string;

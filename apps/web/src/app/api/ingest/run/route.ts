@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import type { RunScope, StartFailure } from "~/server/ingest-run";
+import type { StartFailure } from "~/server/ingest-run";
 import { fail } from "~/app/api/ingest/reply";
 import { RUN_MODES } from "~/domain/ingest-run";
 import { listEntries } from "~/server/ingest-journal";
@@ -9,20 +9,10 @@ import { cancelRun, readRun, startRun } from "~/server/ingest-run";
 // Memory the poller re-reads every couple of seconds; a cached answer is a lie.
 export const dynamic = "force-dynamic";
 
-const name = z.string().min(1).max(500);
-
-/** Today's behaviour is the default, so an older caller keeps working. */
-const mode = z.enum(RUN_MODES).default("auto");
-
-const StartSchema = z.union([
-  z.object({ pathOrId: name, mode }),
-  z.object({ pathOrIds: z.array(name).min(1).max(200), mode }),
-]);
-
-const scopeOf = (input: z.infer<typeof StartSchema>): RunScope =>
-  "pathOrId" in input
-    ? { pathOrId: input.pathOrId }
-    : { pathOrIds: input.pathOrIds };
+const StartSchema = z.object({
+  pathOrIds: z.array(z.string().min(1).max(500)).min(1).max(200),
+  mode: z.enum(RUN_MODES),
+});
 
 const AfterSchema = z.coerce.number().int().min(0);
 
@@ -36,13 +26,11 @@ export async function POST(request: Request) {
   const body: unknown = await request.json().catch(() => null);
   const start = StartSchema.safeParse(body);
   if (!start.success) {
-    return fail(
-      400,
-      'Send {"pathOrId":"…"} or {"pathOrIds":["…"]}, with an optional {"mode":"auto"|"normal"}',
-    );
+    return fail(400, 'Send {"pathOrIds":["…"],"mode":"auto"|"normal"}');
   }
 
-  const started = await startRun(scopeOf(start.data), start.data.mode);
+  const { pathOrIds, mode } = start.data;
+  const started = await startRun({ pathOrIds }, mode);
   if (!started.ok) {
     return fail(START_STATUS[started.error.reason], started.error.message);
   }
