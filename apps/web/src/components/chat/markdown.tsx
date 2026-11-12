@@ -12,7 +12,8 @@ const PLUGINS = { code };
  */
 export default function Markdown({ children }: { children: string }) {
   return (
-    // Streamdown's overlays would render unstyled: Tailwind never scans its classes.
+    // Its link modal and fullscreen table paint with bg-primary, bg-muted and
+    // bg-sidebar, which emit nothing: the theme defines none of those colours.
     <Streamdown
       plugins={PLUGINS}
       linkSafety={{ enabled: false }}
