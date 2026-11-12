@@ -41,6 +41,10 @@ allowBuilds:
   sharp: false
   utf-8-validate: false
 
+overrides:
+  "@esbuild-kit/core-utils>esbuild": ^0.25.12
+  "@typescript-eslint/typescript-estree>minimatch": ^11.0.8
+
 publicHoistPattern:
   - "@ianvs/prettier-plugin-sort-imports"
   - prettier-plugin-tailwindcss
