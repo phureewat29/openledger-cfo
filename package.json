@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@openledger-cfo/prettier-config": "workspace:*",
-    "dotenv-cli": "^10.0.0",
+    "dotenv-cli": "^11.1.0",
     "prettier": "catalog:",
     "turbo": "^2.11.10",
     "typescript": "catalog:"
