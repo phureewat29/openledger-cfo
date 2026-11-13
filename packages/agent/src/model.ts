@@ -9,7 +9,7 @@ import type {
 } from "@langchain/openai";
 import { convertChunksToEvents } from "@langchain/core/language_models/compat";
 import { ChatOpenAI } from "@langchain/openai";
-import { attemptAsync } from "es-toolkit";
+import { attemptAsync, uniq } from "es-toolkit";
 
 import type { Redactor, VocabEntry } from "./redaction";
 import { createRedactor } from "./redaction";
@@ -66,11 +66,36 @@ export const createRedactorSource = (
 };
 
 /**
+ * A Windows path reaches the model with either drive-letter case, either
+ * separator, or its backslashes doubled by JSON, and each spelling needs its
+ * own vocabulary entry.
+ */
+export const homeSpellings = (
+  home: string,
+  platform: NodeJS.Platform,
+): string[] => {
+  if (platform !== "win32") return [home];
+  const drive = home.slice(0, 1);
+  const rest = home.slice(1);
+  return uniq(
+    [drive.toUpperCase(), drive.toLowerCase()].flatMap((letter) => {
+      const path = `${letter}${rest}`;
+      return [path, path.replaceAll("\\", "/"), path.replaceAll("\\", "\\\\")];
+    }),
+  );
+};
+
+/**
  * Absolute paths reach the model in tool errors and stack traces, and each one
  * under the home directory names the OS account.
  */
 const homeDirectory = (): Promise<VocabEntry[]> =>
-  Promise.resolve([{ category: "U", value: homedir() }]);
+  Promise.resolve(
+    homeSpellings(homedir(), process.platform).map((value) => ({
+      category: "U" as const,
+      value,
+    })),
+  );
 
 const userName = async (): Promise<VocabEntry[]> => {
   const status = await caller.ledger.status();
@@ -91,12 +116,17 @@ const accountLabels = async (): Promise<VocabEntry[]> => {
   ]);
 };
 
+/** `rel_path` uses `/` everywhere; a Windows path spells it with backslashes. */
 const statementNames = async (): Promise<VocabEntry[]> => {
   const page = await caller.ledger.ingest.list();
-  return page.rows.map((row) => ({
-    category: "F" as const,
-    value: row.rel_path,
-  }));
+  return page.rows.flatMap((row) =>
+    [
+      row.rel_path,
+      ...(process.platform === "win32"
+        ? [row.rel_path.replaceAll("/", "\\")]
+        : []),
+    ].map((value) => ({ category: "F" as const, value })),
+  );
 };
 
 /** One per process, so the last good vocabulary outlives the turn that read it. */

@@ -18,7 +18,12 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { VocabEntry } from "./redaction";
-import { chatModel, createRedactorSource, RedactingChatOpenAI } from "./model";
+import {
+  chatModel,
+  createRedactorSource,
+  homeSpellings,
+  RedactingChatOpenAI,
+} from "./model";
 import { createRedactor } from "./redaction";
 
 // The app's redactor reads names through the ledger, which a test must not spawn.
@@ -86,6 +91,45 @@ describe("chatModel", () => {
 
     expect(crossed).toHaveLength(1);
     expect(crossed[0]?.text).not.toContain(homedir());
+  });
+});
+
+describe("homeSpellings", () => {
+  const HOME = "C:\\Users\\alice";
+
+  it("spells a Windows home every way a path can arrive", () => {
+    expect(homeSpellings(HOME, "win32")).toEqual([
+      "C:\\Users\\alice",
+      "C:/Users/alice",
+      "C:\\\\Users\\\\alice",
+      "c:\\Users\\alice",
+      "c:/Users/alice",
+      "c:\\\\Users\\\\alice",
+    ]);
+  });
+
+  it("keeps a POSIX home as it is", () => {
+    expect(homeSpellings("/home/alice", "linux")).toEqual(["/home/alice"]);
+  });
+
+  it("hides each spelling and restores it exactly", () => {
+    const redactor = createRedactor(
+      homeSpellings(HOME, "win32").map((value) => ({
+        category: "U" as const,
+        value,
+      })),
+    );
+    const text = [
+      `open '${HOME}\\Downloads\\a.pdf'`,
+      "open 'c:\\Users\\alice\\a.pdf'",
+      "at file:///C:/Users/alice/repo/x.js:1:2",
+      JSON.stringify({ path: `${HOME}\\x` }),
+    ].join("\n");
+
+    const redacted = redactor.redactText(text);
+
+    expect(redacted).not.toContain("alice");
+    expect(redactor.restoreText(redacted)).toBe(text);
   });
 });
 
