@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { win32 } from "node:path";
 import { EXIT } from "@aquartier/openledger/contract";
 import { attempt, delay, isPlainObject } from "es-toolkit";
 
@@ -111,6 +113,84 @@ export const formatOledCommand = (args: string[], configPath: string): string =>
     ...maskArgv(toFinalArgv(args, configPath).map(quoteShellArg)),
   ].join(" ");
 
+/** How a spawn starts the CLI: by its bare name, or as Node running a script. */
+export interface OledLauncher {
+  readonly file: string;
+  readonly prefix: readonly string[];
+  /** A Windows shim on PATH that named no script this could run. */
+  readonly unreadShim?: string;
+}
+
+const BARE: OledLauncher = { file: OLED_BIN, prefix: [] };
+
+/** The machine as the launcher reads it, injected so the Windows walk runs anywhere. */
+export interface LauncherHost {
+  readonly platform: NodeJS.Platform;
+  readonly path: string | undefined;
+  readonly execPath: string;
+  readonly exists: (file: string) => boolean;
+  readonly read: (file: string) => string | undefined;
+}
+
+/**
+ * The quoted script just before `%*`: npm anchors it at `%dp0%\`, pnpm at
+ * `%~dp0\` or, across drives, writes it absolute, and pnpm doubles each `%`.
+ */
+const SHIM_SCRIPT = /"(%dp0%\\|%~dp0\\)?([^"]+\.[cm]?js)"\s+%\*/i;
+
+export const scriptOfShim = (shim: string, dir: string): string | undefined => {
+  const match = SHIM_SCRIPT.exec(shim);
+  if (match === null) return undefined;
+  const [, anchor, target = ""] = match;
+  const script = target.replaceAll("%%", "%");
+  if (anchor !== undefined) return win32.join(dir, script);
+  return win32.isAbsolute(script) ? script : undefined;
+};
+
+// Within one PATH directory an `.exe` (Volta's shim) wins, as it does for cmd.exe.
+const WINDOWS_NAMES = ["oled.exe", "oled.cmd"];
+
+/**
+ * npm and pnpm install `oled` on Windows as `oled.cmd`. execFile cannot start a
+ * `.cmd` without a shell (CVE-2024-27980), and a shell re-parses every
+ * argument, passwords included. So Windows runs the script the shim names under
+ * this Node, and leaves anything else to execFile under the bare name.
+ */
+export const resolveOledLauncher = (host: LauncherHost): OledLauncher => {
+  if (host.platform !== "win32") return BARE;
+  const found = (host.path ?? "")
+    .split(win32.delimiter)
+    .map((dir) => dir.replaceAll('"', ""))
+    .filter((dir) => dir !== "")
+    .flatMap((dir) => WINDOWS_NAMES.map((name) => win32.join(dir, name)))
+    .find((file) => host.exists(file));
+  if (!found?.endsWith(".cmd")) return BARE;
+
+  const shim = host.read(found);
+  const script =
+    shim === undefined ? undefined : scriptOfShim(shim, win32.dirname(found));
+  return script !== undefined && host.exists(script)
+    ? { file: host.execPath, prefix: [script] }
+    : { ...BARE, unreadShim: found };
+};
+
+const readText = (file: string): string | undefined =>
+  attempt(() => readFileSync(file, "utf8"))[1] ?? undefined;
+
+/**
+ * Resolved per command, as execvp and libuv resolve a bare name: an
+ * `npm install -g` while the app runs reaches the next command, as the setup
+ * card promises.
+ */
+const launcherOf = (): OledLauncher =>
+  resolveOledLauncher({
+    platform: process.platform,
+    path: process.env.PATH,
+    execPath: process.execPath,
+    exists: existsSync,
+    read: readText,
+  });
+
 interface SpawnOutcome {
   stdout: string;
   stderr: string;
@@ -118,12 +198,16 @@ interface SpawnOutcome {
   spawnError?: string;
 }
 
-const spawnOled = (argv: string[], stdin?: string): Promise<SpawnOutcome> =>
+const spawnOled = (
+  launcher: OledLauncher,
+  argv: string[],
+  stdin?: string,
+): Promise<SpawnOutcome> =>
   new Promise<SpawnOutcome>((resolve) => {
     const child = execFile(
-      OLED_BIN,
-      argv,
-      { maxBuffer: MAX_BUFFER, encoding: "utf8" },
+      launcher.file,
+      [...launcher.prefix, ...argv],
+      { maxBuffer: MAX_BUFFER, encoding: "utf8", windowsHide: true },
       (error, stdout, stderr) => {
         if (!error) {
           resolve({ stdout, stderr, exitCode: 0 });
@@ -166,18 +250,26 @@ const isRetryableBusy = ({ exitCode, stderr }: SpawnOutcome): boolean => {
 };
 
 const spawnRetryingBusy = async (
+  launcher: OledLauncher,
   argv: string[],
   stdin: string | undefined,
   delays = BUSY_RETRY_DELAYS_MS,
 ): Promise<SpawnOutcome> => {
-  const outcome = await spawnOled(argv, stdin);
+  const outcome = await spawnOled(launcher, argv, stdin);
   const [wait, ...rest] = delays;
   if (!isRetryableBusy(outcome) || wait === undefined) return outcome;
   await delay(wait);
-  return spawnRetryingBusy(argv, stdin, rest);
+  return spawnRetryingBusy(launcher, argv, stdin, rest);
 };
 
-const toSpawnError = (code: string): OledError => {
+const toSpawnError = (code: string, launcher: OledLauncher): OledError => {
+  if (code === "ENOENT" && launcher.unreadShim !== undefined) {
+    return {
+      kind: "spawn_failed",
+      message: `\`${OLED_BIN}\` is on PATH as ${launcher.unreadShim}, but no script could be read from it.`,
+      hint: "Reinstall the OpenLedger data plane: `npm install -g @aquartier/openledger`.",
+    };
+  }
   if (code === "ENOENT") {
     return {
       kind: "spawn_failed",
@@ -214,7 +306,8 @@ const run = async (
   stdin: string | undefined,
   allowPartial: boolean,
 ): Promise<RunOutcome> => {
-  const outcome = await spawnRetryingBusy(argv, stdin).catch(
+  const launcher = launcherOf();
+  const outcome = await spawnRetryingBusy(launcher, argv, stdin).catch(
     (cause: unknown): SpawnOutcome => ({
       stdout: "",
       stderr: "",
@@ -224,7 +317,10 @@ const run = async (
   );
 
   if (outcome.spawnError !== undefined) {
-    return { result: err(toSpawnError(outcome.spawnError)), exitCode: -1 };
+    return {
+      result: err(toSpawnError(outcome.spawnError, launcher)),
+      exitCode: -1,
+    };
   }
   // Exit 7 wrote its results to stdout; the caller decides what a partial run means.
   if (
