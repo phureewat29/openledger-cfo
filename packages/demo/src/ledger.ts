@@ -82,7 +82,8 @@ export const bootstrapLedger = async (
   const { ocrBaseUrl, ocrModel, ocrApiKey } = view.ok ? view.value : {};
 
   if (!options.keep) {
-    await rm(LEDGER.root, { recursive: true, force: true });
+    // A running server can hold the ledger file for a moment; Windows answers EBUSY until it lets go.
+    await rm(LEDGER.root, { recursive: true, force: true, maxRetries: 5 });
     options.log(`reset   ${LEDGER.root}`);
   }
   await mkdir(LEDGER.root, { recursive: true });
