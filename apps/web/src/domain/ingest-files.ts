@@ -70,6 +70,13 @@ export const safeUploadName = (raw: string): string | undefined => {
   return DEVICE_NAME.test(head) ? `_${name}` : name;
 };
 
+/**
+ * Windows reads either separator and ignores case, so one file answers to
+ * several spellings there. Elsewhere a backslash is part of a filename.
+ */
+export const pathKeyOf = (path: string, platform: NodeJS.Platform): string =>
+  platform === "win32" ? path.replaceAll("\\", "/").toLowerCase() : path;
+
 /** Encrypted and untouched: nothing can read it until the operator unlocks it. */
 export const isLocked = (row: IngestFile): boolean =>
   row.encrypted && row.status === "new";

@@ -117,15 +117,21 @@ const accountLabels = async (): Promise<VocabEntry[]> => {
 };
 
 /** `rel_path` uses `/` everywhere; a Windows path spells it with backslashes. */
+export const relPathSpellings = (
+  relPath: string,
+  platform: NodeJS.Platform,
+): string[] =>
+  platform === "win32"
+    ? uniq([relPath, relPath.replaceAll("/", "\\")])
+    : [relPath];
+
 const statementNames = async (): Promise<VocabEntry[]> => {
   const page = await caller.ledger.ingest.list();
   return page.rows.flatMap((row) =>
-    [
-      row.rel_path,
-      ...(process.platform === "win32"
-        ? [row.rel_path.replaceAll("/", "\\")]
-        : []),
-    ].map((value) => ({ category: "F" as const, value })),
+    relPathSpellings(row.rel_path, process.platform).map((value) => ({
+      category: "F" as const,
+      value,
+    })),
   );
 };
 

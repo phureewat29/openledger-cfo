@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { safeUploadName, uploadExtensionOf } from "./ingest-files";
+import { pathKeyOf, safeUploadName, uploadExtensionOf } from "./ingest-files";
 
 describe("uploadExtensionOf", () => {
   it.each([
@@ -52,4 +52,21 @@ describe("safeUploadName", () => {
   it.each(["", "   ", ".pdf", "dir/.hidden.pdf"])("refuses %j", (raw) => {
     expect(safeUploadName(raw)).toBeUndefined();
   });
+});
+
+describe("pathKeyOf", () => {
+  it("gives every Windows spelling of a file one key", () => {
+    expect(pathKeyOf("2026\\KBank-May.PDF", "win32")).toBe(
+      pathKeyOf("2026/kbank-may.pdf", "win32"),
+    );
+  });
+
+  it.each(["linux", "darwin"] as const)(
+    "keeps case and backslashes on %s",
+    (platform) => {
+      expect(pathKeyOf("2026\\KBank-May.PDF", platform)).toBe(
+        "2026\\KBank-May.PDF",
+      );
+    },
+  );
 });

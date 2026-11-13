@@ -23,6 +23,7 @@ import {
   createRedactorSource,
   homeSpellings,
   RedactingChatOpenAI,
+  relPathSpellings,
 } from "./model";
 import { createRedactor } from "./redaction";
 
@@ -130,6 +131,24 @@ describe("homeSpellings", () => {
 
     expect(redacted).not.toContain("alice");
     expect(redactor.restoreText(redacted)).toBe(text);
+  });
+});
+
+describe("relPathSpellings", () => {
+  it("adds the backslashed spelling on Windows", () => {
+    expect(relPathSpellings("2026/kbank-may.pdf", "win32")).toEqual([
+      "2026/kbank-may.pdf",
+      "2026\\kbank-may.pdf",
+    ]);
+    expect(relPathSpellings("kbank-may.pdf", "win32")).toEqual([
+      "kbank-may.pdf",
+    ]);
+  });
+
+  it("keeps a POSIX rel_path as it is", () => {
+    expect(relPathSpellings("2026/kbank-may.pdf", "linux")).toEqual([
+      "2026/kbank-may.pdf",
+    ]);
   });
 });
 
