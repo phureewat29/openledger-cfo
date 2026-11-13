@@ -52,12 +52,13 @@ export function ChartPane({
         bodyClassName={bodyClassName}
         actions={
           // Inset: the pane's overflow-hidden clips a ring drawn outside a
-          // button this close to the header's top edge.
+          // button this close to the header's top edge. An icon's min-content
+          // is the glyph, so without shrink-0 the meta squeezes the button.
           expandable ? (
             <Button
               variant="ghost"
               size="icon"
-              className="focus-visible:-outline-offset-2"
+              className="shrink-0 focus-visible:-outline-offset-2"
               aria-label={`Expand ${title}`}
               onClick={() => setExpanded(true)}
             >
@@ -89,11 +90,12 @@ export function ChartPane({
         >
           {expanded ? (
             <>
+              {/* The pane header's rule: on a phone the meta truncates, Close stays. */}
               <div className="flex h-6 shrink-0 items-center justify-between gap-3">
-                <span className="label">{title}</span>
-                <span className="flex shrink-0 items-center gap-2">
+                <span className="label shrink-0 truncate">{title}</span>
+                <span className="flex min-w-0 items-center gap-2">
                   {meta === undefined ? null : (
-                    <span className="text-muted-foreground text-[10px] tracking-[0.12em] uppercase tabular-nums">
+                    <span className="text-muted-foreground min-w-0 truncate text-[10px] tracking-[0.12em] uppercase tabular-nums">
                       {meta}
                     </span>
                   )}
