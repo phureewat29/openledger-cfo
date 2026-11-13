@@ -149,9 +149,21 @@ const spawnOled = (argv: string[], stdin?: string): Promise<SpawnOutcome> =>
     child.stdin?.end(stdin);
   });
 
-// E_BUSY: another process held the ledger past the CLI's own ~5s wait; the
-// command emitted nothing, so re-running is safe — writes included.
 const BUSY_RETRY_DELAYS_MS = [25, 75, 150];
+
+/**
+ * E_BUSY: another process held the ledger past the CLI's own ~5s wait. The same
+ * command is safe to re-run, writes included, unless the error carries
+ * `details.resume_from_index`: an `ingest commit` that had already posted rows,
+ * which a re-run would post twice wherever a row has no stable id.
+ */
+const isRetryableBusy = ({ exitCode, stderr }: SpawnOutcome): boolean => {
+  if (exitCode !== EXIT.BUSY) return false;
+  const details = parseCliErrorLine(stderr)?.details;
+  return !(
+    isPlainObject(details) && Object.hasOwn(details, "resume_from_index")
+  );
+};
 
 const spawnRetryingBusy = async (
   argv: string[],
@@ -160,7 +172,7 @@ const spawnRetryingBusy = async (
 ): Promise<SpawnOutcome> => {
   const outcome = await spawnOled(argv, stdin);
   const [wait, ...rest] = delays;
-  if (outcome.exitCode !== EXIT.BUSY || wait === undefined) return outcome;
+  if (!isRetryableBusy(outcome) || wait === undefined) return outcome;
   await delay(wait);
   return spawnRetryingBusy(argv, stdin, rest);
 };
