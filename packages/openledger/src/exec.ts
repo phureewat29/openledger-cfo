@@ -191,7 +191,7 @@ const launcherOf = (): OledLauncher =>
     read: readText,
   });
 
-interface SpawnOutcome {
+export interface SpawnOutcome {
   stdout: string;
   stderr: string;
   exitCode: number;
@@ -249,17 +249,16 @@ const isRetryableBusy = ({ exitCode, stderr }: SpawnOutcome): boolean => {
   );
 };
 
-const spawnRetryingBusy = async (
-  launcher: OledLauncher,
-  argv: string[],
-  stdin: string | undefined,
-  delays = BUSY_RETRY_DELAYS_MS,
+/** Spawns again after each delay in turn while the outcome is a busy exit a re-run can wait out. */
+export const retryingBusy = async (
+  spawn: () => Promise<SpawnOutcome>,
+  delays: readonly number[] = BUSY_RETRY_DELAYS_MS,
 ): Promise<SpawnOutcome> => {
-  const outcome = await spawnOled(launcher, argv, stdin);
+  const outcome = await spawn();
   const [wait, ...rest] = delays;
   if (!isRetryableBusy(outcome) || wait === undefined) return outcome;
   await delay(wait);
-  return spawnRetryingBusy(launcher, argv, stdin, rest);
+  return retryingBusy(spawn, rest);
 };
 
 const toSpawnError = (code: string, launcher: OledLauncher): OledError => {
@@ -307,14 +306,14 @@ const run = async (
   allowPartial: boolean,
 ): Promise<RunOutcome> => {
   const launcher = launcherOf();
-  const outcome = await spawnRetryingBusy(launcher, argv, stdin).catch(
-    (cause: unknown): SpawnOutcome => ({
-      stdout: "",
-      stderr: "",
-      exitCode: -1,
-      spawnError: `ESPAWN: ${messageOf(cause)}`,
-    }),
-  );
+  const outcome = await retryingBusy(() =>
+    spawnOled(launcher, argv, stdin),
+  ).catch((cause: unknown): SpawnOutcome => ({
+    stdout: "",
+    stderr: "",
+    exitCode: -1,
+    spawnError: `ESPAWN: ${messageOf(cause)}`,
+  }));
 
   if (outcome.spawnError !== undefined) {
     return {

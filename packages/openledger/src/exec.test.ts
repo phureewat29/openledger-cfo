@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { LauncherHost } from "./exec";
-import { resolveOledLauncher, scriptOfShim } from "./exec";
+import type { LauncherHost, SpawnOutcome } from "./exec";
+import { resolveOledLauncher, retryingBusy, scriptOfShim } from "./exec";
 
 /** npm 11's cmd-shim 8.0.0, for `npm install -g` into the default prefix. */
 const NPM_GLOBAL = [
@@ -206,5 +206,71 @@ describe("resolveOledLauncher", () => {
       prefix: [],
       unreadShim: `${NPM_DIR}\\oled.cmd`,
     });
+  });
+});
+
+/** The stderr line oled 0.25's `describeFailure` writes for an E_BUSY under --json. */
+const busyLine = (extra: object = {}) =>
+  `${JSON.stringify({
+    error: {
+      code: "E_BUSY",
+      message: "The ledger is in use by another process.",
+      hint: "another oled process is using the ledger; re-run the same command in a moment",
+      ...extra,
+    },
+  })}\n`;
+
+const busy = (stderr: string): SpawnOutcome => ({
+  stdout: "",
+  stderr,
+  exitCode: 8,
+});
+
+const PLAIN = busy(busyLine());
+
+/** An `ingest commit` that lost the lock after posting two rows. */
+const RESUMABLE = busy(
+  busyLine({
+    hint: "rows before index 2 already ran (2 posted, results above); re-run only the rows from index 2, since re-running them all would post rows without a stable id twice",
+    details: { posted: 2, resume_from_index: 2 },
+  }),
+);
+
+const UNRELATED = busy(busyLine({ details: { posted: 0 } }));
+
+const NOISY = busy(
+  [
+    "(node:4242) [DEP0040] DeprecationWarning: The `punycode` module is deprecated.",
+    "{ not json, though it opens like it",
+    RESUMABLE.stderr,
+  ].join("\n"),
+);
+
+const DONE: SpawnOutcome = {
+  stdout: '{"ok":true}\n',
+  stderr: "",
+  exitCode: 0,
+};
+
+// Three retries, none of them waiting.
+const NO_WAIT = [0, 0, 0];
+
+describe("retryingBusy", () => {
+  it.each<[string, SpawnOutcome[]]>([
+    ["names resume_from_index", [RESUMABLE]],
+    ["is plain", [PLAIN, PLAIN, PLAIN, PLAIN]],
+    ["carries unrelated details", [UNRELATED, UNRELATED, UNRELATED, UNRELATED]],
+    ["names resume_from_index amid other stderr", [NOISY]],
+    ["clears on the next run", [PLAIN, DONE]],
+  ])("spawns an exit 8 that %s as scripted", async (_, script) => {
+    const spawn = script.reduce(
+      (mock, outcome) => mock.mockResolvedValueOnce(outcome),
+      vi
+        .fn<() => Promise<SpawnOutcome>>()
+        .mockRejectedValue(new Error("spawned past the script")),
+    );
+
+    expect(await retryingBusy(spawn, NO_WAIT)).toBe(script.at(-1));
+    expect(spawn).toHaveBeenCalledTimes(script.length);
   });
 });
