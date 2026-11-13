@@ -340,9 +340,10 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       });
     }
 
+    // A virus scan on Windows can briefly lock the file; a temp file left behind is not the batch's failure.
     const out = await exec(["accounts", "create", "--input", file], {
       allowPartial: true,
-    }).finally(() => rm(file, { force: true }));
+    }).finally(() => attemptAsync(() => rm(file, { force: true })));
     const page = andThen(out, (stdout) =>
       parseNdjsonRows(
         accountCreateResultSchema,
