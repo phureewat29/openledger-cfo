@@ -293,8 +293,8 @@ const toSpawnError = (code: string, launcher: OledLauncher): OledError => {
   if (code === "ENOENT" && launcher.unreadShim !== undefined) {
     return {
       kind: "spawn_failed",
-      message: `\`${OLED_BIN}\` is on PATH as ${launcher.unreadShim}, but no script could be read from it.`,
-      hint: "Reinstall the OpenLedger data plane: `npm install -g @aquartier/openledger`.",
+      message: `\`${OLED_BIN}\` is on PATH as ${launcher.unreadShim}, which names no script this app can run.`,
+      hint: `Install oled with npm: \`npm install -g @aquartier/openledger\`. If ${launcher.unreadShim} still comes first on PATH, put npm's global bin ahead of it.`,
     };
   }
   if (code === "ENOENT") {
