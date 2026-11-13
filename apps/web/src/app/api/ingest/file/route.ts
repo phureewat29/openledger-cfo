@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import { resolve, sep } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod/v4";
 
 import type { OledErrorKind } from "@openledger-cfo/openledger";
@@ -57,11 +57,12 @@ export async function DELETE(request: Request) {
     const dir = await ledger.config.dataDir();
     if (!dir.ok) return fail(503, dir.error.message);
 
-    // A rel_path can carry directories, so a basename reduction would unlink the
-    // wrong file — only the resolved path proves the target is inside the directory the ledger walks.
+    // A rel_path can carry directories, so only the resolved path proves the target is inside the
+    // directory the ledger walks. `relative` proves it for a drive root too, which ends in a separator.
     const root = resolve(dir.value);
     const path = resolve(root, relPath);
-    if (!path.startsWith(root + sep)) {
+    const inside = relative(root, path);
+    if (inside === "" || isAbsolute(inside) || inside.split(sep)[0] === "..") {
       return fail(400, "That path is outside the data directory");
     }
 
