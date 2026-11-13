@@ -28,7 +28,8 @@
     },
     "test": {
       "dependsOn": ["^topo", "^build"],
-      "outputs": []
+      "outputs": [],
+      "passThroughEnv": ["OLED_SMOKE_DIR"]
     },
     "clean": {
       "cache": false
