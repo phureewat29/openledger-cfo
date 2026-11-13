@@ -171,7 +171,9 @@ const linkKey = (source: string, target: string) => `${source}->${target}`;
 const finite = (value: number | undefined): value is number =>
   value !== undefined && Number.isFinite(value);
 
-const widthOf = (text: string, size: number) => text.length * size * CHAR;
+// A combining mark (Thai vowels and tones above or below) stacks on its letter and adds no advance.
+const widthOf = (text: string, size: number) =>
+  text.replace(/\p{M}/gu, "").length * size * CHAR;
 
 const centerOf = (node: PlacedNode) => (node.y0 + node.y1) / 2;
 
@@ -418,8 +420,9 @@ const scaleOf = (width: number, height: number) =>
 
 /**
  * The legend's box, worked out from its text rather than measured: Geist Mono
- * gives every character the same advance. These mirror the list's classes
- * below; the line height is the 1.5 it inherits.
+ * gives Latin one fixed advance, and the fallback glyphs of a script it lacks
+ * only approximate it. These mirror the list's classes below; the line height
+ * is the 1.5 it inherits.
  */
 const LEGEND = { size: 11, line: 16.5, gapX: 12, gapY: 2, inset: 16, top: 4 };
 

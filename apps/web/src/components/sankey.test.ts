@@ -37,6 +37,23 @@ describe("legendHeight", () => {
       ),
     ).toBe(74);
   });
+
+  // 39 is the height Chrome lays this list out at with Geist Mono loaded.
+  it("gives Thai vowel and tone marks no width of their own", () => {
+    expect(
+      legendHeight(
+        [
+          "12 mo avg",
+          "1 ค่าใช้จ่ายในบ้าน ฿23,110",
+          "2 ค่าเดินทางและท่องเที่ยว ฿19,772",
+          "3 อาหารและเครื่องดื่ม ฿18,750",
+          "เงินปันผล กองทุนรวม ฿1,881",
+          "4 ผ่อนบ้าน ธนาคารไทยพาณิชย์ สาขาอโศก ฿10,934",
+        ],
+        636,
+      ),
+    ).toBe(39);
+  });
 });
 
 describe("fitScale", () => {
