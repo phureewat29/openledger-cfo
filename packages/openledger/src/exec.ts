@@ -236,13 +236,19 @@ const spawnOled = (
 const BUSY_RETRY_DELAYS_MS = [25, 75, 150];
 
 /**
- * E_BUSY: another process held the ledger past the CLI's own ~5s wait. The same
- * command is safe to re-run, writes included, unless the error carries
- * `details.resume_from_index`: an `ingest commit` that had already posted rows,
- * which a re-run would post twice wherever a row has no stable id.
+ * E_BUSY: another process held the ledger past the CLI's own ~5s wait. Per
+ * oled's 0.25 contract the same command is then safe to re-run, writes
+ * included, unless the error carries `details.resume_from_index` (an `ingest
+ * commit` that had already posted rows, which a re-run would post twice
+ * wherever a row has no stable id) or stdout already holds output. Both signals
+ * come from the CLI: a write that landed and printed nothing would run twice.
  */
-const isRetryableBusy = ({ exitCode, stderr }: SpawnOutcome): boolean => {
-  if (exitCode !== EXIT.BUSY) return false;
+const isRetryableBusy = ({
+  exitCode,
+  stdout,
+  stderr,
+}: SpawnOutcome): boolean => {
+  if (exitCode !== EXIT.BUSY || stdout !== "") return false;
   const details = parseCliErrorLine(stderr)?.details;
   return !(
     isPlainObject(details) && Object.hasOwn(details, "resume_from_index")

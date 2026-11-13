@@ -238,6 +238,13 @@ const RESUMABLE = busy(
 
 const UNRELATED = busy(busyLine({ details: { posted: 0 } }));
 
+/** A busy exit after a row reached stdout, whatever its stderr names. */
+const PRINTED: SpawnOutcome = {
+  ...PLAIN,
+  stdout:
+    '{"type":"result","index":0,"ok":true,"transaction_id":"tx-7f3a","duplicate":false}\n',
+};
+
 const NOISY = busy(
   [
     "(node:4242) [DEP0040] DeprecationWarning: The `punycode` module is deprecated.",
@@ -261,6 +268,7 @@ describe("retryingBusy", () => {
     ["is plain", [PLAIN, PLAIN, PLAIN, PLAIN]],
     ["carries unrelated details", [UNRELATED, UNRELATED, UNRELATED, UNRELATED]],
     ["names resume_from_index amid other stderr", [NOISY]],
+    ["printed a row first", [PRINTED]],
     ["clears on the next run", [PLAIN, DONE]],
   ])("spawns an exit 8 that %s as scripted", async (_, script) => {
     const spawn = script.reduce(
