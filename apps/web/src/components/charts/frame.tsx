@@ -18,7 +18,8 @@ type Listener = (size: ChartSize) => void;
  */
 const QUANTUM = 8;
 
-const quantize = (value: number) => Math.round(value / QUANTUM) * QUANTUM;
+export const quantize = (value: number) =>
+  Math.round(value / QUANTUM) * QUANTUM;
 
 /**
  * One observer for every chart on the page, flushed once per frame.
@@ -42,10 +43,7 @@ const createSizeHub = () => {
 
   const measure = (entries: readonly ResizeObserverEntry[]) => {
     entries.forEach(({ target, contentRect }) =>
-      pending.set(target, {
-        w: quantize(contentRect.width),
-        h: quantize(contentRect.height),
-      }),
+      pending.set(target, { w: contentRect.width, h: contentRect.height }),
     );
     if (frame === 0) frame = requestAnimationFrame(flush);
   };
@@ -82,19 +80,21 @@ const same = (current: ChartSize | null, next: ChartSize) =>
 /**
  * Null until the element has been measured, which is the same answer the
  * server gives: a chart drawn in pixel space may only gate what it adds on
- * top of the markup both renders agree on.
+ * top of the markup both renders agree on. A chart that works out its own
+ * boxes from this one passes an exact `round` and quantizes what it derives.
  */
-export const useChartSize = () => {
+export const useChartSize = (round: (value: number) => number = quantize) => {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<ChartSize | null>(null);
 
   useEffect(() => {
     const element = ref.current;
     if (element === null) return;
-    return sizes.observe(element, (next) =>
-      setSize((current) => (same(current, next) ? current : next)),
-    );
-  }, []);
+    return sizes.observe(element, ({ w, h }) => {
+      const next = { w: round(w), h: round(h) };
+      setSize((current) => (same(current, next) ? current : next));
+    });
+  }, [round]);
 
   return { ref, size };
 };

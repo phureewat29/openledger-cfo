@@ -2,11 +2,12 @@
 
 import { useMemo, useRef, useState } from "react";
 import { sankey, sankeyLinkHorizontal } from "d3-sankey";
-import { groupBy, sortBy } from "es-toolkit";
+import { compact, groupBy, identity, sortBy, sum } from "es-toolkit";
 
+import type { ChartSize } from "~/components/charts/frame";
 import type { TipRow } from "~/components/charts/tooltip";
 import type { FlowGraph, NodeKind } from "~/domain/flows/types";
-import { useChartSize } from "~/components/charts/frame";
+import { quantize, useChartSize } from "~/components/charts/frame";
 import { ChartTip, tipPlacement } from "~/components/charts/tooltip";
 import { formatPercent, formatThb, formatThbCompact } from "~/domain/format";
 
@@ -267,7 +268,7 @@ const placeLabels = (
   return { labelled, notes };
 };
 
-const buildLayout = (graph: FlowGraph, expanded: boolean, type: TypeSizes) => {
+const buildLayout = (graph: FlowGraph) => {
   const laid = sankey<NodeDatum, LinkDatum>()
     .nodeId((node) => node.id)
     .nodeWidth(NODE_WIDTH)
@@ -330,8 +331,7 @@ const buildLayout = (graph: FlowGraph, expanded: boolean, type: TypeSizes) => {
     ];
   });
 
-  const nameMax = expanded ? EXPANDED_NAME_MAX : NAME_MAX;
-  return { ...placeLabels(nodes, nameMax, type), links };
+  return { nodes, links };
 };
 
 const labelX = (node: PlacedNode) => {
@@ -416,6 +416,78 @@ const scaleOf = (width: number, height: number) =>
   // `meet` fits to the smaller axis; quantizing stops per-pixel re-layouts.
   Math.max(Math.round(Math.min(width / WIDTH, height / HEIGHT) * 20) / 20, 0.2);
 
+/**
+ * The legend's box, worked out from its text rather than measured: Geist Mono
+ * gives every character the same advance. These mirror the list's classes
+ * below; the line height is the 1.5 it inherits.
+ */
+const LEGEND = { size: 11, line: 16.5, gapX: 12, gapY: 2, inset: 16, top: 4 };
+
+/** An entry wider than the list shrinks to it and wraps between words. */
+const linesOf = (text: string, room: number) => {
+  const [first = "", ...rest] = text.split(" ");
+  const space = widthOf(" ", LEGEND.size);
+  return rest.reduce(
+    ({ lines, used }, word) => {
+      const width = widthOf(word, LEGEND.size);
+      return used + space + width <= room
+        ? { lines, used: used + space + width }
+        : { lines: lines + 1, used: width };
+    },
+    { lines: 1, used: widthOf(first, LEGEND.size) },
+  ).lines;
+};
+
+export const legendHeight = (items: readonly string[], width: number) => {
+  const room = width - LEGEND.inset;
+  const { rows } = items.reduce<{ rows: readonly number[]; used: number }>(
+    ({ rows, used }, text) => {
+      const itemWidth = widthOf(text, LEGEND.size);
+      if (rows.length > 0 && used + LEGEND.gapX + itemWidth <= room) {
+        return { rows, used: used + LEGEND.gapX + itemWidth };
+      }
+      const lines = itemWidth > room ? linesOf(text, room) : 1;
+      return { rows: [...rows, lines], used: Math.min(itemWidth, room) };
+    },
+    { rows: [], used: 0 },
+  );
+  if (rows.length === 0) return 0;
+  return LEGEND.top + sum(rows) * LEGEND.line + (rows.length - 1) * LEGEND.gapY;
+};
+
+/** The legend's entries as it prints them, the pane's note first. */
+const legendOf = (note: string | undefined, notes: readonly Note[]) =>
+  compact([
+    note,
+    ...notes.map((item) =>
+      compact([item.glyph, item.label, item.value]).join(" "),
+    ),
+  ]);
+
+/**
+ * The legend shares the plot's column and lists what the scale left unlabelled,
+ * so a scale read off the plot resizes the legend that sized the plot. It is
+ * solved against the whole frame instead: from the server render's guess, each
+ * step takes the scale the plot would measure beside the legend the last step
+ * implied. A return to an earlier scale is a cycle with no fixed point; it
+ * settles on the smallest, so labels err larger rather than smaller.
+ */
+export const fitScale = (
+  frame: ChartSize,
+  legendAt: (scale: number) => number,
+): number => {
+  const step = (scale: number, seen: readonly number[]): number => {
+    const next = scaleOf(
+      quantize(frame.w),
+      quantize(frame.h - legendAt(scale)),
+    );
+    if (next === scale) return scale;
+    if (!seen.includes(next)) return step(next, [...seen, next]);
+    return Math.min(...seen.slice(seen.indexOf(next)));
+  };
+  return step(ASSUMED_SCALE, [ASSUMED_SCALE]);
+};
+
 export function Sankey({
   graph,
   note,
@@ -427,14 +499,26 @@ export function Sankey({
   expanded?: boolean;
 }) {
   const { ref, size } = useChartSize();
+  // The frame holds the plot and the legend both, so the legend cannot move it.
+  const { ref: frameRef, size: frame } = useChartSize(identity);
   const [hot, setHot] = useState<Hot | null>(null);
   const box = useRef<DOMRect | null>(null);
 
-  const scale = size === null ? ASSUMED_SCALE : scaleOf(size.w, size.h);
+  const { nodes, links } = useMemo(() => buildLayout(graph), [graph]);
+  const nameMax = expanded ? EXPANDED_NAME_MAX : NAME_MAX;
+  const scale = useMemo(() => {
+    if (frame === null) return ASSUMED_SCALE;
+    const legendAt = (candidate: number) =>
+      legendHeight(
+        legendOf(note, placeLabels(nodes, nameMax, typeFor(candidate)).notes),
+        frame.w,
+      );
+    return fitScale(frame, legendAt);
+  }, [frame, nodes, nameMax, note]);
   const type = useMemo(() => typeFor(scale), [scale]);
-  const { labelled, links, notes } = useMemo(
-    () => buildLayout(graph, expanded, type),
-    [graph, expanded, type],
+  const { labelled, notes } = useMemo(
+    () => placeLabels(nodes, nameMax, type),
+    [nodes, nameMax, type],
   );
 
   // Not `??=`: the React Compiler skips any component that uses it.
@@ -496,7 +580,11 @@ export function Sankey({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-chart="sankey">
+    <div
+      ref={frameRef}
+      className="flex min-h-0 flex-1 flex-col"
+      data-chart="sankey"
+    >
       <div
         ref={ref}
         className="relative min-h-0 flex-1"
