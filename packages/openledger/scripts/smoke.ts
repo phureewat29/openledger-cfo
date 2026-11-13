@@ -254,7 +254,8 @@ const main = async (): Promise<Check[]> => {
     expectIncludes,
     expectErrorKind,
   } = createChecklist();
-  await rm(LEDGER_DIR, { recursive: true, force: true });
+  // Windows may still hold the last run's ledger file for a moment.
+  await rm(LEDGER_DIR, { recursive: true, force: true, maxRetries: 5 });
 
   const oled = createOpenLedger({ configPath: CONFIG_PATH });
 

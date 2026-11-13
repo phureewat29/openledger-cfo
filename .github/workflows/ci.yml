@@ -50,6 +50,8 @@ jobs:
       - name: smoke against the global oled
         working-directory: packages/openledger
         shell: bash
+        env:
+          OLED_SMOKE_DIR: ${{ runner.temp }}/oled-smoke-global
         run: ./node_modules/.bin/tsx scripts/smoke.ts
 
       - run: pnpm build
