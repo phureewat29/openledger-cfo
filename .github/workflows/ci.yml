@@ -13,7 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  TURBO_FORCE: "true"
   TURBO_TELEMETRY_DISABLED: "1"
   NEXT_TELEMETRY_DISABLED: "1"
 
