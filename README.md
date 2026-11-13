@@ -34,7 +34,7 @@ You need three things. Check each one:
 
 ```bash
 node --version     # ^22.21 or >=24 (Node 23 is not supported)
-pnpm --version     # >= 11.28 — `corepack enable` picks up the pinned one
+pnpm --version     # >= 11.28 — `corepack enable` picks up the pinned one, or npm i -g pnpm@11.28.9
 oled --version     # >= 0.24.0 — npm install -g @aquartier/openledger
 ```
 
@@ -55,9 +55,12 @@ pnpm install
 pnpm bootstrap
 
 # serve the production build
-pnpm build && pnpm serve
+pnpm build
+pnpm serve
 
 ```
+
+On Windows, clone onto a drive letter such as `C:\`, not a UNC or `\\wsl$` path.
 
 You should see the demo dataset. If a pane says the ledger is not initialized, run `pnpm bootstrap` again and watch its checks print.
 
@@ -97,7 +100,7 @@ pnpm dev         # start local development
 pnpm typecheck   # builds the dist-publishing packages first, then checks everything
 pnpm lint        # eslint across the workspace
 pnpm format      # prettier check
-pnpm test        # vitest in agent and web, the connector smoke in openledger
+pnpm test        # vitest in agent, web and openledger, plus the connector smoke
 pnpm build       # full production build
 ```
 
@@ -123,6 +126,8 @@ tooling/          shared toolchain
 - **`oled` was not found or too old**: `npm install -g @aquartier/openledger` (0.24.0 or newer), then `oled --version`.
 - **Tables missing or empty**: `pnpm db:push` recreates the schema in `cfo.db`, and `pnpm bootstrap` reseeds it.
 - **Node 23**: not in the support range. Use 22.21+ or 24+ (`.nvmrc` pins 22.21).
+- **Windows on ARM**: OpenLedger's database driver has no arm64 build, so install x64 Node.
+- **`pnpm db:push` hangs on Linux**: on Node 24.22, `drizzle-kit push` can hang after "No changes detected", an upstream bug. Use Node 22 (`.nvmrc`), or press Ctrl-C once that line prints.
 - **Ingest cannot read a document**: image-only PDFs need OCR — enable it under **AI Gateway Config** and point it at any OpenAI-compatible vision endpoint — share the gateway credentials, or run one locally (the form defaults to `typhoon-ocr1.5-2b` at `http://127.0.0.1:1234`). The settings are forwarded to `.oled/config.json`, and the demo loader preserves them across resets; without OCR only text-layer PDFs work.
 - **Ingest put a record in the wrong account**: tell the CFO in the chat pane on the right. The agent can move transactions, rename accounts, and correct balances in the ledger.
 - **Typecheck errors that make no sense**: a stale `dist/`; run `pnpm typecheck` from the root so the packages rebuild first.
