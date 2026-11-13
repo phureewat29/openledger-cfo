@@ -7,27 +7,16 @@ import { ledger } from "@openledger-cfo/api";
 import { err, ok } from "@openledger-cfo/openledger";
 
 import { fail } from "~/app/api/ingest/reply";
-import { UPLOAD_TYPE_ERROR, uploadExtensionOf } from "~/domain/ingest-files";
+import {
+  safeUploadName,
+  UPLOAD_TYPE_ERROR,
+  uploadExtensionOf,
+} from "~/domain/ingest-files";
 
 const MAX_BYTES = 30 * 1024 * 1024;
 
 /** Names collide when the same statement is dropped twice; past this it is a loop. */
 const MAX_SUFFIX = 20;
-
-/**
- * The upload names a file in the ledger's data dir, so the browser's string is
- * reduced to one path segment: basename only, normalized, and stripped of
- * everything a shell or a file walk could read as structure.
- */
-const safeName = (raw: string): string | undefined => {
-  const base = raw.split(/[\\/]/).pop() ?? "";
-  const name = base
-    .normalize("NFKC")
-    .replace(/[^A-Za-z0-9._ -]/g, "-")
-    .trim();
-  if (name.length === 0 || name.startsWith(".")) return undefined;
-  return name;
-};
 
 const errnoOf = (cause: unknown): string | undefined =>
   cause instanceof Error ? (cause as NodeJS.ErrnoException).code : undefined;
@@ -92,7 +81,7 @@ export async function POST(request: Request) {
       return fail(415, UPLOAD_TYPE_ERROR);
     }
 
-    const name = safeName(file.name);
+    const name = safeUploadName(file.name);
     if (name === undefined) {
       return fail(400, "That filename has nothing usable in it.");
     }

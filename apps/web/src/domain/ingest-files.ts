@@ -49,6 +49,27 @@ export const uploadExtensionOf = (name: string): string | undefined => {
   return UPLOAD_EXTENSIONS.has(extension) ? extension : undefined;
 };
 
+/** Windows opens these as devices whatever extension follows them. */
+const DEVICE_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
+
+/**
+ * An upload names a file in the ledger's data dir, so the browser's string is
+ * reduced to one path segment: basename only, normalized, and stripped of
+ * everything a shell or a file walk could read as structure. A device name is
+ * moved aside on every OS, so the data dir stays readable from Windows.
+ */
+export const safeUploadName = (raw: string): string | undefined => {
+  const base = raw.split(/[\\/]/).pop() ?? "";
+  const name = base
+    .normalize("NFKC")
+    .replace(/[^A-Za-z0-9._ -]/g, "-")
+    .trim();
+  if (name.length === 0 || name.startsWith(".")) return undefined;
+  // Windows reads the device off the part before the first dot, trailing spaces dropped.
+  const head = name.split(".", 1)[0]?.trimEnd() ?? "";
+  return DEVICE_NAME.test(head) ? `_${name}` : name;
+};
+
 /** Encrypted and untouched: nothing can read it until the operator unlocks it. */
 export const isLocked = (row: IngestFile): boolean =>
   row.encrypted && row.status === "new";
