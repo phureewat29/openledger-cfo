@@ -44,4 +44,13 @@ jobs:
       - run: pnpm lint
       - run: pnpm format
       - run: pnpm test
+
+      # `pnpm test` puts the pinned CLI's bin first on PATH. tsx run directly
+      # leaves PATH alone, so the connector reaches the global oled, through
+      # the npm shim a README install gets on Windows.
+      - name: smoke against the global oled
+        working-directory: packages/openledger
+        shell: bash
+        run: ./node_modules/.bin/tsx scripts/smoke.ts
+
       - run: pnpm build

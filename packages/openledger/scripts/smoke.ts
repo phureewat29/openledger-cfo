@@ -6,7 +6,7 @@ import type { OledCommandEvent, OledError, Result } from "../src/index";
 import { createOpenLedger, EXIT_KIND, FILE_ID_PATTERN } from "../src/index";
 import { textPdf } from "./pdf-fixture";
 
-// The dependency's bin link shadows a global `oled`: this runs the pinned CLI.
+// Under `pnpm smoke` the dependency's bin link shadows a global `oled`; tsx run directly reaches the global one.
 
 /** Throwaway by construction: main() wipes this directory before every run. */
 const LEDGER_DIR = process.env.OLED_SMOKE_DIR ?? join(tmpdir(), "oled-smoke");
