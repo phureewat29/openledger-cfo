@@ -323,6 +323,15 @@ const targetOfRow = async (row: IngestFile): Promise<RunTarget> => {
 };
 
 /**
+ * Windows reads either separator and ignores case, so one file answers to
+ * several spellings there. Elsewhere a backslash is part of a filename.
+ */
+const pathKeyOf =
+  process.platform === "win32"
+    ? (path: string): string => path.replaceAll("\\", "/").toLowerCase()
+    : (path: string): string => path;
+
+/**
  * The queue is a snapshot the operator worked from, so a name it no longer
  * holds is still work: a file registered a moment ago reads as new here and
  * the agent finds it where it lies.
@@ -331,10 +340,11 @@ const targetOfName = async (
   name: string,
   rows: IngestFile[],
 ): Promise<RunTarget> => {
+  const key = pathKeyOf(name);
   const row = rows.find(
     (candidate) =>
-      candidate.rel_path === name ||
-      candidate.path === name ||
+      pathKeyOf(candidate.rel_path) === key ||
+      pathKeyOf(candidate.path) === key ||
       candidate.file_id === name,
   );
   if (row !== undefined) return targetOfRow(row);
