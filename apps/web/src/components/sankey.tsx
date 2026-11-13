@@ -421,10 +421,18 @@ const scaleOf = (width: number, height: number) =>
 /**
  * The legend's box, worked out from its text rather than measured: Geist Mono
  * gives Latin one fixed advance, and the fallback glyphs of a script it lacks
- * only approximate it. These mirror the list's classes below; the line height
- * is the 1.5 it inherits.
+ * only approximate it. The list's own style is built from these numbers.
  */
-const LEGEND = { size: 11, line: 16.5, gapX: 12, gapY: 2, inset: 16, top: 4 };
+const LEGEND = { size: 11, line: 16.5, gapX: 12, gapY: 2, padX: 8, top: 4 };
+
+const LEGEND_STYLE: React.CSSProperties = {
+  fontSize: LEGEND.size,
+  lineHeight: `${LEGEND.line}px`,
+  columnGap: LEGEND.gapX,
+  rowGap: LEGEND.gapY,
+  paddingInline: LEGEND.padX,
+  paddingTop: LEGEND.top,
+};
 
 /** An entry wider than the list shrinks to it and wraps between words. */
 const linesOf = (text: string, room: number) => {
@@ -442,7 +450,7 @@ const linesOf = (text: string, room: number) => {
 };
 
 export const legendHeight = (items: readonly string[], width: number) => {
-  const room = width - LEGEND.inset;
+  const room = width - 2 * LEGEND.padX;
   const { rows } = items.reduce<{ rows: readonly number[]; used: number }>(
     ({ rows, used }, text) => {
       const itemWidth = widthOf(text, LEGEND.size);
@@ -701,7 +709,8 @@ export function Sankey({
       {notes.length === 0 && note === undefined ? null : (
         <ul
           data-slot="flow-notes"
-          className="text-muted-foreground flex shrink-0 flex-wrap gap-x-3 gap-y-0.5 px-2 pt-1 text-[11px] tabular-nums"
+          className="text-muted-foreground flex shrink-0 flex-wrap tabular-nums"
+          style={LEGEND_STYLE}
         >
           {note === undefined ? null : <li>{note}</li>}
           {notes.map((item) => (
