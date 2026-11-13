@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { LauncherHost, SpawnOutcome } from "./exec";
 import { resolveOledLauncher, retryingBusy, scriptOfShim } from "./exec";
+import { ok } from "./result";
 
 /** npm 11's cmd-shim 8.0.0, for `npm install -g` into the default prefix. */
 const NPM_GLOBAL = [
@@ -117,11 +118,14 @@ describe("scriptOfShim", () => {
   });
 });
 
+const BARE = ok({ file: "oled", prefix: [] });
+
 const windowsHost = (
   path: string,
   files: Readonly<Record<string, string>>,
 ): LauncherHost => ({
   platform: "win32",
+  versions: {},
   path,
   execPath: NODE_EXE,
   exists: (file) => Object.hasOwn(files, file),
@@ -136,13 +140,14 @@ describe("resolveOledLauncher", () => {
       const read = vi.fn(() => NPM_GLOBAL);
       const launcher = resolveOledLauncher({
         platform,
+        versions: {},
         path: NPM_DIR,
         execPath: "/usr/bin/node",
         exists,
         read,
       });
 
-      expect(launcher).toEqual({ file: "oled", prefix: [] });
+      expect(launcher).toEqual(BARE);
       expect(exists).not.toHaveBeenCalled();
       expect(read).not.toHaveBeenCalled();
     },
@@ -156,7 +161,7 @@ describe("resolveOledLauncher", () => {
       }),
     );
 
-    expect(launcher).toEqual({ file: NODE_EXE, prefix: [NPM_SCRIPT] });
+    expect(launcher).toEqual(ok({ file: NODE_EXE, prefix: [NPM_SCRIPT] }));
   });
 
   it("takes the first PATH directory holding oled, quoted or not", () => {
@@ -171,7 +176,7 @@ describe("resolveOledLauncher", () => {
       }),
     );
 
-    expect(launcher.prefix).toEqual([script]);
+    expect(launcher).toEqual(ok({ file: NODE_EXE, prefix: [script] }));
   });
 
   it("leaves an oled.exe ahead of any shim to execFile", () => {
@@ -184,29 +189,44 @@ describe("resolveOledLauncher", () => {
       }),
     );
 
-    expect(launcher).toEqual({ file: "oled", prefix: [] });
+    expect(launcher).toEqual(BARE);
   });
 
   it("falls back to the bare name when oled is not on PATH", () => {
     expect(
       resolveOledLauncher(windowsHost("C:\\Windows\\system32", {})),
-    ).toEqual({ file: "oled", prefix: [] });
-    expect(resolveOledLauncher(windowsHost("", {}))).toEqual({
-      file: "oled",
-      prefix: [],
-    });
+    ).toEqual(BARE);
+    expect(resolveOledLauncher(windowsHost("", {}))).toEqual(BARE);
   });
 
   it.each([
     ["names no script", { [`${NPM_DIR}\\oled.cmd`]: VOLTA_CMD }],
     ["names a missing script", { [`${NPM_DIR}\\oled.cmd`]: NPM_GLOBAL }],
   ])("keeps a shim that %s for the spawn error", (_, files) => {
-    expect(resolveOledLauncher(windowsHost(NPM_DIR, files))).toEqual({
-      file: "oled",
-      prefix: [],
-      unreadShim: `${NPM_DIR}\\oled.cmd`,
-    });
+    expect(resolveOledLauncher(windowsHost(NPM_DIR, files))).toEqual(
+      ok({ file: "oled", prefix: [], unreadShim: `${NPM_DIR}\\oled.cmd` }),
+    );
   });
+
+  it.each(["bun", "electron"])(
+    "refuses the shim under %s, so nothing spawns",
+    (runtime) => {
+      const read = vi.fn();
+      const launcher = resolveOledLauncher({
+        ...windowsHost(NPM_DIR, {
+          [`${NPM_DIR}\\oled.cmd`]: NPM_GLOBAL,
+          [NPM_SCRIPT]: "",
+        }),
+        versions: { [runtime]: "1.0.0" },
+        read,
+      });
+      const error = launcher.ok ? undefined : launcher.error;
+
+      expect(error?.kind).toBe("spawn_failed");
+      expect(error?.message).toContain(`${NPM_DIR}\\oled.cmd`);
+      expect(read).not.toHaveBeenCalled();
+    },
+  );
 });
 
 /** The stderr line oled 0.25's `describeFailure` writes for an E_BUSY under --json. */

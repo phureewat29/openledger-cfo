@@ -126,6 +126,7 @@ const BARE: OledLauncher = { file: OLED_BIN, prefix: [] };
 /** The machine as the launcher reads it, injected so the Windows walk runs anywhere. */
 export interface LauncherHost {
   readonly platform: NodeJS.Platform;
+  readonly versions: Readonly<Record<string, string | undefined>>;
   readonly path: string | undefined;
   readonly execPath: string;
   readonly exists: (file: string) => boolean;
@@ -150,28 +151,48 @@ export const scriptOfShim = (shim: string, dir: string): string | undefined => {
 // Within one PATH directory an `.exe` (Volta's shim) wins, as it does for cmd.exe.
 const WINDOWS_NAMES = ["oled.exe", "oled.cmd"];
 
+/** Runtimes whose `execPath` is no Node to run a shim's script with. */
+const NOT_NODE = [
+  ["bun", "Bun"],
+  ["electron", "Electron"],
+] as const;
+
 /**
  * npm and pnpm install `oled` on Windows as `oled.cmd`. execFile cannot start a
  * `.cmd` without a shell (CVE-2024-27980), and a shell re-parses every
  * argument, passwords included. So Windows runs the script the shim names under
- * this Node, and leaves anything else to execFile under the bare name.
+ * this Node, refuses outright when this process is not Node, and leaves
+ * anything else to execFile under the bare name.
  */
-export const resolveOledLauncher = (host: LauncherHost): OledLauncher => {
-  if (host.platform !== "win32") return BARE;
+export const resolveOledLauncher = (
+  host: LauncherHost,
+): Result<OledLauncher, OledError> => {
+  if (host.platform !== "win32") return ok(BARE);
   const found = (host.path ?? "")
     .split(win32.delimiter)
     .map((dir) => dir.replaceAll('"', ""))
     .filter((dir) => dir !== "")
     .flatMap((dir) => WINDOWS_NAMES.map((name) => win32.join(dir, name)))
     .find((file) => host.exists(file));
-  if (!found?.endsWith(".cmd")) return BARE;
+  if (!found?.endsWith(".cmd")) return ok(BARE);
+
+  const runtime = NOT_NODE.find(([key]) => host.versions[key] !== undefined);
+  if (runtime !== undefined) {
+    return err({
+      kind: "spawn_failed",
+      message: `\`${OLED_BIN}\` is on PATH as ${found}, whose script needs Node, but this process runs under ${runtime[1]}.`,
+      hint: "Start the app with Node.",
+    });
+  }
 
   const shim = host.read(found);
   const script =
     shim === undefined ? undefined : scriptOfShim(shim, win32.dirname(found));
-  return script !== undefined && host.exists(script)
-    ? { file: host.execPath, prefix: [script] }
-    : { ...BARE, unreadShim: found };
+  return ok(
+    script !== undefined && host.exists(script)
+      ? { file: host.execPath, prefix: [script] }
+      : { ...BARE, unreadShim: found },
+  );
 };
 
 const readText = (file: string): string | undefined =>
@@ -182,9 +203,10 @@ const readText = (file: string): string | undefined =>
  * `npm install -g` while the app runs reaches the next command, as the setup
  * card promises.
  */
-const launcherOf = (): OledLauncher =>
+const launcherOf = (): Result<OledLauncher, OledError> =>
   resolveOledLauncher({
     platform: process.platform,
+    versions: process.versions,
     path: process.env.PATH,
     execPath: process.execPath,
     exists: existsSync,
@@ -311,7 +333,9 @@ const run = async (
   stdin: string | undefined,
   allowPartial: boolean,
 ): Promise<RunOutcome> => {
-  const launcher = launcherOf();
+  const resolved = launcherOf();
+  if (!resolved.ok) return { result: resolved, exitCode: -1 };
+  const launcher = resolved.value;
   const outcome = await retryingBusy(() =>
     spawnOled(launcher, argv, stdin),
   ).catch((cause: unknown): SpawnOutcome => ({
