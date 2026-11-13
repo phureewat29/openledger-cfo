@@ -51,10 +51,13 @@ export function ChartPane({
         className={className}
         bodyClassName={bodyClassName}
         actions={
+          // Inset: the pane's overflow-hidden clips a ring drawn outside a
+          // button this close to the header's top edge.
           expandable ? (
             <Button
               variant="ghost"
               size="icon"
+              className="focus-visible:-outline-offset-2"
               aria-label={`Expand ${title}`}
               onClick={() => setExpanded(true)}
             >
