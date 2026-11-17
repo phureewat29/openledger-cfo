@@ -128,7 +128,8 @@ tooling/          shared toolchain
 - **Node 23**: not in the support range. Use 22.21+ or 24+ (`.nvmrc` pins 22.21).
 - **Windows on ARM**: OpenLedger's database driver has no arm64 build, so install x64 Node.
 - **`pnpm db:push` hangs on Linux**: on Node 24.22, `drizzle-kit push` can hang after "No changes detected", an upstream bug. Use Node 22 (`.nvmrc`). On Node 24, press Ctrl-C once that line prints; that stops `pnpm bootstrap` too, so finish with `pnpm demo`, or `pnpm -F @openledger-cfo/demo empty` for an empty start.
-- **Ingest cannot read a document**: image-only PDFs need OCR — enable it under **AI Gateway Config** and point it at any OpenAI-compatible vision endpoint — share the gateway credentials, or run one locally (the form defaults to `typhoon-ocr1.5-2b` at `http://127.0.0.1:1234`). The settings are forwarded to `.oled/config.json`, and the demo loader preserves them across resets; without OCR only text-layer PDFs work.
+- **Ingest cannot read a document**: ingest takes PDF, PNG and JPG; convert anything else first, WebP and HEIC included. OpenLedger's built-in OCR reads scans and photos on this machine, with no setup. It reads printed Thai and English, not handwriting. If a run reports that the built-in OCR did not load, reinstall the CLI: `npm install -g @aquartier/openledger`.
+- **`pnpm db:push` asks to delete `ocr_shares_gateway`**: that column held the old OCR setting and nothing reads it now. Answer yes; the gateway settings stay.
 - **Ingest put a record in the wrong account**: tell the CFO in the chat pane on the right. The agent can move transactions, rename accounts, and correct balances in the ledger.
 - **Typecheck errors that make no sense**: a stale `dist/`; run `pnpm typecheck` from the root so the packages rebuild first.
 - **Worried about your real ledger**: this repo only ever runs `oled` with `--config` pointing at its own `.oled/`; your `~/.oled` is never read or written.
