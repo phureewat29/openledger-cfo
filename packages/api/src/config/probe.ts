@@ -20,9 +20,7 @@ const ErrorBody = z.looseObject({
     .transform((error) => (typeof error === "string" ? error : error.message)),
 });
 
-// Callers build URLs by string concat on purpose — `new URL("...", base)`
-// resolves against a pathed base by dropping its last segment, which
-// silently eats the `/v1`.
+/** Concat, not `new URL(path, base)`, which drops a base's last segment such as `/v1`. */
 const trimTrailingSlashes = (baseUrl: string): string =>
   baseUrl.replace(/\/+$/, "");
 

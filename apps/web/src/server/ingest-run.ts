@@ -535,7 +535,7 @@ const bump = (counts: Map<string, number>, key: string): number => {
 };
 
 /**
- * One file at a time: a prepare is minutes of OCR on the write lane, and the
+ * One file at a time: a prepare can run long on the slow lane, and the
  * gap between two of them is the only place a cancel can be noticed — no turn
  * is in flight to carry one.
  */
@@ -672,10 +672,8 @@ const unlockOrPark = async (
     return;
   }
 
-  // What opened outranks what parked: files the password already paid to
-  // prepare must reach the model now — a park can end in Skip or Cancel, and
-  // either would strand them. The still-locked re-surface next turn, bounded
-  // by the attempt cap.
+  // Unlocked files reach the model now: a park can end in Skip or Cancel and
+  // strand them. Still-locked files re-surface next turn, up to the cap.
   if (swept.unlocked.length > 0) {
     advance(run, continuationFor(swept.unlocked));
     return;
@@ -1030,10 +1028,8 @@ export const submitPassword = async (
   run.phase = resumedFrom(waiting, password);
 
   const unlocked = await tryUnlock(run, waiting);
-  // Every prepare here spends minutes with no turn in flight: a cancel lands
-  // between them or nowhere, so each gap checks before parking or advancing.
-  // Through a call, not the property: narrowing survives an await, a cancel
-  // does not wait for one.
+  // No turn is in flight, so a cancel lands between prepares or nowhere.
+  // A call, not the property: narrowing would survive the await.
   if (wasCancelled(run)) {
     settleCancelled(run);
     return ok(undefined);
