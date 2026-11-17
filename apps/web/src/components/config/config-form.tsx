@@ -51,17 +51,23 @@ function SectionBox({
     >
       <legend className="label px-1">{title}</legend>
       {children}
-      {line === null ? null : (
-        <p role="status" className="text-[11px] break-words">
-          <span className={TONE[line.tone].text}>{line.word}</span>
-          {line.detail === undefined ? null : (
-            <span className="text-muted-foreground"> — {line.detail}</span>
-          )}
-        </p>
-      )}
+      {/* Mounted empty, so screen readers hear the first verdict too. */}
+      <p role="status" className="text-[11px] break-words empty:sr-only">
+        {line === null ? null : (
+          <>
+            <span className={TONE[line.tone].text}>{line.word}</span>
+            {line.detail === undefined ? null : (
+              <span className="text-muted-foreground"> — {line.detail}</span>
+            )}
+          </>
+        )}
+      </p>
     </fieldset>
   );
 }
+
+const ARIA_DISABLED =
+  "aria-disabled:pointer-events-none aria-disabled:opacity-50";
 
 const httpUrl = (value: string): boolean => {
   const protocol = URL.parse(value)?.protocol;
@@ -199,6 +205,7 @@ export function ConfigForm({
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
+    if (busy) return;
     setFormError(null);
 
     const gateway = gatewayCandidate();
@@ -285,26 +292,31 @@ export function ConfigForm({
       </div>
 
       <div className="border-border bg-card flex shrink-0 flex-col gap-1.5 border-t px-4 py-3">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
             type="button"
             variant="ghost"
-            className="text-sm"
+            className="px-3 text-sm"
             disabled={save.isPending}
             onClick={cancel}
           >
             Cancel
           </Button>
+          {/* aria-disabled, not disabled: a disabled button drops its focus. */}
           <Button
             type="button"
             variant="outline"
-            className="text-sm"
-            disabled={busy}
-            onClick={runTest}
+            className={cn("min-w-40 text-sm", ARIA_DISABLED)}
+            aria-disabled={busy}
+            onClick={busy ? undefined : runTest}
           >
             {gatewayTest.isPending ? "Testing…" : "Test connection"}
           </Button>
-          <Button type="submit" className="text-sm" disabled={busy}>
+          <Button
+            type="submit"
+            className={cn("text-sm", ARIA_DISABLED)}
+            aria-disabled={busy}
+          >
             {save.isPending ? "Saving…" : "Save"}
           </Button>
         </div>
