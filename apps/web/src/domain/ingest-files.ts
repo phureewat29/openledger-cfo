@@ -27,7 +27,6 @@ const UPLOAD_EXTENSIONS: ReadonlySet<string> = new Set([
   "png",
   "jpg",
   "jpeg",
-  "webp",
 ]);
 
 /** The file picker's `accept` list, spelled from the set the route enforces. */
@@ -35,8 +34,7 @@ export const UPLOAD_ACCEPT = [...UPLOAD_EXTENSIONS]
   .map((extension) => `.${extension}`)
   .join(",");
 
-export const UPLOAD_TYPE_ERROR =
-  "Only PDF, PNG, JPG and WEBP files can be ingested.";
+export const UPLOAD_TYPE_ERROR = "Only PDF, PNG and JPG files can be ingested.";
 
 /**
  * A name's extension, lowercased, when the ledger can read it. A leading dot

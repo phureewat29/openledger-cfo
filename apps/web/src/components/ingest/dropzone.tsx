@@ -87,7 +87,7 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
 
   const label = () => {
     if (progress === undefined) {
-      return "Drop files, or click — PDF, PNG, JPG, WEBP";
+      return "Drop files, or click — PDF, PNG, JPG";
     }
     if (progress.total === 1) return "Uploading…";
     return `Uploading ${progress.done + 1}/${progress.total}…`;
