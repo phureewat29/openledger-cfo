@@ -180,7 +180,7 @@ export class CompletionsChatOpenAI extends ChatOpenAI {
 
 /**
  * Redaction sits at the one boundary all gateway traffic crosses. Three escapes
- * in `@langchain/openai@1.8.3` would route around it: `withConfig`, which the
+ * in `@langchain/openai@1.8.4` would route around it: `withConfig`, which the
  * base class shuts, and the two stream entry points overridden below. The
  * versions are pinned because the escapes are unversioned internals.
  */

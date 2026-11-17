@@ -32,7 +32,7 @@
     "@openledger-cfo/prettier-config": "workspace:*",
     "dotenv-cli": "^11.1.0",
     "prettier": "catalog:",
-    "turbo": "^2.11.10",
+    "turbo": "^2.11.11",
     "typescript": "catalog:"
   },
   "prettier": "@openledger-cfo/prettier-config"

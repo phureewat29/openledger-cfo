@@ -16,7 +16,7 @@
     "with-env": "dotenv -e ../../.env --"
   },
   "dependencies": {
-    "@ai-sdk/react": "^4.0.173",
+    "@ai-sdk/react": "^4.0.177",
     "@openledger-cfo/agent": "workspace:*",
     "@openledger-cfo/api": "workspace:*",
     "@openledger-cfo/db": "workspace:*",
@@ -34,7 +34,7 @@
     "d3-scale": "^4.0.3",
     "d3-shape": "^3.2.1",
     "es-toolkit": "catalog:",
-    "lucide-react": "^1.72.0",
+    "lucide-react": "^1.73.0",
     "next": "^16.4.6",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
@@ -48,7 +48,7 @@
     "@openledger-cfo/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "catalog:",
     "@types/d3-array": "^3.2.2",
-    "@types/d3-sankey": "^0.12.4",
+    "@types/d3-sankey": "^0.12.5",
     "@types/d3-scale": "^4.0.9",
     "@types/d3-shape": "^3.2.0",
     "@types/node": "catalog:",

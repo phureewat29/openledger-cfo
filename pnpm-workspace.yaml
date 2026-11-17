@@ -8,15 +8,15 @@ catalog:
   "@eslint/js": ^9.39.5
   "@tailwindcss/postcss": ^4.3.5
   "@tanstack/react-query": ^5.107.1
-  "@trpc/client": ^11.28.0
-  "@trpc/server": ^11.28.0
-  "@trpc/tanstack-react-query": ^11.28.0
+  "@trpc/client": ^11.28.3
+  "@trpc/server": ^11.28.3
+  "@trpc/tanstack-react-query": ^11.28.3
   "@types/node": ^22.20.5
-  ai: ^7.0.169
-  better-sqlite3: ^13.0.3
+  ai: ^7.0.173
+  better-sqlite3: ^13.2.0
   es-toolkit: ^1.53.2
   eslint: ^9.39.5
-  prettier: ^3.10.0
+  prettier: ^3.10.1
   tailwindcss: ^4.3.5
   tsx: ^4.23.15
   typescript: ^6.0.3
