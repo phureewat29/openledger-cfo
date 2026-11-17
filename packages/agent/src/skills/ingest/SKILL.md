@@ -5,7 +5,7 @@ compatibility: Requires Node.js >= 18 and the oled CLI (npm install -g @aquartie
 ---
 
 <!--
-  Body vendored verbatim from @aquartier/openledger v0.25.0
+  Body vendored verbatim from @aquartier/openledger v0.26.0
   (skills/openledger/SKILL.md). Only the frontmatter `name` differs, because the
   Agent Skills spec requires it to match this directory.
 
@@ -17,11 +17,11 @@ compatibility: Requires Node.js >= 18 and the oled CLI (npm install -g @aquartie
 
 `oled` is a deterministic CLI over a local, double-entry ledger; you supply the intelligence. The CLI is the manual: `oled --help` lists the commands and the output contract, `oled <noun> --help` gives each command's behavior, flow, and flags, and every error carries a code and a message, often a `hint`. Exit 8 (`E_BUSY`) means another process held the ledger: re-run the same command unchanged, unless the error carries `details.resume_from_index` (an `ingest commit` that had already posted rows); then re-run only the rows from that index, or rows without a stable id post twice. When you do not understand something, ask the CLI: never invent flags, subcommands, or ids.
 
-Always pass `--json`. List output ends with a `{"type":"summary"}` row — page with `--offset` while it says `has_more`. Money totals are keyed by currency; never add two currencies together. `oled status --json` carries `contract_version` (currently 1); it bumps whenever any command's JSON shape changes, so pin against it if you parse output structurally.
+Always pass `--json`. List output ends with a `{"type":"summary"}` row — page with `--offset` while it says `has_more`. Money totals are keyed by currency; never add two currencies together. `oled status --json` carries `contract_version` (currently 2); it bumps whenever any command's JSON shape changes, so pin against it if you parse output structurally.
 
 ## Setup
 
-`oled --version` prints a version when installed. To install: check `node --version` >= 22.12, then `npm install -g @aquartier/openledger`. First run: `oled config --init --json` unless `oled status --json` shows `"configured":true`; commands that touch the ledger exit 3 until then, and `--init` refuses a setup that already exists (exit 6) — change settings with plain flags, e.g. `oled config --ocr-base-url <url> --json`. Every other command accepts `--config <path>` to run against a different config file, a separate ledger; `oled config <path> --json` reads or writes that file directly. Statements go in the `dataDir` from `oled config --json`, as PDFs or as photos/scans (PNG/JPEG/WebP); `oled open` opens it.
+`oled --version` prints a version when installed. To install: check `node --version` >= 22.12, then `npm install -g @aquartier/openledger`. First run: `oled config --init --json` unless `oled status --json` shows `"configured":true`; commands that touch the ledger exit 3 until then, and `--init` refuses a setup that already exists (exit 6) — change settings with plain flags, e.g. `oled config --user-name <name> --json`. Every other command accepts `--config <path>` to run against a different config file, a separate ledger; `oled config <path> --json` reads or writes that file directly. Statements go in the `dataDir` from `oled config --json`, as PDFs or as photos/scans (PNG/JPEG); `oled open` opens it.
 
 ## Loop
 
