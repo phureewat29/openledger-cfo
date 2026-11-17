@@ -9,6 +9,7 @@ import { cn } from "@openledger-cfo/ui";
 import { RemoveButton } from "~/components/plan/remove-button";
 import {
   UPLOAD_ACCEPT,
+  UPLOAD_HINT,
   UPLOAD_TYPE_ERROR,
   uploadExtensionOf,
 } from "~/domain/ingest-files";
@@ -87,7 +88,7 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
 
   const label = () => {
     if (progress === undefined) {
-      return "Drop files, or click — PDF, PNG, JPG";
+      return UPLOAD_HINT;
     }
     if (progress.total === 1) return "Uploading…";
     return `Uploading ${progress.done + 1}/${progress.total}…`;
@@ -108,7 +109,7 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
           void send(event.dataTransfer.files);
         }}
         className={cn(
-          "border-border text-muted-foreground hover:border-accent/60 flex h-7 cursor-pointer items-center rounded-md border border-dashed px-2 text-xs",
+          "border-border text-muted-foreground hover:border-accent/60 flex min-h-7 cursor-pointer items-center rounded-md border border-dashed px-2 py-1 text-xs",
           dragging && "border-accent text-foreground",
           busy && "cursor-progress",
         )}

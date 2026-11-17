@@ -2,6 +2,7 @@ import { INGEST_GRID, INGEST_NARROW, INGEST_WIDE } from "~/app/ingest/grid";
 import { Breadcrumbs } from "~/components/breadcrumbs";
 import { LoadingLine } from "~/components/loading-line";
 import { PaneFrame } from "~/components/pane-frame";
+import { UPLOAD_HINT } from "~/domain/ingest-files";
 
 /**
  * Soft on purpose: the ingest grid holds every pane's height, so the frames
@@ -22,8 +23,8 @@ export default function IngestLoading() {
           bodyClassName="flex min-h-0 flex-1 flex-col p-0"
         >
           <div className="border-border shrink-0 border-b p-2">
-            <div className="border-border text-muted-foreground flex h-7 items-center rounded-md border border-dashed px-2 text-xs">
-              Drop files, or click — PDF, PNG, JPG
+            <div className="border-border text-muted-foreground flex min-h-7 items-center rounded-md border border-dashed px-2 py-1 text-xs">
+              {UPLOAD_HINT}
             </div>
           </div>
           <div className="min-h-0 flex-1 p-3">

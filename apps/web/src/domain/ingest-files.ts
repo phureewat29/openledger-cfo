@@ -36,6 +36,9 @@ export const UPLOAD_ACCEPT = [...UPLOAD_EXTENSIONS]
 
 export const UPLOAD_TYPE_ERROR = "Only PDF, PNG and JPG files can be ingested.";
 
+/** The dropzone's idle label; the loading skeleton must print the same. */
+export const UPLOAD_HINT = "Drop files, or click — PDF, PNG, JPG";
+
 /**
  * A name's extension, lowercased, when the ledger can read it. A leading dot
  * marks a hidden file, not an extension.
