@@ -46,7 +46,7 @@ const createLanes = () => {
 const inLane = createLanes();
 
 /** Flags whose following argument must never reach a log, a UI, or an error. */
-const SECRET_FLAGS = new Set(["--password", "--ocr-api-key"]);
+const SECRET_FLAGS = new Set(["--password"]);
 
 /** What stands in for a secret in a log, a UI, or an error. */
 export const SECRET_MASK = "•••";

@@ -65,8 +65,6 @@ export const createOpenLedger = (opts: CreateOpenLedgerOptions = {}) => {
     },
     config: {
       dataDir: reads.configDataDir,
-      read: reads.configRead,
-      set: writes.configSet,
     },
     /** Standing up a ledger: provisioning and batch posting, not request-path mutations. */
     bootstrap: {
@@ -86,7 +84,6 @@ export {
   resolveOledConfig,
   WORKSPACE_MARKER,
 } from "./config";
-export type { OledConfigFile } from "./config";
 /**
  * Re-exported for callers that already hold the client. Both modules are pure
  * and import nothing, so a caller that must stay off the server — a browser
@@ -148,8 +145,6 @@ export type {
   AccountUpdateResult,
   ConfigInitInput,
   ConfigInitResult,
-  ConfigSetInput,
-  ConfigView,
   CountSummary,
   FileDropResult,
   IngestDoneResult,

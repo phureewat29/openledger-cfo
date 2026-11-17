@@ -3,7 +3,6 @@ import { join } from "node:path";
 import type { z } from "zod/v4";
 import { CONTRACT_VERSION } from "@aquartier/openledger/contract";
 
-import type { OledConfigFile } from "./config";
 import type { OledError } from "./errors";
 import type { OledCommandListener } from "./exec";
 import type { ListPage } from "./ndjson";
@@ -328,13 +327,6 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
   const configDataDir = async (): Promise<Result<string, OledError>> =>
     map(await readOledConfigFile(configPath), (config) => config.dataDir);
 
-  /**
-   * Off the file, raw key included: this is a local single-user app and the
-   * settings form shows what it will save. Writes still go through the CLI.
-   */
-  const configRead = (): Promise<Result<OledConfigFile, OledError>> =>
-    readOledConfigFile(configPath);
-
   return {
     status,
     report,
@@ -348,6 +340,5 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     ingestList,
     ingestDocument,
     configDataDir,
-    configRead,
   };
 };
