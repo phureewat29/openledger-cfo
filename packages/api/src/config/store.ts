@@ -7,22 +7,20 @@ import { err, messageOf, ok, unwrapOr } from "@openledger-cfo/openledger";
 
 export const DEFAULT_AI_MODEL = "qwen/qwen3.8-27b";
 
-export const HttpUrlSchema = z.url({ protocol: /^https?$/ }).max(400);
-
-/** One length rule for every model-id field, so a value cannot test green and then fail to save. */
-export const ModelIdSchema = z.string().min(1).max(120);
-
-// Plain overwrite: the form always sends the key field, "" meaning keyless.
+/**
+ * Test and save both parse this, so a value cannot test green and then fail
+ * to save. An empty `apiKey` means a keyless endpoint.
+ */
 export const SaveGatewaySchema = z.object({
-  baseUrl: HttpUrlSchema,
+  baseUrl: z.url({ protocol: /^https?$/ }).max(400),
   apiKey: z.string().max(400).default(""),
-  model: ModelIdSchema.default(DEFAULT_AI_MODEL),
+  model: z.string().min(1).max(120).default(DEFAULT_AI_MODEL),
 });
 
 const CONFIG_ROW_ID = "app";
 
 /** The agent package declares this shape too; they stay structurally equal. */
-export interface GatewayConfig {
+interface GatewayConfig {
   readonly baseUrl: string;
   readonly apiKey: string;
   readonly model: string;
@@ -79,21 +77,17 @@ export const readGateway = async (): Promise<GatewayConfig | undefined> => {
   };
 };
 
-/** `ocrSharesGateway` omitted leaves the stored flag alone. */
+/** `redact` omitted leaves the stored flag alone. */
 export const saveConfiguration = async (input: {
   baseUrl: string;
   apiKey: string;
   model: string;
-  ocrSharesGateway?: boolean;
   redact?: boolean;
 }): Promise<Result<void, ConfigReadError>> => {
   const row = {
     aiBaseUrl: input.baseUrl,
     aiApiKey: input.apiKey,
     aiModel: input.model,
-    ...(input.ocrSharesGateway === undefined
-      ? {}
-      : { ocrSharesGateway: input.ocrSharesGateway }),
     ...(input.redact === undefined ? {} : { aiRedact: input.redact }),
   };
   return fromStore(async () => {

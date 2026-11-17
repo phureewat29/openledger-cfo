@@ -1,13 +1,12 @@
-import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import type { inferRouterOutputs } from "@trpc/server";
 
 import type { AppRouter } from "./root";
 
-type RouterInputs = inferRouterInputs<AppRouter>;
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 
 export { type AppRouter, appRouter } from "./root";
 export { createTRPCContext } from "./trpc";
-export type { RouterInputs, RouterOutputs };
+export type { RouterOutputs };
 
 export type { ProbeReason } from "./config/probe";
 export { readGateway } from "./config/store";

@@ -71,16 +71,6 @@ export const bootstrapLedger = async (
   const guard = guardDemoLedger();
   if (!guard.ok) return guard;
 
-  // OCR is a machine setting: carried across the reset so a reseed never
-  // turns image ingest off. Raw key included — re-init must replay it.
-  const view = await oled.config.read();
-  if (!view.ok && view.error.kind !== "not_configured") {
-    options.log(
-      `ocr config unreadable, continuing without it: ${view.error.message}`,
-    );
-  }
-  const { ocrBaseUrl, ocrModel, ocrApiKey } = view.ok ? view.value : {};
-
   if (!options.keep) {
     // A running server can hold the ledger file for a moment; Windows answers EBUSY until it lets go.
     await rm(LEDGER.root, { recursive: true, force: true, maxRetries: 5 });
@@ -98,9 +88,6 @@ export const bootstrapLedger = async (
       currency: options.config.currency,
       locale: options.config.locale,
       userName: options.config.userName,
-      ocrBaseUrl,
-      ocrModel,
-      ocrApiKey,
     });
     if (!init.ok) return init;
     options.log(`config  ${init.value.config_path}`);

@@ -7,30 +7,10 @@ export type ProbeReason = "unauthorized" | "unreachable" | "rejected";
 export type ProbeOutcome =
   { ok: true } | { ok: false; reason: ProbeReason; message: string };
 
-export type ProbeKind = "gateway" | "ocr";
-
 const CHAT_TIMEOUT_MS = 10_000;
 const PING_TIMEOUT_MS = 3_500;
 
 const UNAUTHORIZED = new Set([401, 403]);
-
-/** 64×64 white PNG: tiny to embed, yet above the minimum-size image validation some providers run (a 1×1 false-reds Venice). */
-const PROBE_IMAGE =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAAKUlEQVR4nO3MQREAAAwCIPuX1hD77SAA6VEEAoFAIBAIBAKBQCAQfA8Gpwvw4pr3blgAAAAASUVORK5CYII=";
-
-/** Each kind speaks the request its config will serve in production. */
-const MESSAGES: Record<ProbeKind, unknown> = {
-  gateway: [{ role: "user", content: "ping" }],
-  ocr: [
-    {
-      role: "user",
-      content: [
-        { type: "text", text: "." },
-        { type: "image_url", image_url: { url: PROBE_IMAGE } },
-      ],
-    },
-  ],
-};
 
 // OpenAI nests `{error: {message}}`; some providers flatten to `{error: string}`.
 const ErrorBody = z.looseObject({
@@ -120,7 +100,6 @@ export const probeChat = (candidate: {
   baseUrl: string;
   apiKey?: string;
   model: string;
-  kind: ProbeKind;
 }): Promise<ProbeOutcome> => {
   const url = `${trimTrailingSlashes(candidate.baseUrl)}/chat/completions`;
   const init: RequestInit = {
@@ -131,7 +110,7 @@ export const probeChat = (candidate: {
     },
     body: JSON.stringify({
       model: candidate.model,
-      messages: MESSAGES[candidate.kind],
+      messages: [{ role: "user", content: "ping" }],
       max_tokens: 1,
       stream: false,
       temperature: 0,
