@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { partition } from "es-toolkit";
+import { attemptAsync, partition } from "es-toolkit";
 
 import { messageOf } from "@openledger-cfo/openledger/result";
 import { cn } from "@openledger-cfo/ui";
@@ -32,15 +32,14 @@ interface Outcome {
 const upload = async (file: File): Promise<UploadReply> => {
   const body = new FormData();
   body.append("file", file);
-  try {
+  const [cause, reply] = await attemptAsync(async () => {
     const response = await fetch("/api/ingest/upload", {
       method: "POST",
       body,
     });
     return (await response.json()) as UploadReply;
-  } catch (cause) {
-    return { ok: false, error: messageOf(cause) };
-  }
+  });
+  return reply ?? { ok: false, error: messageOf(cause) };
 };
 
 export function Dropzone({ onUploaded }: { onUploaded: () => void }) {

@@ -1,3 +1,4 @@
+import { attemptAsync } from "es-toolkit";
 import { z } from "zod/v4";
 
 import type { Result } from "@openledger-cfo/openledger";
@@ -49,11 +50,8 @@ const toStoreError = (cause: unknown): ConfigReadError => {
 const fromStore = async <T>(
   run: () => Promise<T>,
 ): Promise<Result<T, ConfigReadError>> => {
-  try {
-    return ok(await run());
-  } catch (cause) {
-    return err(toStoreError(cause));
-  }
+  const [cause, value] = await attemptAsync<T, Error>(run);
+  return cause === null ? ok(value) : err(toStoreError(cause));
 };
 
 export const readConfigurationRow = (): Promise<

@@ -1,3 +1,4 @@
+import { attemptAsync } from "es-toolkit";
 import { z } from "zod/v4";
 
 import { messageOf } from "@openledger-cfo/openledger";
@@ -73,22 +74,15 @@ const probe = async (
   timeoutMs: number,
   rejected: (response: Response) => ProbeOutcome | Promise<ProbeOutcome>,
 ): Promise<ProbeOutcome> => {
-  try {
-    const response = await fetch(url, {
-      ...init,
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (response.ok || response.status === 429) return { ok: true };
-    if (UNAUTHORIZED.has(response.status)) {
-      return fail(
-        "unauthorized",
-        `${url} answered ${String(response.status)}.`,
-      );
-    }
-    return await rejected(response);
-  } catch (cause) {
-    return caught(cause, timeoutMs);
+  const [cause, response] = await attemptAsync(() =>
+    fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) }),
+  );
+  if (response === null) return caught(cause, timeoutMs);
+  if (response.ok || response.status === 429) return { ok: true };
+  if (UNAUTHORIZED.has(response.status)) {
+    return fail("unauthorized", `${url} answered ${String(response.status)}.`);
   }
+  return rejected(response);
 };
 
 /**
