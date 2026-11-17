@@ -149,6 +149,8 @@ export function ConfigForm({
     (set: (value: string) => void) =>
     (event: React.ChangeEvent<HTMLInputElement>) => {
       set(event.target.value);
+      // Detaches an in-flight probe, so its answer cannot land on new values.
+      gatewayTest.reset();
       setGatewayLine(null);
       setFormError(null);
     };
