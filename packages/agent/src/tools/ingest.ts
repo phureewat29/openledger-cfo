@@ -1,5 +1,6 @@
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { tool } from "@langchain/core/tools";
+import { omit, sumBy } from "es-toolkit";
 import { z } from "zod/v4";
 
 import type { IngestFileRow } from "@openledger-cfo/openledger";
@@ -59,14 +60,16 @@ export const ingestPrepare = tool(
       const out = await caller.ledger.ingest.prepare(input);
       if (!out.ok) return toolResult(out);
 
-      // The extracted text can run to a megabyte; readDocument serves it capped.
-      const { document, ...rest } = out;
-      return toolResult({ ...rest, document_chars: document?.length ?? 0 });
+      // readDocument serves the text itself, capped.
+      return toolResult({
+        ...omit(out, ["document"]),
+        document_chars: sumBy(out.pages, (page) => page.chars),
+      });
     }),
   {
     name: "ingestPrepare",
     description:
-      "Register one statement and extract its text or page images. Takes minutes on a scan. Returns the file id every later step needs, or an input-required refusal for a locked PDF.",
+      "Register one statement and extract its text. The built-in OCR reads scans and photos: printed Thai and English, not handwriting. Returns the file id every later step needs, or an input-required refusal for a locked PDF.",
     schema: z.object({
       pathOrId: z
         .string()
@@ -81,7 +84,7 @@ export const ingestPrepare = tool(
       rescan: z
         .boolean()
         .optional()
-        .describe("Ignore the text layer and read the page images instead"),
+        .describe("Ignore a garbled text layer and read every page with OCR"),
       force: z
         .boolean()
         .optional()

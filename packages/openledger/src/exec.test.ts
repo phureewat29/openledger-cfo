@@ -229,7 +229,7 @@ describe("resolveOledLauncher", () => {
   );
 });
 
-/** The stderr line oled 0.25's `describeFailure` writes for an E_BUSY under --json. */
+/** The stderr line oled's `describeFailure` writes for an E_BUSY under --json. */
 const busyLine = (extra: object = {}) =>
   `${JSON.stringify({
     error: {

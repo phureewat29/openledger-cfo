@@ -209,7 +209,7 @@ const TRANSACTION_UPDATE_FLAGS = {
 export interface IngestPrepareOptions {
   /** Only a locked PDF needs one; it never reaches an event, a log or an error. */
   password?: string;
-  /** Ignore the text layer and read the page images instead. */
+  /** Ignore the text layer and read every page with the built-in OCR. */
   rescan?: boolean;
   /** Re-register the file, dropping the prior ingest's rows and artifacts. */
   force?: boolean;
@@ -374,10 +374,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     );
   };
 
-  /**
-   * Reads one statement into text or page images. Runs on the slow lane: OCR
-   * holds the file for minutes and every other command has to stay answerable.
-   */
+  /** Slow lane: OCR on a long scan must not block the reads. */
   const ingestPrepare = async (
     pathOrId: string,
     opts: IngestPrepareOptions = {},
@@ -393,11 +390,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       ...toFlagArgs(PREPARE_FLAGS, opts),
     ];
 
-    // Exit 7 is a document with holes, not a failed read: failed_pages names them.
-    return runSingle(args, prepareResultSchema, {
-      lane: "slow",
-      allowPartial: true,
-    });
+    return runSingle(args, prepareResultSchema, { lane: "slow" });
   };
 
   const ingestCommit = async (

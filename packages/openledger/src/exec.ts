@@ -32,9 +32,9 @@ export type OledLane = "fast" | "slow";
  * module twice makes a second set of lanes, so a caller that needs one queue
  * per process holds one connector per process.
  *
- * Two lanes, not one: `ingest prepare` can hold a statement for minutes under
- * OCR, and a single queue would block every read behind it — overlaps can
- * still contend for the ledger lock (exit 8, retried below).
+ * Two lanes, not one: a long `ingest prepare` would otherwise block every read
+ * behind it. Overlaps can still contend for the ledger lock (exit 8, retried
+ * below).
  */
 const createLanes = () => {
   const lanes = { fast: createSerialQueue(), slow: createSerialQueue() };
@@ -259,7 +259,7 @@ const BUSY_RETRY_DELAYS_MS = [25, 75, 150];
 
 /**
  * E_BUSY: another process held the ledger past the CLI's own ~5s wait. Per
- * oled's 0.25 contract the same command is then safe to re-run, writes
+ * oled's contract the same command is then safe to re-run, writes
  * included, unless the error carries `details.resume_from_index` (an `ingest
  * commit` that had already posted rows, which a re-run would post twice
  * wherever a row has no stable id) or stdout already holds output. Both signals

@@ -313,8 +313,8 @@ const main = async (): Promise<Check[]> => {
 
   const status = expectOk("status", await oled.status());
   if (status) {
-    // Literal 1 on purpose: a bumped dependency must not silently move this pin.
-    expectEqual("status contract version", status.contract_version, 1);
+    // Literal 2 on purpose: a bumped dependency must not silently move this pin.
+    expectEqual("status contract version", status.contract_version, 2);
     record(
       "status reports the CLI version",
       typeof status.version === "string" && status.version.length > 0,
@@ -409,8 +409,8 @@ const main = async (): Promise<Check[]> => {
   const fileId = prepared?.file_id ?? "";
   if (prepared) {
     record("prepare returns an sf id", FILE_ID_PATTERN.test(fileId), fileId);
-    expectEqual("prepare route", prepared.kind, "text");
     expectEqual("prepare reader", prepared.source, "text-layer");
+    expectEqual("prepare text layer", prepared.text_layer, "complete");
     expectEqual("prepare page count", prepared.page_count, 2);
     expectIncludes(
       "prepare reports its command",

@@ -379,33 +379,19 @@ export const ingestFileSummarySchema = z.object({
 });
 export type IngestFileSummary = z.infer<typeof ingestFileSummarySchema>;
 
-const PREPARE_KINDS = ["text", "images"] as const;
-const prepareKindSchema = z.enum(PREPARE_KINDS);
-
-/** `chars` on the text route, `path` on the images route. */
 const preparePageSchema = z.looseObject({
   page: z.number(),
-  chars: z.number().optional(),
-  path: z.string().optional(),
+  chars: z.number(),
 });
 
-/**
- * One shared head, then the route's own payload: `document` for text,
- * `dpi`/`path` pages for images. `source` names the reader — text-layer, ocr,
- * raster, original — and `text_layer` is complete, partial or none.
- */
+/** One `document` path to read, whichever reader filled it. */
 export const prepareResultSchema = z.looseObject({
   file_id: z.string(),
-  kind: prepareKindSchema,
-  source: z.string(),
-  text_layer: z.string(),
+  source: z.enum(["text-layer", "ocr"]),
+  text_layer: z.enum(["complete", "partial", "none"]),
   page_count: z.number(),
+  document: z.string(),
   pages: z.array(preparePageSchema),
-  ocr_model: z.string().optional(),
-  document: z.string().optional(),
-  /** Pages the OCR endpoint could not read; the run still exits 7. */
-  failed_pages: z.array(z.number()).optional(),
-  dpi: z.number().optional(),
 });
 export type PrepareResult = z.infer<typeof prepareResultSchema>;
 
