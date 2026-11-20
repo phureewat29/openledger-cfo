@@ -1,16 +1,12 @@
 import { groupBy, mapValues } from "es-toolkit";
 
 import type { Life } from "../dataset";
-import type { SeedRow } from "../types";
+import type { SeedRow } from "../rows";
 import type { Check } from "./shared";
-import { dayIn, eachMonth, lastDayIn, monthKey } from "../calendar";
-import { legsOf } from "../types";
+import { dayIn, eachMonth, isWholeMonth, monthKey } from "../calendar";
+import { legsOf } from "../rows";
 import { check } from "./shared";
 
-/**
- * The fixed obligations are the ones a reader will scroll for, so every whole
- * month has to show both paydays and every loan that had not yet been settled.
- */
 export const cadenceCheck = (life: Life, rows: SeedRow[]): Check => {
   const { incomeSources: income, loans } = life.meta.products;
   const incomeAccounts = new Set(income.map((source) => source.account));
@@ -31,10 +27,8 @@ export const cadenceCheck = (life: Life, rows: SeedRow[]): Check => {
     (group) => new Set(group.map(({ month }) => month)),
   );
 
-  const fullMonths = eachMonth(life.meta.window).filter(
-    (month) =>
-      dayIn(month, 1) >= life.meta.window.start &&
-      lastDayIn(month) <= life.meta.window.end,
+  const fullMonths = eachMonth(life.meta.window).filter((month) =>
+    isWholeMonth(month, life.meta.window),
   );
 
   const gaps = fullMonths.flatMap((month) => {

@@ -1,9 +1,18 @@
+import { attemptAsync } from "es-toolkit";
+
 import type { OledError } from "@openledger-cfo/openledger";
 
 import type { Check } from "./invariants";
 
 export const log = (line: string): void => {
   console.log(line);
+};
+
+/** The one process boundary: a throw from below is printed and exits 1. */
+export const exitWith = async (run: () => Promise<number>): Promise<void> => {
+  const [cause, code] = await attemptAsync(run);
+  if (code === null) console.error(cause);
+  process.exitCode = code ?? 1;
 };
 
 export const describeError = (error: OledError): string =>

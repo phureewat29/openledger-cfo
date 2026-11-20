@@ -25,7 +25,6 @@ const loanBase = {
   category: z.enum(["mortgage", "personal"]),
 };
 
-/** Interest is charged on what is still owed, so the split moves every month. */
 const amortizingLoanSchema = z.object({
   ...loanBase,
   kind: z.literal("amortizing"),
@@ -34,11 +33,7 @@ const amortizingLoanSchema = z.object({
   prepayments: z.array(prepaymentSchema),
 });
 
-/**
- * Thai flat-rate lending charges interest on the original principal for the
- * whole term, so every installment splits identically and settling early is the
- * only way to stop paying for money already repaid.
- */
+/** Flat-rate lending: interest on the original principal for the whole term, so every installment splits identically. */
 const flatLoanSchema = z.object({
   ...loanBase,
   kind: z.literal("flat"),
@@ -60,12 +55,6 @@ export type AmortizingLoan = z.infer<typeof amortizingLoanSchema>;
 export type FlatLoan = z.infer<typeof flatLoanSchema>;
 export type Loan = z.infer<typeof loanSchema>;
 
-/**
- * Rates are the ones these four products actually carried through 2025. Both
- * mortgages are quoted off the lender's MRR — SCB posted 6.775% and KBank 6.68%
- * at the end of 2025 — so a retention deal of MRR less about two points is what
- * a borrower with this income would be paying.
- */
 export const LOANS: Loan[] = [
   {
     kind: "amortizing",
@@ -97,8 +86,7 @@ export const LOANS: Loan[] = [
     monthlyPayment: 13_500,
     paymentDay: 5,
     payFrom: ACCOUNT.kbank,
-    // Bonus season is when a Thai borrower knocks a lump off the smaller loan;
-    // these two are what let it clear inside the window.
+    // These two are what let the loan clear inside the window.
     prepayments: [
       { month: "2024-12", day: 28, amount: 150_000, payFrom: ACCOUNT.kbank },
       { month: "2025-12", day: 28, amount: 230_000, payFrom: ACCOUNT.kbank },
@@ -121,8 +109,6 @@ export const LOANS: Loan[] = [
     prepayments: [],
   },
   {
-    // ฿888,000 over five years at ฿14,800 of principal and ฿2,000 of interest a
-    // month: ฿120,000 of interest on the original sum, or about 2.70% flat.
     kind: "flat",
     key: "car",
     account: ACCOUNT.carLoan,

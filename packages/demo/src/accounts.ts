@@ -1,9 +1,4 @@
-/**
- * One authority for every account id the seed may touch. Ids only: the account
- * definitions that carry names and metadata are assembled in `chart.ts`, which
- * reads this table and the product tables that reference it. Keeping ids free of
- * imports is what lets a product table name its own accounts without a cycle.
- */
+/** Ids only, and no imports: product tables name their accounts from here without an import cycle. */
 export const ACCOUNT = {
   kbank: "thb:asset:bank:kbank",
   scb: "thb:asset:bank:scb",
@@ -141,12 +136,19 @@ export const ACCOUNT = {
   conversionUSD: "usd:equity:conversion",
 } as const;
 
-/**
- * A unit ledger is two accounts under a head of its own: what is held, and the
- * contra every acquisition and disposal passes through. Quantity is money's own
- * kind of double entry — the shares have to come from somewhere for the ledger
- * to balance in that head, and they have to go somewhere when they are sold.
- */
+/** What a spend may be paid from; a card credits a liability, everything else an asset. */
+export type PaymentSource = (typeof ACCOUNT)[
+  | "cash"
+  | "truemoney"
+  | "kbank"
+  | "scb"
+  | "uob"
+  | "cardKbankVisa"
+  | "cardTtbAbsolute"
+  | "cardScbUp"
+  | "cardKrungsriFirst"];
+
+/** A unit ledger: the position held, and the contra every acquisition and disposal passes through. */
 export const unitAccountsOf = (
   code: string,
 ): { position: string; equity: string } => ({

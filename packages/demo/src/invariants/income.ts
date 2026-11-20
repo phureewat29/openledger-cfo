@@ -1,20 +1,23 @@
 import { sumBy } from "es-toolkit";
 
 import type { Life } from "../dataset";
-import type { SeedRow } from "../types";
+import type { SeedRow } from "../rows";
 import type { Check } from "./shared";
 import { formatMoney, fromUnits, toUnits } from "../money";
-import { legsOf } from "../types";
-import { check, detail, linkedGroupsCrediting } from "./shared";
+import { legsOf } from "../rows";
+import { check, detail } from "./shared";
+
+const linkedGroupsCrediting = (rows: SeedRow[], account: string): SeedRow[] =>
+  rows.filter(
+    (seedRow) =>
+      "linked" in seedRow &&
+      seedRow.linked.some((entry) => entry.credit_account === account),
+  );
 
 const PAYSLIP_MIN_RATE = 0.22;
 const PAYSLIP_MAX_RATE = 0.26;
 
-/**
- * A payslip's legs are the whole of gross pay: what the employee sees, what the
- * revenue department takes, what social security takes and what the provident
- * fund keeps. If they do not add back to gross, money was invented.
- */
+/** A payslip's legs are the whole of gross pay; if they do not add back, money was invented. */
 export const payslipCheck = (life: Life, rows: SeedRow[]): Check => {
   const source = life.meta.products.incomeSources.find(
     (entry) => entry.key === "employment",

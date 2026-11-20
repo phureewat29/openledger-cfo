@@ -1,15 +1,14 @@
+import type { PaymentSource } from "../accounts";
 import type { Month } from "../calendar";
 import type { Merchant } from "../merchants";
-import type { SeedContext, SeedRow } from "../types";
+import type { SeedContext, SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
 import { addDays, dayIn, within } from "../calendar";
-import { FUNDING } from "../funding";
 import { MERCHANT } from "../merchants";
 import { satang } from "../money";
 import { int, money, pick, pickDistinct, skewedMoney } from "../rng";
-import { row } from "../types";
+import { row } from "../rows";
 
-/** A place carries its own category: a rail pass is never a clothing spend. */
 interface Place {
   label: string;
   account: string;
@@ -37,7 +36,6 @@ interface Trip {
 
 const FX_MARKUP = 0.025;
 
-/** Songkran at home, a summer trip and a year-end trip: three a year, two abroad. */
 const TRIPS: Record<number, Trip> = {
   4: {
     label: "Songkran — Chiang Mai",
@@ -117,7 +115,6 @@ interface FestivalSale {
   label: string;
 }
 
-/** Double-date sales are the two nights of the year the cards get a workout. */
 const FESTIVAL_SALES: Record<number, FestivalSale> = {
   11: { day: 11, label: "11.11 sale" },
   12: { day: 12, label: "12.12 sale" },
@@ -130,7 +127,7 @@ interface BigPurchase {
   description: string;
   account: string;
   amount: number;
-  funding: string;
+  funding: PaymentSource;
   merchant: Merchant;
 }
 
@@ -140,7 +137,7 @@ const BIG_PURCHASES: BigPurchase[] = [
     description: "Apple Store — iPhone 16 Pro Max",
     account: ACCOUNT.electronics,
     amount: 54_900,
-    funding: FUNDING.first,
+    funding: ACCOUNT.cardKrungsriFirst,
     merchant: MERCHANT.appleStore,
   },
   {
@@ -148,7 +145,7 @@ const BIG_PURCHASES: BigPurchase[] = [
     description: "Apple Store — MacBook Pro M4 Pro",
     account: ACCOUNT.electronics,
     amount: 99_900,
-    funding: FUNDING.first,
+    funding: ACCOUNT.cardKrungsriFirst,
     merchant: MERCHANT.appleStore,
   },
   {
@@ -169,17 +166,10 @@ const BIG_PURCHASES: BigPurchase[] = [
   },
 ];
 
-/**
- * One spend a day from the day after departure, so a year-end trip that starts
- * on the 26th runs into January rather than piling onto the 28th. Days past the
- * window's end are dropped: the window is the ledger's horizon, not the trip's.
- */
 const tripRows = (ctx: SeedContext, month: Month, trip: Trip): SeedRow[] => {
   const departure = dayIn(month, trip.startDay);
   if (!within(departure, ctx.window)) return [];
 
-  // Long-haul is paid for when it is booked, not when it is flown: the airline
-  // and the prepaid hotel rate both settle weeks before anyone leaves.
   const booking = addDays(departure, -trip.flightLeadDays);
   const booked = within(booking, ctx.window) ? booking : departure;
   const bookings: SeedRow[] = [
@@ -187,7 +177,7 @@ const tripRows = (ctx: SeedContext, month: Month, trip: Trip): SeedRow[] => {
       date: booked,
       description: `Flights — ${trip.label}`,
       debit: ACCOUNT.flights,
-      credit: FUNDING.up,
+      credit: ACCOUNT.cardScbUp,
       amount: money(ctx.rng, trip.flightMin, trip.flightMax),
       merchant: trip.flightMerchant,
     }),
@@ -195,14 +185,12 @@ const tripRows = (ctx: SeedContext, month: Month, trip: Trip): SeedRow[] => {
       date: booked,
       description: `Hotel — ${trip.label}`,
       debit: ACCOUNT.hotels,
-      credit: FUNDING.up,
+      credit: ACCOUNT.cardScbUp,
       amount: money(ctx.rng, trip.hotelMin, trip.hotelMax),
       merchant: trip.hotelMerchant,
     }),
   ];
 
-  // Spending money is drawn abroad from the account that holds the travel float,
-  // so it is a movement between two of the persona's own assets, not a spend.
   const withdrawals = trip.international
     ? [0, 3]
         .map((offset) => addDays(departure, offset))
@@ -231,7 +219,7 @@ const tripRows = (ctx: SeedContext, month: Month, trip: Trip): SeedRow[] => {
         date: spendDate,
         description: `${trip.label} — ${place.label}`,
         debit: place.account,
-        credit: FUNDING.absolute,
+        credit: ACCOUNT.cardTtbAbsolute,
         amount,
       }),
       ...(trip.international
@@ -240,7 +228,7 @@ const tripRows = (ctx: SeedContext, month: Month, trip: Trip): SeedRow[] => {
               date: spendDate,
               description: `FX fee — ${trip.label}`,
               debit: ACCOUNT.fxFees,
-              credit: FUNDING.absolute,
+              credit: ACCOUNT.cardTtbAbsolute,
               amount: satang(amount * FX_MARKUP),
             }),
           ]
@@ -263,7 +251,7 @@ const saleRows = (ctx: SeedContext, month: Month): SeedRow[] => {
       date: saleDate,
       description: `${sale.label} — ${merchant.canonical}`,
       debit: ACCOUNT.shoppingOnline,
-      credit: FUNDING.first,
+      credit: ACCOUNT.cardKrungsriFirst,
       amount: skewedMoney(ctx.rng, 1_500, 12_000),
       merchant,
     });

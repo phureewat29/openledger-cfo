@@ -3,12 +3,12 @@ import { groupBy, mapValues, sumBy, uniq } from "es-toolkit";
 import type { AccountType } from "@openledger-cfo/openledger";
 
 import type { Life } from "../dataset";
-import type { SeedRow } from "../types";
+import type { SeedRow } from "../rows";
 import type { Check } from "./shared";
-import { lastDayIn } from "../calendar";
+import { isWholeMonth, monthOf } from "../calendar";
 import { currencyOf } from "../expected";
 import { formatMoney, fromUnits, toUnits } from "../money";
-import { deltasOf, legsOf } from "../types";
+import { deltasOf, legsOf } from "../rows";
 import { check, typeOf } from "./shared";
 
 const assetIds = (life: Life): Set<string> =>
@@ -18,11 +18,7 @@ const assetIds = (life: Life): Set<string> =>
       .map((account) => account.id),
   );
 
-/**
- * The one that locks the refill ordering: a closing balance can be positive
- * while the account spent the summer overdrawn, so this folds the stream in
- * posting order and stops at the first row that puts an asset below zero.
- */
+/** Folds in posting order: a positive close can hide a stretch spent overdrawn. */
 export const solvencyCheck = (life: Life, rows: SeedRow[]): Check => {
   const name = "no asset account ever goes negative";
   const assets = assetIds(life);
@@ -91,14 +87,10 @@ interface MonthNet {
   readonly income: number;
   readonly expenses: number;
   readonly net: number;
-  /** A month that lies wholly inside the window, so its total is a whole month's. */
   readonly full: boolean;
 }
 
-/**
- * What a reader sees on the dashboard: income and expenses per calendar month,
- * signed the way `oled report` signs them, in the ledger's own currency.
- */
+/** Signed the way `oled report` signs them, in the ledger's own currency. */
 export const monthlyNets = (life: Life): MonthNet[] => {
   const types = typeOf(life);
   const primary = life.meta.config.currency;
@@ -120,18 +112,12 @@ export const monthlyNets = (life: Life): MonthNet[] => {
       );
     const incomeUnits = unitsOf("income");
     const expenseUnits = -unitsOf("expense");
-    const first = `${chunk.month}-01`;
     return {
       month: chunk.month,
       income: fromUnits(incomeUnits),
       expenses: fromUnits(expenseUnits),
       net: fromUnits(incomeUnits - expenseUnits),
-      full:
-        first >= life.meta.window.start &&
-        lastDayIn({
-          year: Number(chunk.month.slice(0, 4)),
-          month: Number(chunk.month.slice(5, 7)),
-        }) <= life.meta.window.end,
+      full: isWholeMonth(monthOf(chunk.month), life.meta.window),
     };
   });
 };
@@ -143,12 +129,6 @@ const DECEMBER_FLOOR = 600_000;
 const SAVINGS_RATE_MIN = 0.32;
 const SAVINGS_RATE_MAX = 0.48;
 
-/**
- * The shape of the life, not just its arithmetic. A ledger whose thin months
- * read as near-zero describes someone living to the edge of their income, which
- * is not this persona — so the floor, the spread and the December peaks are
- * assertions in their own right.
- */
 export const netHealthChecks = (life: Life): Check[] => {
   const months = monthlyNets(life);
   const full = months.filter((month) => month.full);

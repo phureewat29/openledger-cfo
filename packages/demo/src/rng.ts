@@ -35,10 +35,6 @@ export const money = (rng: Rng, min: number, max: number): number =>
 export const skewedMoney = (rng: Rng, min: number, max: number): number =>
   satang(min + (max - min) * rng() ** 2);
 
-/**
- * Walks from the guaranteed head rather than indexing, so the non-empty tuple
- * type is proof enough that a value comes back and no dead fallback is needed.
- */
 export const pick = <T>(rng: Rng, items: readonly [T, ...T[]]): T => {
   const [head, ...rest] = items;
   const target = int(rng, 0, rest.length);
@@ -48,10 +44,7 @@ export const pick = <T>(rng: Rng, items: readonly [T, ...T[]]): T => {
   );
 };
 
-/**
- * Draws from a shrinking pool, so no item comes back twice — a trip buys one
- * rail pass, not three. Returns fewer than `count` only if the pool runs out.
- */
+/** Draws without replacement; returns fewer than `count` only if the pool runs out. */
 export const pickDistinct = <T>(
   rng: Rng,
   items: readonly [T, ...T[]],

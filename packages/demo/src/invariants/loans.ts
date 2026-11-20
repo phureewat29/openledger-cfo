@@ -2,11 +2,11 @@ import { sumBy } from "es-toolkit";
 
 import type { Life } from "../dataset";
 import type { Loan } from "../products/loans";
-import type { SeedRow } from "../types";
+import type { SeedRow } from "../rows";
 import type { Check } from "./shared";
 import { monthKey } from "../calendar";
 import { formatMoney, fromUnits, toUnits } from "../money";
-import { legsOf } from "../types";
+import { legsOf } from "../rows";
 import { check, detail } from "./shared";
 
 interface Installment {
@@ -94,11 +94,8 @@ interface Replay {
 }
 
 /**
- * Replays each loan against its own contract: on an amortizing loan the interest
- * charged has to be a month of the rate on what was still owed at the time, and
- * the principal is whatever is left of the payment. The replay is driven by the
- * posted rows, so a schedule that skipped, doubled or mis-split an installment
- * cannot agree with it.
+ * Replays each loan's contract from the posted rows, so a schedule that skipped,
+ * doubled or mis-split an installment cannot agree with it.
  */
 export const loanCheck = (life: Life, rows: SeedRow[], loan: Loan): Check => {
   const name = `${loan.label} follows its schedule`;

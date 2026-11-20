@@ -2,13 +2,14 @@ import { groupBy, mapValues, partition, sum, sumBy, uniq } from "es-toolkit";
 
 import type { Life } from "../dataset";
 import type { Instrument } from "../products/securities";
-import type { SeedRow } from "../types";
+import type { SeedRow } from "../rows";
 import type { Check } from "./shared";
 import { unitAccountsOf } from "../accounts";
 import { monthIndexOf } from "../calendar";
 import { formatMoney, fromUnits, toUnits } from "../money";
 import { priceOn, withinPriceBand } from "../prices";
-import { deltasOf, legsOf } from "../types";
+import { distributionOn, dividendOn } from "../products/securities";
+import { deltasOf, legsOf } from "../rows";
 import { check, detail } from "./shared";
 
 const REALIZED_GAIN_SUFFIX = ":investment:realized-gain";
@@ -44,19 +45,16 @@ interface TradeScan {
   readonly disposals: number;
 }
 
-/**
- * Splits every row into the instrument trades it contains. A trade is the money
- * a group moved for one instrument beside exactly one unit leg: that pairing is
- * what makes a price recoverable, and a group that breaks it has recorded a
- * quantity nobody can put a value on, or a value nobody can put a quantity on.
- */
-const scanTrades = (life: Life, rows: SeedRow[]): TradeScan => {
+/** A trade is one instrument's money beside exactly one unit leg; that pairing is what makes a price recoverable. */
+const scanTrades = (
+  life: Life,
+  traded: Traded[],
+  rows: SeedRow[],
+): TradeScan => {
   const byMoney = new Map(
-    tradedInstruments(life).map((entry) => [entry.instrument.account, entry]),
+    traded.map((entry) => [entry.instrument.account, entry]),
   );
-  const byUnit = new Map(
-    tradedInstruments(life).map((entry) => [entry.position, entry]),
-  );
+  const byUnit = new Map(traded.map((entry) => [entry.position, entry]));
   const gainAccounts = new Set(
     life.accounts
       .filter((account) => account.id.endsWith(REALIZED_GAIN_SUFFIX))
@@ -149,11 +147,7 @@ const scanTrades = (life: Life, rows: SeedRow[]): TradeScan => {
   };
 };
 
-/**
- * The price is not written down anywhere: it is the ratio between the two legs
- * of a trade. Recomputing it from the posted amounts and holding it against the
- * curve is what proves the ledger and the price table describe one world.
- */
+/** The price is written nowhere: it is the ratio between the two legs of a trade. */
 const impliedPriceCheck = (life: Life, trades: Trade[]): Check => {
   const faults: string[] = [];
 
@@ -181,15 +175,12 @@ const impliedPriceCheck = (life: Life, trades: Trade[]): Check => {
   );
 };
 
-/**
- * Quantity is double entry in its own right, so a unit position obeys the same
- * law money does: it can never go short, and where it ends has to be what the
- * dataset says it holds.
- */
-const unitSolvencyCheck = (life: Life, rows: SeedRow[]): Check => {
-  const positions = new Set(
-    tradedInstruments(life).map((entry) => entry.position),
-  );
+const unitSolvencyCheck = (
+  life: Life,
+  traded: Traded[],
+  rows: SeedRow[],
+): Check => {
+  const positions = new Set(traded.map((entry) => entry.position));
   const balances = new Map<string, number>();
   const shortages: string[] = [];
   for (const seedRow of rows) {
@@ -219,9 +210,9 @@ const unitSolvencyCheck = (life: Life, rows: SeedRow[]): Check => {
   );
 };
 
-/** The four trade-derived checks, sharing one scan of the rows. */
 export const securitiesChecks = (life: Life, rows: SeedRow[]): Check[] => {
-  const scan = scanTrades(life, rows);
+  const traded = tradedInstruments(life);
+  const scan = scanTrades(life, traded, rows);
   return [
     check(
       "every trade pairs its money with one unit leg",
@@ -234,6 +225,97 @@ export const securitiesChecks = (life: Life, rows: SeedRow[]): Check[] => {
       detail(scan.gainFaults, `${String(scan.disposals)} disposals`),
     ),
     impliedPriceCheck(life, scan.trades),
-    unitSolvencyCheck(life, rows),
+    unitSolvencyCheck(life, traded, rows),
   ];
+};
+
+interface Payer {
+  readonly ticker: string;
+  readonly position: string;
+  /** What the declared rate pays on a quantity held. */
+  readonly payout: (quantity: number) => number;
+}
+
+export const dividendPayers = (life: Life): Payer[] =>
+  life.meta.products.holdings.map((holding) => ({
+    ticker: holding.ticker,
+    position: unitAccountsOf(holding.unit).position,
+    payout: (quantity: number) => dividendOn(holding, quantity),
+  }));
+
+export const distributionPayers = (life: Life): Payer[] =>
+  life.meta.products.funds.flatMap((fund) =>
+    fund.kind === "dca" && fund.dps > 0
+      ? [
+          {
+            ticker: fund.ticker,
+            position: unitAccountsOf(fund.unit).position,
+            payout: (quantity: number) => distributionOn(fund, quantity),
+          },
+        ]
+      : [],
+  );
+
+/** Replays the quantity held from the unit legs and recomputes each payout from the declared rate. */
+export const payoutCheck = (
+  name: string,
+  label: string,
+  rows: SeedRow[],
+  payers: Payer[],
+): Check => {
+  const tracked = new Set(payers.map((payer) => payer.position));
+  const held = new Map<string, number>();
+  const faults: string[] = [];
+  let seen = 0;
+
+  for (const seedRow of rows) {
+    const payer = payers.find((entry) =>
+      seedRow.description.startsWith(`${entry.ticker} ${label}`),
+    );
+    if (payer !== undefined) {
+      seen += 1;
+      const quantity = fromUnits(held.get(payer.position) ?? 0);
+      const posted = sumBy(legsOf(seedRow), (entry) => toUnits(entry.amount));
+      const wanted = toUnits(payer.payout(quantity));
+      if (posted !== wanted) {
+        faults.push(
+          `${seedRow.date} ${payer.ticker} pays ${formatMoney(fromUnits(posted))} on ${formatMoney(quantity)}, not ${formatMoney(fromUnits(wanted))}`,
+        );
+      }
+    }
+
+    for (const [position, units] of deltasOf(seedRow, tracked)) {
+      held.set(position, (held.get(position) ?? 0) + units);
+    }
+  }
+
+  return check(
+    name,
+    seen > 0 && faults.length === 0,
+    detail(faults, `${String(seen)} payouts`),
+  );
+};
+
+export const cryptoBasisCheck = (life: Life, rows: SeedRow[]): Check => {
+  const coins = new Set(life.meta.products.coins.map((coin) => coin.account));
+  const basis = new Map<string, number>();
+  const faults: string[] = [];
+
+  for (const seedRow of rows) {
+    for (const [account, units] of deltasOf(seedRow, coins)) {
+      const held = basis.get(account) ?? 0;
+      basis.set(account, held + units);
+      if (units < 0 && -units > held) {
+        faults.push(
+          `${seedRow.date} ${account} sells more basis than it holds`,
+        );
+      }
+    }
+  }
+
+  return check(
+    "crypto disposals never exceed cost basis",
+    coins.size > 0 && faults.length === 0,
+    detail(faults),
+  );
 };

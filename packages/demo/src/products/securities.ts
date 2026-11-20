@@ -5,23 +5,16 @@ import { accountIdSchema } from "@openledger-cfo/openledger";
 import { ACCOUNT } from "../accounts";
 import { satang } from "../money";
 
-/**
- * Six prices per instrument, read at 2024-09, 2024-12, 2025-04, 2025-08,
- * 2025-12 and 2026-08. Everything between them is interpolated, so a table this
- * short still gives every month of the window its own price.
- */
-const anchorsSchema = z.array(z.number()).length(6);
+/** Where each price anchor sits in the window's month list; months between are interpolated. */
+export const ANCHOR_MONTHS = [0, 3, 7, 11, 15, 23] as const;
+
+const anchorsSchema = z.array(z.number()).length(ANCHOR_MONTHS.length);
 
 /** A unit ledger's head. The id grammar allows three letters there and no digits. */
 const unitCodeSchema = z
   .string()
   .regex(/^[a-z]{3}$/, "Expected a three-letter unit code");
 
-/**
- * What every priced instrument has in common, whatever asset class it sits in:
- * an account that holds its cost, a unit ledger that holds its quantity, and a
- * price curve that ties the two together on any given day.
- */
 export interface Instrument {
   readonly account: string;
   readonly ticker: string;
@@ -32,8 +25,6 @@ export interface Instrument {
    */
   readonly unitScale: number;
   readonly anchors: readonly number[];
-  /** Cost of the position the persona already held when the window opened. */
-  readonly opening: number;
 }
 
 export const holdingSchema = z.object({
@@ -51,12 +42,7 @@ export const holdingSchema = z.object({
 
 export type Holding = z.infer<typeof holdingSchema>;
 
-/**
- * Columns: account, ticker, name, kind, unit code, annual dividend per share,
- * opening cost, price anchors. The dividends are the real payouts of these
- * issuers — the mega-cap growth names pay almost nothing and the bank and the
- * broad-market fund carry the portfolio's income.
- */
+/** Columns: account, ticker, name, kind, unit code, annual dividend per share, opening cost, price anchors. */
 const HOLDING_ROWS = [
   [
     ACCOUNT.stockAapl,
@@ -184,7 +170,6 @@ export const HOLDINGS: Holding[] = HOLDING_ROWS.map(
   }),
 );
 
-/** Issuers declare a yearly rate and pay a quarter of it at a time. */
 export const perShareOf = (holding: Holding): number => satang(holding.dps / 4);
 
 export const dividendOn = (holding: Holding, quantity: number): number =>
@@ -201,7 +186,7 @@ const fundBase = {
   anchors: anchorsSchema,
 };
 
-/** Bought in four slices a month, the way a Thai broker's auto-invest is set up. */
+/** Bought in four slices a month. */
 const dcaFundSchema = z.object({
   ...fundBase,
   kind: z.literal("dca"),
@@ -363,57 +348,3 @@ export const COINS: Coin[] = [
 
 /** Every instrument the chart has to open a unit ledger for. */
 export const INSTRUMENTS: Instrument[] = [...HOLDINGS, ...THAI_FUNDS, ...COINS];
-
-/**
- * A disposal names the quantity it sells, not the money it raises: the price on
- * the day decides the proceeds and the cost basis released decides the gain.
- * Sales never reach the dataset schema, so this stays a plain shape.
- */
-interface Sale {
-  readonly account: string;
-  readonly ticker: string;
-  readonly date: string;
-  /** Share of the units held on the sale date that is disposed of. */
-  readonly unitsFraction: number;
-  readonly toAccount: string;
-}
-
-/**
- * Two dated where the cycle was kind and one dated where it was not: the spring
- * 2025 trough sits below every price the position was built at, so that sale
- * releases more cost than it raises and the loss is real rather than staged.
- */
-export const CRYPTO_SALES: Sale[] = [
-  {
-    account: ACCOUNT.cryptoEth,
-    ticker: "ETH",
-    date: "2025-04-09",
-    unitsFraction: 0.35,
-    toAccount: ACCOUNT.kbank,
-  },
-  {
-    account: ACCOUNT.cryptoBtc,
-    ticker: "BTC",
-    date: "2025-07-18",
-    unitsFraction: 0.35,
-    toAccount: ACCOUNT.kbank,
-  },
-  {
-    account: ACCOUNT.cryptoEth,
-    ticker: "ETH",
-    date: "2026-03-12",
-    unitsFraction: 0.4,
-    toAccount: ACCOUNT.kbank,
-  },
-];
-
-/** The one equity the persona trims, into a run that had gone far enough. */
-export const STOCK_SALES: Sale[] = [
-  {
-    account: ACCOUNT.stockTsla,
-    ticker: "TSLA",
-    date: "2026-02-18",
-    unitsFraction: 0.25,
-    toAccount: ACCOUNT.brokerageCash,
-  },
-];

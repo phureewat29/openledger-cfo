@@ -10,7 +10,15 @@ import type {
   OpenLedger,
   Result,
 } from "@openledger-cfo/openledger";
-import { err, ok, WORKSPACE_MARKER } from "@openledger-cfo/openledger";
+import {
+  createOpenLedger,
+  err,
+  ok,
+  WORKSPACE_MARKER,
+} from "@openledger-cfo/openledger";
+
+import type { LedgerConfig } from "./dataset";
+import { log } from "./report";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..", "..", "..");
 
@@ -24,6 +32,9 @@ export const LEDGER = {
   dataDir: join(LEDGER_ROOT, "data"),
   cacheDir: join(LEDGER_ROOT, "cache"),
 } as const;
+
+export const openDemoLedger = (): OpenLedger =>
+  createOpenLedger({ configPath: LEDGER.configPath });
 
 const guardDemoLedger = (): Result<true, OledError> => {
   if (!existsSync(join(REPO_ROOT, WORKSPACE_MARKER))) {
@@ -41,40 +52,25 @@ const guardDemoLedger = (): Result<true, OledError> => {
   return ok(true);
 };
 
-/** The four facts `oled config --init` needs; the dataset and the persona both satisfy it. */
-export interface LedgerConfig {
-  readonly country: string;
-  readonly currency: string;
-  readonly locale: string;
-  readonly userName: string;
-}
-
 interface BootstrapOptions {
   config: LedgerConfig;
   accounts: AccountCreateInput[];
   merchants: MerchantUpsertInput[];
   keep: boolean;
-  log: (line: string) => void;
-}
-
-interface BootstrapReport {
-  accountsCreated: number;
-  accountsDuplicate: number;
-  merchants: number;
 }
 
 /** The config, chart and merchants all arrive as arguments; this module reads no dataset and no persona of its own. */
 export const bootstrapLedger = async (
   oled: OpenLedger,
   options: BootstrapOptions,
-): Promise<Result<BootstrapReport, OledError>> => {
+): Promise<Result<true, OledError>> => {
   const guard = guardDemoLedger();
   if (!guard.ok) return guard;
 
   if (!options.keep) {
     // A running server can hold the ledger file for a moment; Windows answers EBUSY until it lets go.
     await rm(LEDGER.root, { recursive: true, force: true, maxRetries: 5 });
-    options.log(`reset   ${LEDGER.root}`);
+    log(`reset   ${LEDGER.root}`);
   }
   await mkdir(LEDGER.root, { recursive: true });
 
@@ -90,30 +86,24 @@ export const bootstrapLedger = async (
       userName: options.config.userName,
     });
     if (!init.ok) return init;
-    options.log(`config  ${init.value.config_path}`);
+    log(`config  ${init.value.config_path}`);
   }
 
   // The CLI refuses an empty batch; zero accounts skips the call.
-  const summary = { created: 0, duplicates: 0 };
-  if (options.accounts.length > 0) {
-    const chart = await oled.bootstrap.accountsCreateBatch(options.accounts);
-    if (!chart.ok) return chart;
-    summary.created = chart.value.summary.created;
-    summary.duplicates = chart.value.summary.duplicates;
-  }
-  options.log(
-    `chart   ${String(summary.created)} created, ${String(summary.duplicates)} already present`,
+  const chart =
+    options.accounts.length === 0
+      ? ok({ summary: { created: 0, duplicates: 0 } })
+      : await oled.bootstrap.accountsCreateBatch(options.accounts);
+  if (!chart.ok) return chart;
+  log(
+    `chart   ${String(chart.value.summary.created)} created, ${String(chart.value.summary.duplicates)} already present`,
   );
 
   for (const merchant of options.merchants) {
     const upserted = await oled.bootstrap.merchantsUpsert(merchant);
     if (!upserted.ok) return upserted;
   }
-  options.log(`merchants ${String(options.merchants.length)} upserted`);
+  log(`merchants ${String(options.merchants.length)} upserted`);
 
-  return ok({
-    accountsCreated: summary.created,
-    accountsDuplicate: summary.duplicates,
-    merchants: options.merchants.length,
-  });
+  return ok(true);
 };

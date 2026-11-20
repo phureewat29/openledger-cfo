@@ -4,7 +4,6 @@ import { accountIdSchema } from "@openledger-cfo/openledger";
 
 import { ACCOUNT } from "../accounts";
 
-/** The shape travels in the dataset, so the table and its contract are one declaration. */
 export const bankSchema = z.object({
   key: z.string(),
   account: accountIdSchema,
@@ -12,20 +11,13 @@ export const bankSchema = z.object({
   bankName: z.string(),
   masked: z.string(),
   opening: z.number(),
-  /** Posted rate, not an effective yield: current accounts pay near nothing, ME Save pays 1.6%. */
+  /** Posted rate, not an effective yield. */
   annualRate: z.number(),
-  /** Thai savings products credit interest either every month or every quarter. */
   cadence: z.enum(["monthly", "quarterly"]),
 });
 
 export type Bank = z.infer<typeof bankSchema>;
 
-/**
- * Seven accounts with distinct jobs, because a single current account cannot
- * show what a real household looks like: the salary hub is busy and nearly
- * empty, the bill hub is fed by a standing sweep, the emergency fund only ever
- * grows, and the parents' account exists to be drawn down by someone else.
- */
 export const BANKS: Bank[] = [
   {
     key: "kbank",

@@ -1,4 +1,4 @@
-import type { SeedRow } from "../types";
+import type { SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
 import { CHART } from "../chart";
 import {
@@ -9,7 +9,7 @@ import {
 import { BANKS } from "../products/banks";
 import { CARDS } from "../products/cards";
 import { LOANS } from "../products/loans";
-import { row } from "../types";
+import { row } from "../rows";
 
 const NAME_OF = new Map(CHART.map((account) => [account.id, account.name]));
 
@@ -29,11 +29,7 @@ const openingRow = (
     amount,
   });
 
-/**
- * Generated first and dated the window's first day so a stable sort keeps them
- * ahead of every other row on that date: the ledger has to know what the persona
- * already owned before it starts spending it.
- */
+/** Dated the window's first day and generated first, so the stable sort keeps them ahead of that day's rows. */
 export const generateOpening = (): SeedRow[] => [
   ...BANKS.map((bank) =>
     openingRow(bank.account, bank.opening, ACCOUNT.openingTHB, "debit"),

@@ -1,15 +1,85 @@
-import { difference } from "es-toolkit";
+import { difference, groupBy, mapValues, sumBy } from "es-toolkit";
 
 import type { AccountCreateInput } from "@openledger-cfo/openledger";
 
 import type { Life } from "../dataset";
 import type { Totals } from "../expected";
-import type { SeedRow } from "../types";
+import type { SeedRow } from "../rows";
 import type { Check } from "./shared";
 import { monthKey, within } from "../calendar";
-import { toUnits } from "../money";
-import { legsOf } from "../types";
-import { check, detail } from "./shared";
+import { currencyOf, DEBIT_NATURAL } from "../expected";
+import { formatMoney, fromUnits, toUnits } from "../money";
+import { legsOf } from "../rows";
+import { check, detail, typeOf } from "./shared";
+
+/** Rows balance by construction, so this fails only if a leg reached an account whose declared type contradicts its direction. */
+export const equationChecks = (life: Life, totals: Totals): Check[] => {
+  const types = typeOf(life);
+  const signed = Object.entries(totals.balances).flatMap(
+    ([account, balance]) => {
+      const type = types.get(account);
+      if (!type) return [];
+      const units = toUnits(balance);
+      return [
+        {
+          currency: currencyOf(account),
+          units: DEBIT_NATURAL.has(type) ? units : -units,
+        },
+      ];
+    },
+  );
+  const perCurrency = mapValues(
+    groupBy(signed, ({ currency }) => currency),
+    (group) => sumBy(group, ({ units }) => units),
+  );
+
+  return Object.entries(perCurrency).map(([currency, units]) =>
+    check(
+      `accounting equation balances (${currency})`,
+      units === 0,
+      units === 0 ? "" : `off by ${formatMoney(fromUnits(units))}`,
+    ),
+  );
+};
+
+const FX_RATE_MIN = 33;
+const FX_RATE_MAX = 38;
+
+/** A conversion is two legs across two ledgers; only the implied rate ties them. */
+export const conversionCheck = (life: Life, rows: SeedRow[]): Check => {
+  const thbConversion = life.accounts.find(
+    (account) => account.id === "thb:equity:conversion",
+  )?.id;
+  const usdConversion = life.accounts.find(
+    (account) => account.id === "usd:equity:conversion",
+  )?.id;
+  const faults: string[] = [];
+  let seen = 0;
+
+  for (const seedRow of rows) {
+    const legs = legsOf(seedRow);
+    const thbUnits = sumBy(
+      legs.filter((entry) => entry.debit_account === thbConversion),
+      (entry) => toUnits(entry.amount),
+    );
+    const usdUnits = sumBy(
+      legs.filter((entry) => entry.credit_account === usdConversion),
+      (entry) => toUnits(entry.amount),
+    );
+    if (thbUnits === 0 || usdUnits === 0) continue;
+    seen += 1;
+    const rate = thbUnits / usdUnits;
+    if (rate < FX_RATE_MIN || rate > FX_RATE_MAX) {
+      faults.push(`${seedRow.date} implies ${rate.toFixed(2)}`);
+    }
+  }
+
+  return check(
+    "currency conversions imply a plausible rate",
+    seen > 0 && faults.length === 0,
+    detail(faults),
+  );
+};
 
 const leafIds = (accounts: AccountCreateInput[]): string[] =>
   accounts
@@ -86,7 +156,6 @@ export const coverageChecks = (life: Life, rows: SeedRow[]): Check[] => {
   ];
 };
 
-/** The dataset states its own totals; folding the rows again is what makes them a claim. */
 export const totalsCheck = (life: Life, totals: Totals): Check[] => {
   const expected = life.meta.expected;
 

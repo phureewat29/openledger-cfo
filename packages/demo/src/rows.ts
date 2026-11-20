@@ -80,9 +80,6 @@ export const legsOf = (candidate: SeedRow): LinkedLeg[] =>
         ),
       ];
 
-export const byDate = (left: SeedRow, right: SeedRow): number =>
-  left.date < right.date ? -1 : left.date > right.date ? 1 : 0;
-
 /** Signed integer-satang movements a row makes on the tracked accounts, in leg order, debits before credits. */
 export const deltasOf = (
   seedRow: SeedRow,

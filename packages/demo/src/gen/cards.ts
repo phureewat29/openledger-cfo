@@ -1,12 +1,12 @@
 import { sumBy } from "es-toolkit";
 
 import type { Card } from "../products/cards";
-import type { SeedContext, SeedRow } from "../types";
+import type { SeedContext, SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
 import { addMonths, dayIn, monthKey, within } from "../calendar";
 import { fromUnits, toUnits } from "../money";
 import { CARDS } from "../products/cards";
-import { legsOf, row } from "../types";
+import { legsOf, row } from "../rows";
 
 interface Charge {
   date: string;
@@ -15,7 +15,6 @@ interface Charge {
 
 interface CardsResult {
   rows: SeedRow[];
-  /** What each card still owes at the window's close, tracked by the cycle itself. */
   endBalances: Record<string, number>;
 }
 
@@ -33,11 +32,7 @@ const lastDueInWindow = (ctx: SeedContext, card: Card): string =>
     .filter((dueDate) => within(dueDate, ctx.window))
     .at(-1) ?? "";
 
-/**
- * A card is a running cycle: spends land in the statement window that contains
- * them and are paid on the next due date. The opening balance is dated day one,
- * already inside the first statement, so it accrues no interest.
- */
+/** The opening balance is dated day one, inside the first statement, so it accrues no interest. */
 const cycleRows = (
   ctx: SeedContext,
   card: Card,
@@ -46,8 +41,6 @@ const cycleRows = (
   const rows: SeedRow[] = [];
   let previousClose = "";
   let carriedUnits = 0;
-  // A statement is rarely paid the day it lands, so most cards leave their
-  // newest one owing: the last due date inside the window goes unpaid.
   const unpaidDue = card.finalStatementUnpaid ? lastDueInWindow(ctx, card) : "";
 
   for (const month of ctx.months) {
@@ -62,8 +55,6 @@ const cycleRows = (
     );
     previousClose = closeDate;
 
-    // Interest accrues on what was carried past the due date, at a monthly
-    // twelfth of the card's annual rate, in whole satang.
     const accruedUnits =
       carriedUnits > 0 ? Math.round((carriedUnits * card.annualRate) / 12) : 0;
     if (accruedUnits > 0) {
@@ -112,7 +103,6 @@ const cycleRows = (
   return rows;
 };
 
-/** Charges already include the opening row and the cycle's own interest postings. */
 const balanceOf = (card: Card, charges: Charge[], cycle: SeedRow[]): number => {
   const interestUnits = sumBy(cycle, (seedRow) =>
     sumBy(

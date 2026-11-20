@@ -1,49 +1,50 @@
-import { groupBy } from "es-toolkit";
+import { groupBy, sortBy } from "es-toolkit";
 
-import type { Life } from "./dataset";
-import type { SeedRow } from "./types";
-import { eachMonth, monthKey } from "./calendar";
-import { CHART } from "./chart";
-import { foldTotals } from "./expected";
-import { generateCards } from "./gen/cards";
-import { generateCrypto } from "./gen/crypto";
-import { generateDaily } from "./gen/daily";
-import { generateFunds } from "./gen/funds";
-import { generateHousehold } from "./gen/household";
-import { generateIncome } from "./gen/income";
-import { applyInterest } from "./gen/interest";
-import { generateLifestyle } from "./gen/lifestyle";
-import { applyLiquidity } from "./gen/liquidity";
-import { generateLoans } from "./gen/loans";
-import { generateOpening } from "./gen/opening";
-import { generateStocks } from "./gen/stocks";
-import { generateSubscriptions } from "./gen/subscriptions";
-import { generateTransfers } from "./gen/transfers";
-import { generateTravel } from "./gen/travel";
-import { MERCHANT_UPSERTS } from "./merchants";
-import { PERSONA } from "./persona";
-import { BANKS } from "./products/banks";
-import { CARDS } from "./products/cards";
-import { INCOME_SOURCES } from "./products/income";
-import { LOANS } from "./products/loans";
+import type { Life } from "../dataset";
+import type { SeedRow } from "../rows";
+import { eachMonth, monthKey } from "../calendar";
+import { CHART } from "../chart";
+import { foldTotals } from "../expected";
+import { MERCHANT_UPSERTS } from "../merchants";
+import { PERSONA } from "../persona";
+import { BANKS } from "../products/banks";
+import { CARDS } from "../products/cards";
+import { INCOME_SOURCES } from "../products/income";
+import { LOANS } from "../products/loans";
 import {
   COINS,
   HOLDINGS,
   INSTRUMENTS,
   THAI_FUNDS,
-} from "./products/securities";
-import { createRng } from "./rng";
-import { byDate } from "./types";
+} from "../products/securities";
+import { createRng } from "../rng";
+import { generateCards } from "./cards";
+import { generateCrypto } from "./crypto";
+import { generateDaily } from "./daily";
+import { generateFunds } from "./funds";
+import { generateHousehold } from "./household";
+import { generateIncome } from "./income";
+import { applyInterest } from "./interest";
+import { generateLifestyle } from "./lifestyle";
+import { applyLiquidity } from "./liquidity";
+import { generateLoans } from "./loans";
+import { generateOpening } from "./opening";
+import { generateStocks } from "./stocks";
+import { generateSubscriptions } from "./subscriptions";
+import { generateTransfers } from "./transfers";
+import { generateTravel } from "./travel";
 
 const chunkByMonth = (rows: SeedRow[]): Life["months"] =>
-  Object.entries(groupBy(rows, (seedRow) => monthKey(seedRow.date)))
-    .map(([month, monthRows]) => ({ month, rows: monthRows }))
-    .sort((left, right) => (left.month < right.month ? -1 : 1));
+  sortBy(
+    Object.entries(groupBy(rows, (seedRow) => monthKey(seedRow.date))).map(
+      ([month, monthRows]) => ({ month, rows: monthRows }),
+    ),
+    [(chunk) => chunk.month],
+  );
 
 /**
- * Cards, liquidity and interest run as passes over the result, not as peers —
- * each needs rows the other generators already placed. The sort runs first
- * and is stable, so a refill can still precede the same-day spend it funds.
+ * Cards, liquidity and interest are passes over the placed rows. The sort is
+ * stable, so a refill still precedes the same-day spend it funds.
  */
 export const buildLife = (variant: number): Life => {
   const window = PERSONA.window;
@@ -66,7 +67,7 @@ export const buildLife = (variant: number): Life => {
   ];
 
   const cards = generateCards(ctx, spending);
-  const settled = [...spending, ...cards.rows].sort(byDate);
+  const settled = sortBy([...spending, ...cards.rows], [(row) => row.date]);
   const rows = applyInterest(ctx, applyLiquidity(settled));
   const months = chunkByMonth(rows);
   const totals = foldTotals(CHART, rows);

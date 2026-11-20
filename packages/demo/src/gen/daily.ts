@@ -1,13 +1,17 @@
-import type { FundingKey, FundingWeights } from "../funding";
+import type { PaymentSource } from "../accounts";
 import type { Merchant } from "../merchants";
 import type { Rng } from "../rng";
-import type { SeedContext, SeedRow } from "../types";
+import type { SeedContext, SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
 import { addDays, eachDay, isWeekend } from "../calendar";
-import { FUNDING } from "../funding";
 import { MERCHANT } from "../merchants";
 import { chance, int, money, pick, skewedMoney, weighted } from "../rng";
-import { row } from "../types";
+import { row } from "../rows";
+
+type FundingWeights = readonly [
+  readonly [PaymentSource, number],
+  ...(readonly [PaymentSource, number])[],
+];
 
 interface DailyStream {
   label: string;
@@ -29,28 +33,26 @@ interface CadenceStream {
   funding: FundingWeights;
 }
 
-// Weighted towards the debit account over the cards: settling as you spend
-// carries less revolving balance and less interest.
 const CARD_HEAVY: FundingWeights = [
-  ["visa", 0.34],
-  ["first", 0.16],
-  ["up", 0.15],
-  ["kbank", 0.35],
+  [ACCOUNT.cardKbankVisa, 0.34],
+  [ACCOUNT.cardKrungsriFirst, 0.16],
+  [ACCOUNT.cardScbUp, 0.15],
+  [ACCOUNT.kbank, 0.35],
 ];
 
 const CASH_HEAVY: FundingWeights = [
-  ["cash", 0.38],
-  ["truemoney", 0.24],
-  ["visa", 0.13],
-  ["kbank", 0.25],
+  [ACCOUNT.cash, 0.38],
+  [ACCOUNT.truemoney, 0.24],
+  [ACCOUNT.cardKbankVisa, 0.13],
+  [ACCOUNT.kbank, 0.25],
 ];
 
 const MIXED: FundingWeights = [
-  ["cash", 0.2],
-  ["truemoney", 0.15],
-  ["kbank", 0.3],
-  ["visa", 0.23],
-  ["first", 0.12],
+  [ACCOUNT.cash, 0.2],
+  [ACCOUNT.truemoney, 0.15],
+  [ACCOUNT.kbank, 0.3],
+  [ACCOUNT.cardKbankVisa, 0.23],
+  [ACCOUNT.cardKrungsriFirst, 0.12],
 ];
 
 const DAILY_STREAMS: DailyStream[] = [
@@ -232,8 +234,7 @@ const CADENCE_STREAMS: CadenceStream[] = [
     funding: CARD_HEAVY,
   },
   {
-    // HomePro and IKEA sell both repairs and furnishings; the repair rows live
-    // in household.ts, so these are the furniture and appliance runs.
+    // Repairs from these merchants are household.ts rows; these are furniture runs.
     label: "Home & living",
     account: ACCOUNT.homeGoods,
     merchants: [MERCHANT.homePro, MERCHANT.ikea],
@@ -279,16 +280,16 @@ const spendRow = (input: {
   description: string;
   account: string;
   amount: number;
-  funding: FundingKey;
+  funding: PaymentSource;
   merchant: Merchant;
 }): SeedRow =>
   row({
     date: input.date,
     description: input.description,
     debit: input.account,
-    credit: FUNDING[input.funding],
+    credit: input.funding,
     amount: input.amount,
-    ...(input.funding === "cash" ? {} : { merchant: input.merchant }),
+    ...(input.funding === ACCOUNT.cash ? {} : { merchant: input.merchant }),
   });
 
 /** One spend by a stream on a day: merchant, amount and funding drawn in that order. */
@@ -309,10 +310,8 @@ const streamRow = (
 };
 
 /**
- * The volume driver: everyday spending, weekday/weekend aware. Every stream
- * calls chance() on every day, whether it fires or not — short-circuiting one
- * of those calls shifts every draw after it and rewrites the whole ledger for a
- * given variant.
+ * Every stream draws chance() every day, fired or not: short-circuiting one call
+ * shifts every later draw and rewrites the dataset.
  */
 export const generateDaily = (ctx: SeedContext): SeedRow[] => {
   const nextDue = new Map<string, string>(

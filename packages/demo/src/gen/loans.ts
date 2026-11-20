@@ -1,13 +1,12 @@
 import type { AmortizingLoan, FlatLoan, Loan } from "../products/loans";
-import type { SeedContext, SeedRow } from "../types";
+import type { SeedContext, SeedRow } from "../rows";
 import { dayIn, monthKey, onOrAfterBusinessDay, within } from "../calendar";
 import { fromUnits, toUnits } from "../money";
 import { LOANS } from "../products/loans";
-import { leg, linked, row } from "../types";
+import { leg, linked, row } from "../rows";
 
 interface LoansResult {
   rows: SeedRow[];
-  /** What each loan still owes at the window's close, tracked by the schedule itself. */
   terminalBalances: Record<string, number>;
 }
 
@@ -16,12 +15,7 @@ interface Schedule {
   balance: number;
 }
 
-/**
- * An installment always clears the contractual payment, so the two legs share
- * one credit and are written as a group. Once the remaining principal is smaller
- * than the payment the interest leg can round away entirely, and a group of one
- * leg is just a transaction.
- */
+/** Once the interest leg rounds to zero, the installment is a plain row rather than a group of one. */
 const installment = (input: {
   date: string;
   description: string;

@@ -1,31 +1,86 @@
-import type { SeedContext, SeedRow } from "../types";
+import { sumBy } from "es-toolkit";
+
+import type { SeedContext, SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
 import { dayIn, onOrBeforeBusinessDay, within } from "../calendar";
 import { fromUnits, toUnits } from "../money";
-import {
-  annualTax,
-  assessableIncome,
-  CONSULTING,
-  marginalRate,
-  monthlyGross,
-  monthlyRetainer,
-  PAYROLL,
-  PERSONA,
-} from "../persona";
-import { leg, linked } from "../types";
+import { CONSULTING, EMPLOYMENT } from "../products/income";
+import { leg, linked } from "../rows";
 
-/**
- * A payslip is one linked group: the gross credit to salary is split across
- * withholding, social security, the provident fund and whatever reaches the
- * bank, so the legs sum back to gross exactly.
- */
+/** Thai personal income tax: each marginal rate applies only to the slice inside its band. */
+const TAX_BANDS = [
+  { from: 0, to: 150_000, rate: 0 },
+  { from: 150_000, to: 300_000, rate: 0.05 },
+  { from: 300_000, to: 500_000, rate: 0.1 },
+  { from: 500_000, to: 750_000, rate: 0.15 },
+  { from: 750_000, to: 1_000_000, rate: 0.2 },
+  { from: 1_000_000, to: 2_000_000, rate: 0.25 },
+  { from: 2_000_000, to: 5_000_000, rate: 0.3 },
+  { from: 5_000_000, to: Number.POSITIVE_INFINITY, rate: 0.35 },
+] as const;
+
+const annualTax = (assessable: number): number =>
+  sumBy(
+    TAX_BANDS,
+    (band) =>
+      Math.max(0, Math.min(assessable, band.to) - band.from) * band.rate,
+  );
+
+const marginalRate = (assessable: number): number =>
+  TAX_BANDS.find((band) => assessable > band.from && assessable <= band.to)
+    ?.rate ?? 0.35;
+
+/** A year past the table keeps the latest figure. */
+const forYear = (table: Readonly<Record<number, number>>, year: number) =>
+  table[year] ?? Object.values(table).at(-1) ?? 0;
+
+interface Bonus {
+  multiplier: number;
+  label: string;
+}
+
+const PAYROLL = {
+  paydayOfMonth: 25,
+  grossByYear: { 2024: 320_000, 2025: 342_400, 2026: 364_656 } as Record<
+    number,
+    number
+  >,
+  socialSecurity: 750,
+  providentFundRate: 0.075,
+  bonusMonths: {
+    4: { multiplier: 1, label: "Mid-year bonus" },
+    12: { multiplier: 3, label: "Annual bonus" },
+  } as Record<number, Bonus>,
+} as const;
+
+// PND1 withholding takes only these deductions; provident-fund relief is
+// claimed at filing, which is why April brings a refund.
+const EXPENSE_DEDUCTION = 100_000;
+const PERSONAL_ALLOWANCE = 60_000;
+
+const assessableIncome = (year: number): number =>
+  forYear(PAYROLL.grossByYear, year) * 12 -
+  EXPENSE_DEDUCTION -
+  PERSONAL_ALLOWANCE -
+  PAYROLL.socialSecurity * 12;
+
+/** Invoiced against the flat 3% a Thai payer withholds from professional fees. */
+const RETAINER = {
+  paydayOfMonth: 5,
+  withholdingRate: 0.03,
+  byYear: { 2024: 145_000, 2025: 155_000, 2026: 165_000 } as Record<
+    number,
+    number
+  >,
+} as const;
+
 const payslipRows = (ctx: SeedContext): SeedRow[] =>
   ctx.months.flatMap((month) => {
     const payday = onOrBeforeBusinessDay(dayIn(month, PAYROLL.paydayOfMonth));
     if (!within(payday, ctx.window)) return [];
 
     const assessable = assessableIncome(month.year);
-    const grossUnits = toUnits(monthlyGross(month.year));
+    const grossUnits = toUnits(forYear(PAYROLL.grossByYear, month.year));
     const taxUnits = Math.round(toUnits(annualTax(assessable)) / 12);
     const socialUnits = toUnits(PAYROLL.socialSecurity);
     const providentUnits = Math.round(grossUnits * PAYROLL.providentFundRate);
@@ -33,12 +88,12 @@ const payslipRows = (ctx: SeedContext): SeedRow[] =>
 
     const payslip = linked({
       date: payday,
-      description: `Payslip — ${PERSONA.employer}`,
+      description: `Payslip — ${EMPLOYMENT.payer}`,
       legs: [
-        leg(ACCOUNT.incomeTax, ACCOUNT.salary, fromUnits(taxUnits)),
-        leg(ACCOUNT.socialSecurity, ACCOUNT.salary, fromUnits(socialUnits)),
-        leg(ACCOUNT.pvd, ACCOUNT.salary, fromUnits(providentUnits)),
-        leg(ACCOUNT.kbank, ACCOUNT.salary, fromUnits(netUnits)),
+        leg(EMPLOYMENT.taxAccount, EMPLOYMENT.account, fromUnits(taxUnits)),
+        leg(ACCOUNT.socialSecurity, EMPLOYMENT.account, fromUnits(socialUnits)),
+        leg(ACCOUNT.pvd, EMPLOYMENT.account, fromUnits(providentUnits)),
+        leg(EMPLOYMENT.settlesTo, EMPLOYMENT.account, fromUnits(netUnits)),
       ],
     });
 
@@ -53,11 +108,11 @@ const payslipRows = (ctx: SeedContext): SeedRow[] =>
       payslip,
       linked({
         date: payday,
-        description: `${bonus.label} — ${PERSONA.employer}`,
+        description: `${bonus.label} — ${EMPLOYMENT.payer}`,
         legs: [
-          leg(ACCOUNT.incomeTax, ACCOUNT.bonus, fromUnits(bonusTaxUnits)),
+          leg(EMPLOYMENT.taxAccount, ACCOUNT.bonus, fromUnits(bonusTaxUnits)),
           leg(
-            ACCOUNT.kbank,
+            EMPLOYMENT.settlesTo,
             ACCOUNT.bonus,
             fromUnits(bonusGrossUnits - bonusTaxUnits),
           ),
@@ -66,30 +121,23 @@ const payslipRows = (ctx: SeedContext): SeedRow[] =>
     ];
   });
 
-/**
- * The second stream: a fixed retainer invoiced on its own payday, taxed at the
- * flat 3% a Thai payer withholds from professional fees rather than through
- * PND1, and settled into a different bank from the salary.
- */
 const retainerRows = (ctx: SeedContext): SeedRow[] =>
   ctx.months.flatMap((month) => {
-    const payday = onOrBeforeBusinessDay(
-      dayIn(month, CONSULTING.paydayOfMonth),
-    );
+    const payday = onOrBeforeBusinessDay(dayIn(month, RETAINER.paydayOfMonth));
     if (!within(payday, ctx.window)) return [];
 
-    const grossUnits = toUnits(monthlyRetainer(month.year));
-    const whtUnits = Math.round(grossUnits * CONSULTING.withholdingRate);
+    const grossUnits = toUnits(forYear(RETAINER.byYear, month.year));
+    const whtUnits = Math.round(grossUnits * RETAINER.withholdingRate);
 
     return [
       linked({
         date: payday,
-        description: `Freelance — ${PERSONA.client}`,
+        description: `Freelance — ${CONSULTING.payer}`,
         legs: [
-          leg(ACCOUNT.withholdingTax, ACCOUNT.consulting, fromUnits(whtUnits)),
+          leg(CONSULTING.taxAccount, CONSULTING.account, fromUnits(whtUnits)),
           leg(
-            ACCOUNT.bbl,
-            ACCOUNT.consulting,
+            CONSULTING.settlesTo,
+            CONSULTING.account,
             fromUnits(grossUnits - whtUnits),
           ),
         ],

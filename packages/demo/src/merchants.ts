@@ -9,9 +9,7 @@ export interface Merchant {
   account: string;
 }
 
-const define = <T extends Record<string, Merchant>>(table: T): T => table;
-
-export const MERCHANT = define({
+export const MERCHANT = {
   sevenEleven: {
     canonical: "7-Eleven",
     alias: "7-ELEVEN 13324 ARI BANGKOK TH",
@@ -412,14 +410,12 @@ export const MERCHANT = define({
     alias: "INTERACTIVE BROKERS LLC GREENWICH US",
     account: ACCOUNT.brokerageFees,
   },
-});
+} satisfies Record<string, Merchant>;
 
-const MERCHANTS: Merchant[] = Object.values(MERCHANT);
-
-export const MERCHANT_UPSERTS: MerchantUpsertInput[] = MERCHANTS.map(
-  (merchant) => ({
-    name: merchant.canonical,
-    alias: merchant.alias,
-    default_account: merchant.account,
-  }),
-);
+export const MERCHANT_UPSERTS: MerchantUpsertInput[] = Object.values(
+  MERCHANT,
+).map((merchant) => ({
+  name: merchant.canonical,
+  alias: merchant.alias,
+  default_account: merchant.account,
+}));

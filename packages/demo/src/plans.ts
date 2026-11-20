@@ -1,4 +1,12 @@
-import { countBy, groupBy, maxBy, orderBy, sumBy } from "es-toolkit";
+import {
+  countBy,
+  groupBy,
+  mapValues,
+  maxBy,
+  orderBy,
+  sum,
+  sumBy,
+} from "es-toolkit";
 
 import type { Result } from "@openledger-cfo/openledger";
 import { db } from "@openledger-cfo/db/client";
@@ -20,12 +28,13 @@ import {
 import type { Month } from "./calendar";
 import type { Life } from "./dataset";
 import type { Check } from "./invariants";
-import type { SeedRow } from "./types";
+import type { SeedRow } from "./rows";
 import { ACCOUNT } from "./accounts";
-import { addMonths, dayIn } from "./calendar";
+import { addMonths, dayIn, monthOf } from "./calendar";
 import { allRows } from "./dataset";
-import { formatMoney } from "./money";
-import { legsOf } from "./types";
+import { check } from "./invariants";
+import { formatMoney, roundUpTo } from "./money";
+import { legsOf } from "./rows";
 
 /**
  * Every wipe walks this list, so the entry points cannot drift.
@@ -49,11 +58,6 @@ interface PlansReport {
 type BudgetInsert = typeof budget.$inferInsert;
 type GoalInsert = typeof goal.$inferInsert;
 type ReminderInsert = typeof reminder.$inferInsert;
-
-const monthOf = (iso: string): Month => ({
-  year: Number(iso.slice(0, 4)),
-  month: Number(iso.slice(5, 7)),
-});
 
 const nextMonthlyOccurrence = (today: string, day: number): string => {
   const thisMonth = monthOf(today);
@@ -99,9 +103,6 @@ const latestByDate = <T extends { date: string }>(
   rows: readonly T[],
 ): T | undefined => orderBy(rows, [(row) => row.date], ["desc"])[0];
 
-const roundUpTo = (amount: number, step: number): number =>
-  Math.ceil(amount / step) * step;
-
 const BUDGET_WINDOW_MONTHS = 12;
 const TOP_BUDGET_CATEGORIES = 8;
 const BUDGET_PERCENTILE = 75;
@@ -143,27 +144,20 @@ const buildBudgets = (life: Life): BudgetInsert[] => {
         amount: legEntry.amount,
       })),
   );
-  const perCategoryMonth = new Map(
-    Object.entries(groupBy(spends, ({ category }) => category)).map(
-      ([category, group]) => [
-        category,
-        new Map(
-          Object.entries(groupBy(group, ({ month }) => month)).map(
-            ([month, monthGroup]) => [
-              month,
-              sumBy(monthGroup, ({ amount }) => amount),
-            ],
-          ),
-        ),
-      ],
-    ),
+  const perCategoryMonth = mapValues(
+    groupBy(spends, ({ category }) => category),
+    (group) =>
+      mapValues(
+        groupBy(group, ({ month }) => month),
+        (monthGroup) => sumBy(monthGroup, ({ amount }) => amount),
+      ),
   );
 
-  const candidates = [...perCategoryMonth.entries()]
+  const candidates = Object.entries(perCategoryMonth)
     .filter(([category]) => !OBLIGATION_CATEGORIES.has(category))
     .map(([category, perMonth]) => {
-      const values = monthKeys.map((month) => perMonth.get(month) ?? 0);
-      return { category, values, total: sumBy(values, (value) => value) };
+      const values = monthKeys.map((month) => perMonth[month] ?? 0);
+      return { category, values, total: sum(values) };
     });
 
   const top = orderBy(candidates, [(entry) => entry.total], ["desc"]).slice(
@@ -189,19 +183,15 @@ const RUNWAY_ROUND_STEP = 100_000;
 const JAPAN_TRIP_TARGET = 250_000;
 const PARENTS_CARE_TARGET = 1_000_000;
 
-const FUND_ACCOUNTS = [
-  ACCOUNT.fundKChange,
-  ACCOUNT.fundScbSet50,
-  ACCOUNT.fundEsGlobal,
-];
-
 const buildGoals = (life: Life): Result<GoalInsert[], string> => {
-  const fundPrefix = categoryOf(ACCOUNT.fundKChange);
-  const fundsShareOnePrefix = FUND_ACCOUNTS.every(
-    (accountId) => categoryOf(accountId) === fundPrefix,
-  );
-  if (!fundsShareOnePrefix) {
-    return err("Thai fund accounts do not share one account prefix");
+  const [fundPrefix, ...otherPrefixes] = life.meta.products.funds
+    .filter((fund) => fund.kind === "dca")
+    .map((fund) => categoryOf(fund.account));
+  if (fundPrefix === undefined) {
+    return err("the dataset has no DCA fund to set the retirement goal on");
+  }
+  if (otherPrefixes.some((prefix) => prefix !== fundPrefix)) {
+    return err("Thai DCA fund accounts do not share one account prefix");
   }
 
   const averageMonthlyExpense =
@@ -252,7 +242,6 @@ const buildGoals = (life: Life): Result<GoalInsert[], string> => {
   ]);
 };
 
-const CREDIT_CARD_PREFIX = "thb:liability:credit_card:";
 const INSURANCE_PREFIX = "thb:expense:insurance:";
 const TAX_FILING_DATE = "2027-03-31";
 const FALLBACK_INSURANCE_AMOUNT = 28_500;
@@ -265,27 +254,13 @@ const modeDayOfMonth = (dates: readonly string[]): number | undefined => {
   return mostCommon === undefined ? undefined : Number(mostCommon[0]);
 };
 
-const buildCardReminders = (
-  life: Life,
-  today: string,
-): Result<ReminderInsert[], string> => {
-  const cards = life.accounts.filter((account) =>
-    account.id.startsWith(CREDIT_CARD_PREFIX),
-  );
-  const reminders: ReminderInsert[] = [];
-  for (const card of cards) {
-    if (card.due_day === undefined) {
-      return err(`card ${card.id} has no due_day in the dataset`);
-    }
-    reminders.push({
-      title: `Pay ${card.name}`,
-      dueDate: nextMonthlyOccurrence(today, card.due_day),
-      monthly: true,
-      note: null,
-    });
-  }
-  return ok(reminders);
-};
+const buildCardReminders = (life: Life, today: string): ReminderInsert[] =>
+  life.meta.products.cards.map((card) => ({
+    title: `Pay ${card.name}`,
+    dueDate: nextMonthlyOccurrence(today, card.dueDay),
+    monthly: true,
+    note: null,
+  }));
 
 const buildMortgageReminder = (
   life: Life,
@@ -348,13 +323,11 @@ const buildReminders = (
   life: Life,
   today: string,
 ): Result<ReminderInsert[], string> => {
-  const cards = buildCardReminders(life, today);
-  if (!cards.ok) return cards;
   const mortgage = buildMortgageReminder(life, today);
   if (!mortgage.ok) return mortgage;
 
   return ok([
-    ...cards.value,
+    ...buildCardReminders(life, today),
     mortgage.value,
     buildInsuranceReminder(life, today),
     {
@@ -378,13 +351,11 @@ const budgetChecks = (life: Life, budgets: BudgetInsert[]): Check[] =>
       (account) =>
         isExpenseAccount(account.id) && matchesPrefix(account.id, row.category),
     );
-    return {
-      name: `budget ${row.category} matches a dataset expense account`,
-      ok: matched,
-      detail: matched
-        ? ""
-        : "no expense account in the dataset matches this category",
-    };
+    return check(
+      `budget ${row.category} matches a dataset expense account`,
+      matched,
+      matched ? "" : "no expense account in the dataset matches this category",
+    );
   });
 
 const goalChecks = (life: Life, goals: GoalInsert[]): Check[] =>
@@ -392,19 +363,14 @@ const goalChecks = (life: Life, goals: GoalInsert[]): Check[] =>
     const matched = life.accounts.some((account) =>
       matchesPrefix(account.id, row.accountPrefix),
     );
-    return {
-      name: `goal "${row.name}" prefix matches a dataset account`,
-      ok: matched,
-      detail: matched ? "" : `no account matches prefix ${row.accountPrefix}`,
-    };
+    return check(
+      `goal "${row.name}" prefix matches a dataset account`,
+      matched,
+      matched ? "" : `no account matches prefix ${row.accountPrefix}`,
+    );
   });
 
-/**
- * Resets and reseeds the control plane's plans from the committed dataset —
- * deterministic except for `today`, so a rerun is a no-op. A plan that cannot
- * be built is an error; one that does not line up is a failing check, not a
- * throw.
- */
+/** A plan that cannot be built is an error; one that does not line up is a failing check. */
 export const seedPlans = (life: Life): Result<PlansReport, string> => {
   const today = isoToday();
   const budgets = buildBudgets(life);

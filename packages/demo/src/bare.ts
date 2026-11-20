@@ -1,24 +1,17 @@
 import { mkdir } from "node:fs/promises";
 
-import { createOpenLedger } from "@openledger-cfo/openledger";
-
-import type { LedgerConfig } from "./ledger";
-import { bootstrapLedger, LEDGER } from "./ledger";
+import type { LedgerConfig } from "./dataset";
+import { bootstrapLedger, LEDGER, openDemoLedger } from "./ledger";
 import { clearPlans } from "./plans";
 import { describeError, log } from "./report";
 
-/**
- * Shared trunk of `empty` and `reset`: bare ledger, emptied plans. `demo` is
- * the same flow with the dataset on top.
- */
 export const runBare = async (config: LedgerConfig): Promise<number> => {
-  const oled = createOpenLedger({ configPath: LEDGER.configPath });
+  const oled = openDemoLedger();
   const emptied = await bootstrapLedger(oled, {
     config,
     accounts: [],
     merchants: [],
     keep: false,
-    log,
   });
   if (!emptied.ok) {
     log(describeError(emptied.error));

@@ -7,7 +7,7 @@ import type {
 } from "@openledger-cfo/openledger";
 
 import { fromUnits, toUnits } from "./money";
-import { legsOf } from "./types";
+import { legsOf } from "./rows";
 
 export const DEBIT_NATURAL = new Set<AccountType>(["asset", "expense"]);
 
@@ -15,7 +15,6 @@ export const currencyOf = (accountId: string): string =>
   accountId.slice(0, 3).toUpperCase();
 
 export interface Totals {
-  /** `status.counts.transactions` counts legs, so a linked row contributes one per leg. */
   transactions: number;
   rows: number;
   balances: Record<string, number>;
@@ -40,10 +39,6 @@ const sumUnitsBy = (
 const asMoney = (totals: Record<string, number>): Record<string, number> =>
   mapValues(totals, fromUnits);
 
-/**
- * Folds the rows into the same aggregates the ledger will report, in integer
- * satang, so the expected figures are exact rather than float-accumulated.
- */
 export const foldTotals = (
   accounts: AccountCreateInput[],
   rows: IngestRowInput[],
@@ -70,6 +65,7 @@ export const foldTotals = (
       .filter((account) => !typeOf.has(account)),
   );
 
+  // Key order lands in life.json: debited accounts first, then credit-only ones.
   const natural = [...new Set([...debits.keys(), ...credits.keys()])].flatMap(
     (account) => {
       const type = typeOf.get(account);

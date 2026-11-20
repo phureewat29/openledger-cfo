@@ -1,17 +1,31 @@
-/**
- * Every statement that fell due inside the window has to have been paid — except
- * the newest one on a card that ends mid-cycle — and the closing balance has to
- * be exactly what the charges, the interest and those payments leave behind.
- */
+import { sumBy } from "es-toolkit";
+
 import type { Life } from "../dataset";
 import type { Card } from "../products/cards";
-import type { SeedRow } from "../types";
+import type { SeedRow } from "../rows";
 import type { Check } from "./shared";
 import { addMonths, dayIn, eachMonth, within } from "../calendar";
 import { formatMoney, fromUnits, toUnits } from "../money";
-import { legsOf } from "../types";
-import { check, detail, legUnits } from "./shared";
+import { legsOf } from "../rows";
+import { check, detail } from "./shared";
 
+const legUnits = (
+  rows: SeedRow[],
+  side: "debit" | "credit",
+  account: string,
+): number =>
+  sumBy(
+    rows.flatMap((seedRow) =>
+      legsOf(seedRow).filter((entry) =>
+        side === "debit"
+          ? entry.debit_account === account
+          : entry.credit_account === account,
+      ),
+    ),
+    (entry) => toUnits(entry.amount),
+  );
+
+/** Every statement due inside the window is paid, except the newest on a card that ends mid-cycle. */
 export const cardCheck = (life: Life, rows: SeedRow[], card: Card): Check => {
   const dueDates = eachMonth(life.meta.window)
     .map((month) => ({
@@ -61,11 +75,7 @@ export const cardCheck = (life: Life, rows: SeedRow[], card: Card): Check => {
   );
 };
 
-/**
- * The balance still standing when a statement closes is at least what was
- * carried past the due date, so a month of the annual rate on it is a ceiling
- * the charge can never legitimately clear.
- */
+/** A month of the annual rate on the balance carried past due is a ceiling no charge legitimately clears. */
 export const cardInterestCheck = (life: Life, rows: SeedRow[]): Check => {
   const rateOf = new Map(
     life.meta.products.cards.map(

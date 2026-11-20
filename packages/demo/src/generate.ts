@@ -1,17 +1,13 @@
 import { parseArgs } from "node:util";
 import { z } from "zod/v4";
 
-import { createOpenLedger } from "@openledger-cfo/openledger";
-
 import { cliArgs } from "./argv";
-import { buildLife } from "./build";
 import { LIFE_PATH, lifeSchema, writeLife } from "./dataset";
-import { checkInvariants, monthlyNets } from "./invariants";
-import { LEDGER } from "./ledger";
-import { loadLife } from "./load";
+import { buildLife } from "./gen";
+import { monthlyNets } from "./invariants";
+import { proveLife } from "./load";
 import { formatMoney } from "./money";
-import { describeError, log, printChecks } from "./report";
-import { verifyLedger } from "./verify";
+import { describeError, exitWith, log, printChecks } from "./report";
 
 interface CliArgs {
   variant: number;
@@ -34,12 +30,7 @@ const readArgs = (): CliArgs => {
   return { variant, keep: values.keep };
 };
 
-/**
- * The authoring path. It builds a dataset, proves it against the pure invariants
- * and against a ledger it actually loads, and only then writes the file the
- * loading path will read. A dataset that fails anything is never written, so the
- * committed file is one that was green when it was made.
- */
+// A dataset that fails any check is never written, so the committed file was green when made.
 const run = async (): Promise<number> => {
   const args = readArgs();
   const life = buildLife(args.variant);
@@ -58,23 +49,14 @@ const run = async (): Promise<number> => {
     return 1;
   }
 
-  const invariants = checkInvariants(life);
-
-  const oled = createOpenLedger({ configPath: LEDGER.configPath });
-  const loaded = await loadLife(oled, life, { keep: args.keep, log });
-  if (!loaded.ok) {
-    log(describeError(loaded.error));
-    return 1;
-  }
-
-  const verified = await verifyLedger(oled, life);
-  if (!verified.ok) {
-    log(describeError(verified.error));
+  const proven = await proveLife(life, args.keep);
+  if (!proven.ok) {
+    log(describeError(proven.error));
     return 1;
   }
 
   log("");
-  for (const fact of verified.value.facts) log(fact);
+  for (const fact of proven.value.facts) log(fact);
   log("");
   log(`month     income      expenses         net`);
   for (const month of monthlyNets(life)) {
@@ -83,7 +65,7 @@ const run = async (): Promise<number> => {
     );
   }
   log("");
-  const failed = printChecks([...invariants, ...verified.value.checks]);
+  const failed = printChecks(proven.value.checks);
   if (failed > 0) {
     log(`\nrefusing to write ${LIFE_PATH}`);
     return 1;
@@ -94,10 +76,4 @@ const run = async (): Promise<number> => {
   return 0;
 };
 
-// The one process boundary: everything below the pipeline reports failure as data.
-try {
-  process.exitCode = await run();
-} catch (cause) {
-  console.error(cause);
-  process.exitCode = 1;
-}
+await exitWith(run);

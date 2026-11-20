@@ -16,20 +16,20 @@ export const incomeSourceSchema = z.object({
 
 type IncomeSource = z.infer<typeof incomeSourceSchema>;
 
-/** Two payers on two paydays into two banks, each withheld under its own regime. */
-export const INCOME_SOURCES: IncomeSource[] = [
-  {
-    key: "employment",
-    account: ACCOUNT.salary,
-    payer: PERSONA.employer,
-    settlesTo: ACCOUNT.kbank,
-    taxAccount: ACCOUNT.incomeTax,
-  },
-  {
-    key: "consulting",
-    account: ACCOUNT.consulting,
-    payer: PERSONA.client,
-    settlesTo: ACCOUNT.bbl,
-    taxAccount: ACCOUNT.withholdingTax,
-  },
-];
+export const EMPLOYMENT: IncomeSource = {
+  key: "employment",
+  account: ACCOUNT.salary,
+  payer: PERSONA.employer,
+  settlesTo: ACCOUNT.kbank,
+  taxAccount: ACCOUNT.incomeTax,
+};
+
+export const CONSULTING: IncomeSource = {
+  key: "consulting",
+  account: ACCOUNT.consulting,
+  payer: PERSONA.client,
+  settlesTo: ACCOUNT.bbl,
+  taxAccount: ACCOUNT.withholdingTax,
+};
+
+export const INCOME_SOURCES: IncomeSource[] = [EMPLOYMENT, CONSULTING];

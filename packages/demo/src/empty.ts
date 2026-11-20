@@ -1,10 +1,6 @@
-/** The public empty start: bare ledger from the persona config, no dataset read. */
 import { runBare } from "./bare";
 import { PERSONA } from "./persona";
+import { exitWith } from "./report";
 
-try {
-  process.exitCode = await runBare(PERSONA);
-} catch (cause) {
-  console.error(cause);
-  process.exitCode = 1;
-}
+// The public empty start reads no dataset: the persona supplies the init config.
+await exitWith(() => runBare(PERSONA));

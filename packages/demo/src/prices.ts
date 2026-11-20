@@ -1,17 +1,14 @@
 import type { Instrument } from "./products/securities";
 import { satang } from "./money";
+import { ANCHOR_MONTHS } from "./products/securities";
 import { createRng } from "./rng";
-
-/** Where each anchor sits in the window's month list. */
-const ANCHOR_MONTHS = [0, 3, 7, 11, 15, 23] as const;
 
 /** How far one month's price may stray from its place on the anchor curve. */
 const JITTER = 0.015;
 
 /**
- * What an implied price may differ from the table by. Wide enough to cover the
- * jitter and the rounding of a two-decimal quantity into a two-decimal cost,
- * narrow enough that a leg priced off the wrong month cannot slip through.
+ * Wide enough for the jitter and two-decimal rounding, narrow enough that a leg
+ * priced off the wrong month cannot pass.
  */
 const PRICE_BAND = 0.035;
 
@@ -38,9 +35,8 @@ const trend = (anchors: readonly number[], monthIndex: number): number => {
 };
 
 /**
- * Keyed by instrument and month rather than drawn from the run's own generator,
- * so a price is a fact about a month that any reader can recompute — including
- * the invariants, which never see the stream of draws that built the rows.
+ * Keyed by instrument and month, not drawn from the run's generator, so any
+ * reader can recompute a price, the invariants included.
  */
 const wobble = (unit: string, monthIndex: number): number => {
   const seed = [...unit].reduce(

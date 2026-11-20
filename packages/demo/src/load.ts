@@ -2,35 +2,23 @@ import type { OledError, OpenLedger, Result } from "@openledger-cfo/openledger";
 import { ok } from "@openledger-cfo/openledger";
 
 import type { Life } from "./dataset";
-import { bootstrapLedger } from "./ledger";
+import type { Check } from "./invariants";
+import { checkInvariants } from "./invariants";
+import { bootstrapLedger, openDemoLedger } from "./ledger";
+import { log } from "./report";
+import { verifyLedger } from "./verify";
 
-interface LoadOptions {
-  keep: boolean;
-  log: (line: string) => void;
-}
-
-interface LoadReport {
-  posted: number;
-  accounts: number;
-  merchants: number;
-}
-
-/**
- * The whole loading path: reset, bootstrap from the dataset, then post one batch
- * per month in file order. Nothing here draws a random number or reads the
- * clock, so two runs of the same file produce the same ledger content.
- */
-export const loadLife = async (
+/** One batch per month in file order: no random draw and no clock, so two loads of one file write the same ledger. */
+const loadLife = async (
   oled: OpenLedger,
   life: Life,
-  options: LoadOptions,
-): Promise<Result<LoadReport, OledError>> => {
+  keep: boolean,
+): Promise<Result<true, OledError>> => {
   const bootstrapped = await bootstrapLedger(oled, {
     config: life.meta.config,
     accounts: life.accounts,
     merchants: life.merchants,
-    keep: options.keep,
-    log: options.log,
+    keep,
   });
   if (!bootstrapped.ok) return bootstrapped;
 
@@ -39,14 +27,32 @@ export const loadLife = async (
     const posted = await oled.bootstrap.ingestCommitBatch(chunk.rows);
     if (!posted.ok) return posted;
     running += posted.value.summary.posted;
-    options.log(
+    log(
       `post ${chunk.month}  ${String(chunk.rows.length).padStart(4)} rows  running ${String(running).padStart(5)}`,
     );
   }
 
+  return ok(true);
+};
+
+interface Proof {
+  checks: Check[];
+  facts: string[];
+}
+
+/** The pure invariants, then a real load, then a read-back of that same ledger. */
+export const proveLife = async (
+  life: Life,
+  keep: boolean,
+): Promise<Result<Proof, OledError>> => {
+  const invariants = checkInvariants(life);
+  const oled = openDemoLedger();
+  const loaded = await loadLife(oled, life, keep);
+  if (!loaded.ok) return loaded;
+  const verified = await verifyLedger(oled, life);
+  if (!verified.ok) return verified;
   return ok({
-    posted: running,
-    accounts: bootstrapped.value.accountsCreated,
-    merchants: bootstrapped.value.merchants,
+    checks: [...invariants, ...verified.value.checks],
+    facts: verified.value.facts,
   });
 };

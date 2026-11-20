@@ -5,22 +5,30 @@ import { foldTotals } from "../expected";
 import { dailyCloseCheck, netHealthChecks, solvencyCheck } from "./balances";
 import { cadenceCheck } from "./cadence";
 import { cardCheck, cardInterestCheck } from "./cards";
-import { conversionCheck } from "./conversion";
-import { cryptoBasisCheck } from "./crypto";
-import { equationChecks } from "./equation";
 import { payslipCheck, retainerCheck } from "./income";
 import { flatLoanClosesCheck, loanCheck } from "./loans";
-import { distributionPayers, dividendPayers, payoutCheck } from "./payouts";
-import { securitiesChecks } from "./securities";
-import { chunkCheck, coverageChecks, totalsCheck } from "./structural";
+import {
+  cryptoBasisCheck,
+  distributionPayers,
+  dividendPayers,
+  payoutCheck,
+  securitiesChecks,
+} from "./securities";
+import {
+  chunkCheck,
+  conversionCheck,
+  coverageChecks,
+  equationChecks,
+  totalsCheck,
+} from "./structural";
 
 export type { Check } from "./shared";
+export { check } from "./shared";
 export { monthlyNets } from "./balances";
 
 /**
- * Assertions about the dataset that hold independently of how it was produced,
- * so a generator and its own tally cannot agree on a wrong answer. Everything
- * here is pure: it needs no ledger to run.
+ * Pure assertions that hold however the dataset was produced, so a generator and
+ * its own tally cannot agree on a wrong answer.
  */
 export const checkInvariants = (life: Life): Check[] => {
   const rows = allRows(life);

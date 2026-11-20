@@ -1,12 +1,8 @@
 import { runBare } from "./bare";
 import { readLife } from "./dataset";
-import { describeError, log } from "./report";
+import { describeError, exitWith, log } from "./report";
 
-/**
- * The recovery hatch: both stores emptied, not refilled. Absent from the
- * README on purpose — `demo` is the documented way back. The dataset is still
- * read for the init config.
- */
+// The recovery hatch, kept out of the README: `demo` is the documented way back.
 const run = async (): Promise<number> => {
   const dataset = await readLife();
   if (!dataset.ok) {
@@ -16,9 +12,4 @@ const run = async (): Promise<number> => {
   return runBare(dataset.value.meta.config);
 };
 
-try {
-  process.exitCode = await run();
-} catch (cause) {
-  console.error(cause);
-  process.exitCode = 1;
-}
+await exitWith(run);

@@ -1,19 +1,42 @@
 import type { Coin } from "../products/securities";
-import type { SeedContext, SeedRow } from "../types";
-import { ACCOUNT, unitAccountsOf } from "../accounts";
-import { dayIn, monthIndexOf, within } from "../calendar";
-import { disposalLegs } from "../disposal";
+import type { SeedContext, SeedRow } from "../rows";
+import type { Sale } from "./trades";
+import { ACCOUNT } from "../accounts";
+import { dayIn, within } from "../calendar";
 import { MERCHANT } from "../merchants";
 import { formatQuantity, fromUnits, satang, toUnits } from "../money";
 import { OPENING_DATE } from "../persona";
 import { openingPriceOf, priceOn } from "../prices";
-import { COINS, CRYPTO_SALES } from "../products/securities";
+import { COINS } from "../products/securities";
 import { chance, money } from "../rng";
-import { leg, linked } from "../types";
+import { linked } from "../rows";
+import { acquisitionLegs, createBook, disposalLegs, salesIn } from "./trades";
 
 const BUY_DAY = 22;
 const BUY_CHANCE = 0.67;
 const EXCHANGE = "Bitkub";
+
+/** The spring 2025 trough sits below every price the position was built at, so that sale books a real loss. */
+const CRYPTO_SALES: Sale[] = [
+  {
+    account: ACCOUNT.cryptoEth,
+    date: "2025-04-09",
+    unitsFraction: 0.35,
+    toAccount: ACCOUNT.kbank,
+  },
+  {
+    account: ACCOUNT.cryptoBtc,
+    date: "2025-07-18",
+    unitsFraction: 0.35,
+    toAccount: ACCOUNT.kbank,
+  },
+  {
+    account: ACCOUNT.cryptoEth,
+    date: "2026-03-12",
+    unitsFraction: 0.4,
+    toAccount: ACCOUNT.kbank,
+  },
+];
 
 /** Coins are recorded in thousandths, so five decimals is the whole precision. */
 const coins = (quantity: number, scale: number): string =>
@@ -21,16 +44,8 @@ const coins = (quantity: number, scale: number): string =>
 
 const baht = (price: number): string => `฿${formatQuantity(price, 0)}`;
 
-/**
- * Crypto is held at cost: a buy is baht for coin, and a sale releases a weighted
- * average of everything the position cost, whatever the coin is worth that day.
- * Writing each as one group is what keeps quantity and money from drifting apart.
- */
 export const generateCrypto = (ctx: SeedContext): SeedRow[] => {
-  // Thousandths of a coin and satang of cost, both carried as integers so a
-  // position replayed across two years is exact.
-  const held = new Map<string, number>();
-  const basis = new Map<string, number>();
+  const book = createBook();
   const rows: SeedRow[] = [];
   let cursor = 0;
 
@@ -50,17 +65,12 @@ export const generateCrypto = (ctx: SeedContext): SeedRow[] => {
     if (quantityUnits <= 0) return;
     const quantity = fromUnits(quantityUnits);
     const cost = satang((quantity / coin.unitScale) * price);
-    const unit = unitAccountsOf(coin.unit);
-    held.set(coin.account, (held.get(coin.account) ?? 0) + quantityUnits);
-    basis.set(coin.account, (basis.get(coin.account) ?? 0) + toUnits(cost));
+    book.acquire(coin.account, quantityUnits, toUnits(cost));
     rows.push(
       linked({
         date: input.date,
         description: `${input.prefix} ${coins(quantity, coin.unitScale)} @ ${baht(price)}${input.onExchange ? ` — ${EXCHANGE}` : ""}`,
-        legs: [
-          leg(coin.account, input.from, cost),
-          leg(unit.position, unit.equity, quantity),
-        ],
+        legs: acquisitionLegs(coin, input.from, cost, quantity),
         ...(input.onExchange ? { merchant: MERCHANT.bitkub } : {}),
       }),
     );
@@ -94,35 +104,27 @@ export const generateCrypto = (ctx: SeedContext): SeedRow[] => {
       });
     }
 
-    for (const sale of CRYPTO_SALES) {
-      if (monthIndexOf(sale.date, ctx.window) !== index) continue;
-      if (!within(sale.date, ctx.window)) continue;
-      const sold = COINS.find((entry) => entry.account === sale.account);
-      if (sold === undefined) continue;
-
-      const heldUnits = held.get(sold.account) ?? 0;
-      const soldUnits = Math.round(heldUnits * sale.unitsFraction);
-      if (soldUnits <= 0) continue;
+    for (const { sale, instrument: sold } of salesIn(
+      CRYPTO_SALES,
+      COINS,
+      ctx,
+      index,
+    )) {
+      const released = book.release(sold.account, sale.unitsFraction);
+      if (released === undefined) continue;
       const price = priceOn(sold, index);
-      const quantity = fromUnits(soldUnits);
+      const quantity = fromUnits(released.soldUnits);
       const proceeds = satang((quantity / sold.unitScale) * price);
-      const basisUnits = Math.round(
-        ((basis.get(sold.account) ?? 0) * soldUnits) / heldUnits,
-      );
-
-      held.set(sold.account, heldUnits - soldUnits);
-      basis.set(sold.account, (basis.get(sold.account) ?? 0) - basisUnits);
       rows.push(
         linked({
           date: sale.date,
           description: `Sell ${sold.ticker} ${coins(quantity, sold.unitScale)} @ ${baht(price)} — ${EXCHANGE}`,
           legs: disposalLegs({
             cash: sale.toAccount,
-            position: sold.account,
+            instrument: sold,
             gainAccount: ACCOUNT.realizedGain,
-            unit: unitAccountsOf(sold.unit),
             proceedsUnits: toUnits(proceeds),
-            basisUnits,
+            basisUnits: released.basisUnits,
             quantity,
           }),
           merchant: MERCHANT.bitkub,

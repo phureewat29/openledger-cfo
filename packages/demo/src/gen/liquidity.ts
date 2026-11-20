@@ -1,9 +1,9 @@
 import { sumBy } from "es-toolkit";
 
-import type { SeedRow } from "../types";
+import type { SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
-import { fromUnits, toUnits } from "../money";
-import { deltasOf, row } from "../types";
+import { fromUnits, roundUpTo, toUnits } from "../money";
+import { deltasOf, row } from "../rows";
 
 interface TopUpRule {
   account: string;
@@ -15,13 +15,8 @@ interface TopUpRule {
   description: string;
 }
 
-/**
- * Ordered so that every account is refilled before the account that funds it:
- * each refill is itself an outflow from the source the next rule looks at, so
- * the salary hub is only topped up once the transfers it owes the other six
- * accounts are already in the stream. Modelling refills instead of tuning fixed
- * withdrawal cadences keeps every account solvent whatever the daily draws do.
- */
+// Each account is refilled before the account that funds it: a refill is itself
+// an outflow the next rule has to see.
 const TOP_UP_RULES: TopUpRule[] = [
   {
     account: ACCOUNT.cash,
@@ -89,14 +84,7 @@ const TOP_UP_RULES: TopUpRule[] = [
   },
 ];
 
-const roundUpTo = (units: number, step: number): number =>
-  Math.ceil(units / step) * step;
-
-/**
- * Splices each refill in ahead of the spend that would breach the floor — a
- * batch posts in array order, so same-day dating alone is not enough. The
- * refill restores the target or covers the outflow, whichever is larger.
- */
+/** Splices a refill in ahead of the breaching spend: a batch posts in array order, so same-day dating is not enough. */
 const applyRule = (rows: SeedRow[], rule: TopUpRule): SeedRow[] => {
   const floorUnits = toUnits(rule.floor);
   const targetUnits = toUnits(rule.target);
@@ -131,7 +119,7 @@ const applyRule = (rows: SeedRow[], rule: TopUpRule): SeedRow[] => {
   return merged;
 };
 
-/** Takes the date-sorted stream and returns it with refills spliced in. */
+/** Expects the date-sorted stream. */
 export const applyLiquidity = (rows: SeedRow[]): SeedRow[] =>
   TOP_UP_RULES.reduce<SeedRow[]>(
     (funded, rule) => applyRule(funded, rule),

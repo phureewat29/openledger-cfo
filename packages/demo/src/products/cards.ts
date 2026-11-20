@@ -17,17 +17,13 @@ export const cardSchema = z.object({
   masked: z.string(),
   statementDay: z.number(),
   dueDay: z.number(),
-  /** Each card settles from the bank that issued it, so money moves where a statement says it does. */
   payFrom: accountIdSchema,
   opening: z.number(),
   annualRate: z.number(),
   /** Months whose statement is only part-paid, so carried balance and interest appear at all. */
   partialPaymentMonths: z.array(z.string()),
   partialFraction: z.number(),
-  /**
-   * The window closes with the newest statement still owed: a statement is
-   * rarely paid on the day it arrives, so most cards end mid-cycle.
-   */
+  /** The newest statement inside the window stays owed; most cards end mid-cycle. */
   finalStatementUnpaid: z.boolean(),
 });
 
@@ -48,7 +44,6 @@ export const CARDS: Card[] = [
     partialPaymentMonths: ["2025-03"],
     partialFraction: 0.6,
     annualRate: CARD_ANNUAL_RATE,
-    // The one disciplined card: autopay clears every statement on its due date.
     finalStatementUnpaid: false,
   },
   {

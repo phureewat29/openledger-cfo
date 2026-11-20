@@ -1,23 +1,21 @@
 import { takeWhile } from "es-toolkit";
 
 import type { Bank } from "../products/banks";
-import type { SeedContext, SeedRow } from "../types";
+import type { SeedContext, SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
 import { lastDayIn, within } from "../calendar";
 import { fromUnits } from "../money";
 import { QUARTER_END_MONTHS } from "../persona";
 import { BANKS } from "../products/banks";
-import { deltasOf, row } from "../types";
+import { deltasOf, row } from "../rows";
 
 const BANK_IDS = new Set(BANKS.map((bank) => bank.account));
 
 const PERIODS: Record<Bank["cadence"], number> = { monthly: 12, quarterly: 4 };
 
 /**
- * Interest is credited on the balance that was actually sitting there, so this
- * runs as a pass over the finished stream rather than as a peer generator that
- * would have to guess. It runs last because a credit to an asset can only ever
- * raise a balance: no refill placed earlier can be invalidated by it.
+ * Credited on the balance actually held. Runs last: a credit only raises a
+ * balance, so no refill placed earlier can be invalidated.
  */
 export const applyInterest = (ctx: SeedContext, rows: SeedRow[]): SeedRow[] => {
   const schedule = new Map(
@@ -39,7 +37,6 @@ export const applyInterest = (ctx: SeedContext, rows: SeedRow[]): SeedRow[] => {
   const out: SeedRow[] = [];
   let cursor = 0;
 
-  // Interest compounds: a credit is part of the balance the next period earns on.
   const creditInterest = (date: string): void => {
     for (const bank of schedule.get(date) ?? []) {
       const balanceUnits = balances.get(bank.account) ?? 0;

@@ -37,7 +37,6 @@ const weekday = (iso: string): number => asUtc(iso).getUTCDay();
 export const isWeekend = (iso: string): boolean =>
   weekday(iso) === 0 || weekday(iso) === 6;
 
-/** Payday lands early when it falls on a weekend; bills land late. */
 export const onOrBeforeBusinessDay = (iso: string): string =>
   isWeekend(iso) ? onOrBeforeBusinessDay(addDays(iso, -1)) : iso;
 
@@ -49,7 +48,8 @@ export const addMonths = ({ year, month }: Month, count: number): Month => {
   return { year: Math.floor(ordinal / 12), month: (ordinal % 12) + 1 };
 };
 
-const monthOf = (iso: string): Month => ({
+/** Reads an ISO date or a `YYYY-MM` key. */
+export const monthOf = (iso: string): Month => ({
   year: Number(iso.slice(0, 4)),
   month: Number(iso.slice(5, 7)),
 });
@@ -59,7 +59,10 @@ export const monthKey = (iso: string): string => iso.slice(0, 7);
 export const within = (iso: string, window: DateWindow): boolean =>
   iso >= window.start && iso <= window.end;
 
-/** Whole months since the window opened — the key every price table is read by. */
+export const isWholeMonth = (month: Month, window: DateWindow): boolean =>
+  dayIn(month, 1) >= window.start && lastDayIn(month) <= window.end;
+
+/** Whole months since the window opened: the key every price table is read by. */
 export const monthIndexOf = (iso: string, window: DateWindow): number =>
   (Number(iso.slice(0, 4)) - Number(window.start.slice(0, 4))) * 12 +
   (Number(iso.slice(5, 7)) - Number(window.start.slice(5, 7)));

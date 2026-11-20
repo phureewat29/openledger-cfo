@@ -1,4 +1,7 @@
-import type { AccountCreateInput } from "@openledger-cfo/openledger";
+import type {
+  AccountCreateInput,
+  AccountType,
+} from "@openledger-cfo/openledger";
 
 import type { Instrument } from "./products/securities";
 import { ACCOUNT, unitAccountsOf } from "./accounts";
@@ -15,31 +18,19 @@ import {
 
 const BROKER = "Interactive Brokers";
 
-const asset = (
-  id: string,
-  name: string,
-  extra: Partial<AccountCreateInput> = {},
-): AccountCreateInput => ({ id, name, type: "asset", ...extra });
-const liability = (
-  id: string,
-  name: string,
-  extra: Partial<AccountCreateInput> = {},
-): AccountCreateInput => ({ id, name, type: "liability", ...extra });
-const income = (id: string, name: string): AccountCreateInput => ({
-  id,
-  name,
-  type: "income",
-});
-const expense = (id: string, name: string): AccountCreateInput => ({
-  id,
-  name,
-  type: "expense",
-});
-const equity = (
-  id: string,
-  name: string,
-  extra: Partial<AccountCreateInput> = {},
-): AccountCreateInput => ({ id, name, type: "equity", ...extra });
+const ofType =
+  (type: AccountType) =>
+  (
+    id: string,
+    name: string,
+    extra: Partial<AccountCreateInput> = {},
+  ): AccountCreateInput => ({ id, name, type, ...extra });
+
+const asset = ofType("asset");
+const liability = ofType("liability");
+const income = ofType("income");
+const expense = ofType("expense");
+const equity = ofType("equity");
 
 const BANK_ACCOUNTS: AccountCreateInput[] = BANKS.map((bank) =>
   asset(bank.account, bank.name, {
@@ -68,11 +59,7 @@ const LOAN_ACCOUNTS: AccountCreateInput[] = LOANS.map((loan) =>
   }),
 );
 
-/**
- * What a reader needs to get from the money a position cost to the quantity it
- * bought. The pointer is declared on the account rather than inferred from the
- * id, so nothing downstream has to know how a ticker maps onto a unit head.
- */
+/** The unit pointer is declared on the account, so no reader derives it from the id. */
 const positionMetadata = (
   instrument: Instrument,
   kind: string,
@@ -110,11 +97,7 @@ const COIN_ACCOUNTS: AccountCreateInput[] = COINS.map((coin) =>
   }),
 );
 
-/**
- * One ledger per instrument, denominated in the instrument itself. Its head is
- * not a currency and never enters a report: quantity and money meet only inside
- * a transaction group, where the two legs together state a price.
- */
+/** One unit ledger per instrument; its head is not a currency and never enters a report. */
 const UNIT_ACCOUNTS: AccountCreateInput[] = INSTRUMENTS.flatMap(
   (instrument) => {
     const unit = unitAccountsOf(instrument.unit);
@@ -208,7 +191,6 @@ const EXPENSES: AccountCreateInput[] = [
   expense(ACCOUNT.brokerageFees, "Remittance & Brokerage Fees"),
 ];
 
-/** One authority for every account the ledger is bootstrapped with. */
 export const CHART: AccountCreateInput[] = [
   ...BANK_ACCOUNTS,
   asset(ACCOUNT.cash, "Cash", { subtype: "cash" }),
@@ -236,7 +218,6 @@ export const CHART: AccountCreateInput[] = [
   equity(ACCOUNT.openingTHB, "Opening Balance (THB)"),
   equity(ACCOUNT.conversionTHB, "Currency Conversion (THB)"),
 
-  // The USD ledger only exists once its accounts do; opening and conversion are explicit.
   asset(ACCOUNT.brokerageCash, "IBKR Cash", {
     subtype: "brokerage",
     bank_name: BROKER,

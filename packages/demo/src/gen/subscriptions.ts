@@ -1,13 +1,12 @@
-import type { FundingKey } from "../funding";
+import type { PaymentSource } from "../accounts";
 import type { Merchant } from "../merchants";
-import type { SeedContext, SeedRow } from "../types";
+import type { SeedContext, SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
 import { dayIn, monthKey, within } from "../calendar";
-import { FUNDING } from "../funding";
 import { MERCHANT } from "../merchants";
 import { satang } from "../money";
 import { money } from "../rng";
-import { row } from "../types";
+import { row } from "../rows";
 
 interface Subscription {
   day: number;
@@ -15,7 +14,7 @@ interface Subscription {
   /** Named where the merchant sells tiers, so a row says which one was billed. */
   plan?: string;
   amount: number;
-  funding: FundingKey;
+  funding: PaymentSource;
   /** Cards bill foreign charges in baht and add a separate conversion fee line. */
   foreignCurrency: boolean;
   /** `YYYY-MM` bounds for a price the persona did not pay all window. */
@@ -33,49 +32,49 @@ const SUBSCRIPTIONS: Subscription[] = [
     day: 2,
     merchant: MERCHANT.netflix,
     amount: 419,
-    funding: "scb",
+    funding: ACCOUNT.scb,
     foreignCurrency: false,
   },
   {
     day: 3,
     merchant: MERCHANT.spotify,
     amount: 249,
-    funding: "scb",
+    funding: ACCOUNT.scb,
     foreignCurrency: false,
   },
   {
     day: 5,
     merchant: MERCHANT.youtube,
     amount: 189,
-    funding: "scb",
+    funding: ACCOUNT.scb,
     foreignCurrency: false,
   },
   {
     day: 6,
     merchant: MERCHANT.disneyPlus,
     amount: 359,
-    funding: "scb",
+    funding: ACCOUNT.scb,
     foreignCurrency: false,
   },
   {
     day: 7,
     merchant: MERCHANT.icloud,
     amount: 349,
-    funding: "absolute",
+    funding: ACCOUNT.cardTtbAbsolute,
     foreignCurrency: true,
   },
   {
     day: 10,
     merchant: MERCHANT.virginActive,
     amount: 4_500,
-    funding: "visa",
+    funding: ACCOUNT.cardKbankVisa,
     foreignCurrency: false,
   },
   {
     day: 11,
     merchant: MERCHANT.adobe,
     amount: 1_050,
-    funding: "absolute",
+    funding: ACCOUNT.cardTtbAbsolute,
     foreignCurrency: true,
   },
   {
@@ -83,7 +82,7 @@ const SUBSCRIPTIONS: Subscription[] = [
     merchant: MERCHANT.anthropic,
     plan: "Claude Pro",
     amount: inBaht(20),
-    funding: "absolute",
+    funding: ACCOUNT.cardTtbAbsolute,
     foreignCurrency: true,
     until: "2025-05",
   },
@@ -92,7 +91,7 @@ const SUBSCRIPTIONS: Subscription[] = [
     merchant: MERCHANT.anthropic,
     plan: "Claude Max 20x",
     amount: inBaht(200),
-    funding: "absolute",
+    funding: ACCOUNT.cardTtbAbsolute,
     foreignCurrency: true,
     since: "2025-06",
   },
@@ -100,14 +99,14 @@ const SUBSCRIPTIONS: Subscription[] = [
     day: 15,
     merchant: MERCHANT.github,
     amount: 147,
-    funding: "uobBank",
+    funding: ACCOUNT.uob,
     foreignCurrency: true,
   },
   {
     day: 16,
     merchant: MERCHANT.notion,
     amount: 360,
-    funding: "uobBank",
+    funding: ACCOUNT.uob,
     foreignCurrency: true,
   },
 ];
@@ -131,7 +130,7 @@ export const generateSubscriptions = (ctx: SeedContext): SeedRow[] =>
       if (!within(chargeDate, ctx.window)) return [];
       if (!billedIn(subscription, monthKey(chargeDate))) return [];
 
-      const source = FUNDING[subscription.funding];
+      const source = subscription.funding;
       const charge = row({
         date: chargeDate,
         description: describe(subscription),

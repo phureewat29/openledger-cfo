@@ -1,10 +1,11 @@
 import { sumBy } from "es-toolkit";
 
+import type { Month } from "../calendar";
 import type { Holding } from "../products/securities";
-import type { SeedContext, SeedRow } from "../types";
-import { ACCOUNT, unitAccountsOf } from "../accounts";
-import { dayIn, monthIndexOf, within } from "../calendar";
-import { disposalLegs } from "../disposal";
+import type { SeedContext, SeedRow } from "../rows";
+import type { Sale } from "./trades";
+import { ACCOUNT } from "../accounts";
+import { dayIn, within } from "../calendar";
 import { MERCHANT } from "../merchants";
 import {
   formatMoney,
@@ -15,14 +16,10 @@ import {
 } from "../money";
 import { OPENING_DATE, openingAmount, QUARTER_END_MONTHS } from "../persona";
 import { openingPriceOf, priceOn } from "../prices";
-import {
-  dividendOn,
-  HOLDINGS,
-  perShareOf,
-  STOCK_SALES,
-} from "../products/securities";
+import { dividendOn, HOLDINGS, perShareOf } from "../products/securities";
 import { jitter, money } from "../rng";
-import { leg, linked, row } from "../types";
+import { leg, linked, row } from "../rows";
+import { acquisitionLegs, createBook, disposalLegs, salesIn } from "./trades";
 
 const FX_START = 34.8;
 const FX_END = 36.9;
@@ -45,6 +42,15 @@ const THREE_WAY_FLOOR = 240_000;
 const MIN_DIVIDEND = 100;
 const SWEEP_FLOOR = 100_000;
 const SWEEP_RESERVE = 50_000;
+
+const STOCK_SALES: Sale[] = [
+  {
+    account: ACCOUNT.stockTsla,
+    date: "2026-02-18",
+    unitsFraction: 0.25,
+    toAccount: ACCOUNT.brokerageCash,
+  },
+];
 
 /** THB drifts against the dollar across the window; each month's rate is drawn once. */
 const fxRateTable = (ctx: SeedContext): number[] => {
@@ -72,41 +78,17 @@ const splitEvenly = (total: number, count: number): number[] => {
 
 const shares = (units: number): string => formatQuantity(units, 2);
 
-const priced = (holding: Holding, price: number, quantity: number): string =>
+const priced = (price: number, quantity: number): string =>
   `${shares(quantity)} sh @ $${formatMoney(price)}`;
 
 /**
- * The two legs a purchase is: what it cost and what it bought. Written as one
- * group because neither is true without the other — the price is nowhere in the
- * ledger except as the ratio between them.
- */
-const tradeLegs = (
-  holding: Holding,
-  cash: string,
-  cost: number,
-  quantity: number,
-) => {
-  const unit = unitAccountsOf(holding.unit);
-  return [
-    leg(holding.account, cash, cost),
-    leg(unit.position, unit.equity, quantity),
-  ];
-};
-
-/**
- * The dollar portfolio. Baht leaves the Bangkok Bank account, crosses through
- * the two conversion equity accounts because a transaction may never span
- * currencies, and lands as brokerage cash that the day's buys spend down to
- * where it started. Only dividends accumulate there, which is what the December
- * reinvestment exists to clear.
+ * Baht reaches the brokerage through the two conversion equity accounts, since a
+ * transaction may never span currencies; only dividends accumulate as cash.
  */
 export const generateStocks = (ctx: SeedContext): SeedRow[] => {
   const rows: SeedRow[] = [];
   const rates = fxRateTable(ctx);
-  // Shares are carried in hundredths and cost in satang, so a position replayed
-  // across two years is exact rather than accumulated in floating point.
-  const held = new Map<string, number>();
-  const basis = new Map<string, number>();
+  const book = createBook();
   let cashUnits = toUnits(openingAmount(ACCOUNT.brokerageCash));
   let cursor = 0;
 
@@ -116,20 +98,147 @@ export const generateStocks = (ctx: SeedContext): SeedRow[] => {
     price: number,
     quantityUnits: number,
     description: string,
+    from: string = ACCOUNT.brokerageCash,
   ): void => {
     const quantity = fromUnits(quantityUnits);
     const cost = satang(quantity * price);
-    held.set(holding.account, (held.get(holding.account) ?? 0) + quantityUnits);
-    basis.set(
-      holding.account,
-      (basis.get(holding.account) ?? 0) + toUnits(cost),
-    );
+    book.acquire(holding.account, quantityUnits, toUnits(cost));
     rows.push(
       linked({
         date,
         description,
-        legs: tradeLegs(holding, ACCOUNT.brokerageCash, cost, quantity),
+        legs: acquisitionLegs(holding, from, cost, quantity),
       }),
+    );
+  };
+
+  const payDividends = (month: Month): void => {
+    const date = dayIn(month, DIVIDEND_DAY);
+    if (!QUARTER_END_MONTHS.includes(month.month)) return;
+    if (!within(date, ctx.window)) return;
+    for (const holding of HOLDINGS) {
+      const quantity = fromUnits(book.heldUnits(holding.account));
+      const dividendUnits = toUnits(dividendOn(holding, quantity));
+      if (dividendUnits < MIN_DIVIDEND) continue;
+      cashUnits += dividendUnits;
+      rows.push(
+        row({
+          date,
+          description: `${holding.ticker} dividend — $${formatMoney(perShareOf(holding))}/sh × ${shares(quantity)} sh`,
+          debit: ACCOUNT.brokerageCash,
+          credit: ACCOUNT.dividendUSD,
+          amount: fromUnits(dividendUnits),
+        }),
+      );
+    }
+  };
+
+  const buyMonth = (month: Month, index: number): void => {
+    const date = dayIn(month, BUY_DAY);
+    if (!within(date, ctx.window)) return;
+    const rate = rates[index] ?? FX_START;
+    const thb = QUARTER_END_MONTHS.includes(month.month)
+      ? money(ctx.rng, QUARTER_BUDGET_MIN, QUARTER_BUDGET_MAX)
+      : money(ctx.rng, BUDGET_MIN, BUDGET_MAX);
+    const usdUnits = Math.round(toUnits(thb) / rate);
+    const count = usdUnits >= THREE_WAY_FLOOR ? 3 : 2;
+    const picks = rotate(cursor, count);
+    cursor = (cursor + count) % HOLDINGS.length;
+
+    const orders = splitEvenly(usdUnits, picks.length).flatMap(
+      (budgetUnits, slot) => {
+        const holding = picks[slot];
+        if (holding === undefined || budgetUnits <= 0) return [];
+        const price = priceOn(holding, index);
+        const quantityUnits = Math.round(budgetUnits / price);
+        if (quantityUnits <= 0) return [];
+        const cost = satang(fromUnits(quantityUnits) * price);
+        return [{ holding, price, quantityUnits, cost }];
+      },
+    );
+
+    // Bank fees are per remittance, so the day's buys share one transfer.
+    const funded = satang(sumBy(orders, (order) => order.cost));
+    if (funded > 0) {
+      rows.push(
+        linked({
+          date,
+          description: `FX transfer to IBKR @ ${rate.toFixed(2)}`,
+          legs: [
+            leg(ACCOUNT.conversionTHB, ACCOUNT.bbl, satang(funded * rate)),
+            leg(ACCOUNT.brokerageCash, ACCOUNT.conversionUSD, funded),
+          ],
+        }),
+        row({
+          date,
+          description: "Outward remittance fee",
+          debit: ACCOUNT.brokerageFees,
+          credit: ACCOUNT.bbl,
+          amount: REMITTANCE_FEE,
+          merchant: MERCHANT.ibkr,
+        }),
+      );
+    }
+
+    for (const order of orders) {
+      buy(
+        order.holding,
+        date,
+        order.price,
+        order.quantityUnits,
+        `Buy ${order.holding.ticker} — ${priced(order.price, fromUnits(order.quantityUnits))}`,
+      );
+    }
+  };
+
+  const sell = (index: number): void => {
+    for (const { sale, instrument: holding } of salesIn(
+      STOCK_SALES,
+      HOLDINGS,
+      ctx,
+      index,
+    )) {
+      const released = book.release(holding.account, sale.unitsFraction);
+      if (released === undefined) continue;
+      const price = priceOn(holding, index);
+      const quantity = fromUnits(released.soldUnits);
+      const proceedsUnits = toUnits(satang(quantity * price));
+      cashUnits += proceedsUnits;
+      rows.push(
+        linked({
+          date: sale.date,
+          description: `Sell ${holding.ticker} — ${priced(price, quantity)}`,
+          legs: disposalLegs({
+            cash: sale.toAccount,
+            instrument: holding,
+            gainAccount: ACCOUNT.realizedGainUSD,
+            proceedsUnits,
+            basisUnits: released.basisUnits,
+            quantity,
+          }),
+        }),
+      );
+    }
+  };
+
+  const reinvest = (month: Month, index: number): void => {
+    const date = dayIn(month, SWEEP_DAY);
+    if (month.month !== 12) return;
+    if (!within(date, ctx.window) || cashUnits <= SWEEP_FLOOR) return;
+    const voo = HOLDINGS.find((holding) => holding.account === ACCOUNT.etfVoo);
+    if (voo === undefined) return;
+
+    const price = priceOn(voo, index);
+    // Floored: the sweep may not spend past the cash that prompted it.
+    const quantityUnits = Math.floor((cashUnits - SWEEP_RESERVE) / price);
+    if (quantityUnits <= 0) return;
+    cashUnits -= toUnits(satang(fromUnits(quantityUnits) * price));
+    buy(
+      voo,
+      date,
+      price,
+      quantityUnits,
+      `Buy ${voo.ticker} — ${priced(price, fromUnits(quantityUnits))} (dividend reinvestment)`,
     );
   };
 
@@ -137,162 +246,21 @@ export const generateStocks = (ctx: SeedContext): SeedRow[] => {
     if (holding.opening <= 0) continue;
     const price = openingPriceOf(holding);
     const quantityUnits = Math.round(toUnits(holding.opening) / price);
-    const quantity = fromUnits(quantityUnits);
-    const cost = satang(quantity * price);
-    held.set(holding.account, quantityUnits);
-    basis.set(holding.account, toUnits(cost));
-    const unit = unitAccountsOf(holding.unit);
-    rows.push(
-      linked({
-        date: OPENING_DATE,
-        description: `Opening position — ${holding.ticker} ${priced(holding, price, quantity)}`,
-        legs: [
-          leg(holding.account, ACCOUNT.openingUSD, cost),
-          leg(unit.position, unit.equity, quantity),
-        ],
-      }),
+    buy(
+      holding,
+      OPENING_DATE,
+      price,
+      quantityUnits,
+      `Opening position — ${holding.ticker} ${priced(price, fromUnits(quantityUnits))}`,
+      ACCOUNT.openingUSD,
     );
   }
 
   ctx.months.forEach((month, index) => {
-    if (QUARTER_END_MONTHS.includes(month.month)) {
-      const dividendDate = dayIn(month, DIVIDEND_DAY);
-      if (within(dividendDate, ctx.window)) {
-        for (const holding of HOLDINGS) {
-          const quantity = fromUnits(held.get(holding.account) ?? 0);
-          const dividendUnits = toUnits(dividendOn(holding, quantity));
-          if (dividendUnits < MIN_DIVIDEND) continue;
-          cashUnits += dividendUnits;
-          rows.push(
-            row({
-              date: dividendDate,
-              description: `${holding.ticker} dividend — $${formatMoney(perShareOf(holding))}/sh × ${shares(quantity)} sh`,
-              debit: ACCOUNT.brokerageCash,
-              credit: ACCOUNT.dividendUSD,
-              amount: fromUnits(dividendUnits),
-            }),
-          );
-        }
-      }
-    }
-
-    const buyDate = dayIn(month, BUY_DAY);
-    if (within(buyDate, ctx.window)) {
-      const rate = rates[index] ?? FX_START;
-      const quarterly = QUARTER_END_MONTHS.includes(month.month);
-      const thb = quarterly
-        ? money(ctx.rng, QUARTER_BUDGET_MIN, QUARTER_BUDGET_MAX)
-        : money(ctx.rng, BUDGET_MIN, BUDGET_MAX);
-      const usdUnits = Math.round(toUnits(thb) / rate);
-      const count = usdUnits >= THREE_WAY_FLOOR ? 3 : 2;
-      const picks = rotate(cursor, count);
-      cursor = (cursor + count) % HOLDINGS.length;
-
-      const orders = splitEvenly(usdUnits, picks.length).flatMap(
-        (budgetUnits, slot) => {
-          const holding = picks[slot];
-          if (holding === undefined || budgetUnits <= 0) return [];
-          const price = priceOn(holding, index);
-          const quantityUnits = Math.round(budgetUnits / price);
-          if (quantityUnits <= 0) return [];
-          const cost = satang(fromUnits(quantityUnits) * price);
-          return [{ holding, price, quantityUnits, cost }];
-        },
-      );
-
-      // Bank fees are per remittance, not per order, so the day's buys share
-      // one transfer sized to their combined cost.
-      const funded = satang(sumBy(orders, (order) => order.cost));
-      if (funded > 0) {
-        rows.push(
-          linked({
-            date: buyDate,
-            description: `FX transfer to IBKR @ ${rate.toFixed(2)}`,
-            legs: [
-              leg(ACCOUNT.conversionTHB, ACCOUNT.bbl, satang(funded * rate)),
-              leg(ACCOUNT.brokerageCash, ACCOUNT.conversionUSD, funded),
-            ],
-          }),
-          row({
-            date: buyDate,
-            description: "Outward remittance fee",
-            debit: ACCOUNT.brokerageFees,
-            credit: ACCOUNT.bbl,
-            amount: REMITTANCE_FEE,
-            merchant: MERCHANT.ibkr,
-          }),
-        );
-      }
-
-      for (const order of orders) {
-        buy(
-          order.holding,
-          buyDate,
-          order.price,
-          order.quantityUnits,
-          `Buy ${order.holding.ticker} — ${priced(order.holding, order.price, fromUnits(order.quantityUnits))}`,
-        );
-      }
-    }
-
-    for (const sale of STOCK_SALES) {
-      if (monthIndexOf(sale.date, ctx.window) !== index) continue;
-      if (!within(sale.date, ctx.window)) continue;
-      const holding = HOLDINGS.find((entry) => entry.account === sale.account);
-      if (holding === undefined) continue;
-
-      const heldUnits = held.get(holding.account) ?? 0;
-      const soldUnits = Math.round(heldUnits * sale.unitsFraction);
-      if (soldUnits <= 0) continue;
-      const price = priceOn(holding, index);
-      const quantity = fromUnits(soldUnits);
-      const proceeds = satang(quantity * price);
-      const basisUnits = Math.round(
-        ((basis.get(holding.account) ?? 0) * soldUnits) / heldUnits,
-      );
-
-      held.set(holding.account, heldUnits - soldUnits);
-      basis.set(
-        holding.account,
-        (basis.get(holding.account) ?? 0) - basisUnits,
-      );
-      cashUnits += toUnits(proceeds);
-      rows.push(
-        linked({
-          date: sale.date,
-          description: `Sell ${holding.ticker} — ${priced(holding, price, quantity)}`,
-          legs: disposalLegs({
-            cash: sale.toAccount,
-            position: holding.account,
-            gainAccount: ACCOUNT.realizedGainUSD,
-            unit: unitAccountsOf(holding.unit),
-            proceedsUnits: toUnits(proceeds),
-            basisUnits,
-            quantity,
-          }),
-        }),
-      );
-    }
-
-    if (month.month !== 12) return;
-    const sweepDate = dayIn(month, SWEEP_DAY);
-    if (!within(sweepDate, ctx.window) || cashUnits <= SWEEP_FLOOR) return;
-    const voo = HOLDINGS.find((holding) => holding.account === ACCOUNT.etfVoo);
-    if (voo === undefined) return;
-
-    const price = priceOn(voo, index);
-    // Floored rather than rounded: the sweep may not reach past the cash that
-    // prompted it, and one share is worth more than the reserve left behind.
-    const quantityUnits = Math.floor((cashUnits - SWEEP_RESERVE) / price);
-    if (quantityUnits <= 0) return;
-    cashUnits -= toUnits(satang(fromUnits(quantityUnits) * price));
-    buy(
-      voo,
-      sweepDate,
-      price,
-      quantityUnits,
-      `Buy ${voo.ticker} — ${priced(voo, price, fromUnits(quantityUnits))} (dividend reinvestment)`,
-    );
+    payDividends(month);
+    buyMonth(month, index);
+    sell(index);
+    reinvest(month, index);
   });
 
   return rows;

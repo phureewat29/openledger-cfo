@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { attempt, attemptAsync } from "es-toolkit";
 import { z } from "zod/v4";
 
 import type { OledError, Result } from "@openledger-cfo/openledger";
@@ -24,7 +25,6 @@ import {
   thaiFundSchema,
 } from "./products/securities";
 
-/** The authored dataset, committed so that loading it is reproducible without a generator. */
 export const LIFE_PATH = resolve(
   import.meta.dirname,
   "..",
@@ -41,7 +41,9 @@ const lifeConfigSchema = z.object({
   userName: z.string(),
 });
 
-/** Product-class tallies the coverage checks assert against the dataset's own tables. */
+/** The four facts `oled config --init` needs; the dataset and the persona both satisfy it. */
+export type LedgerConfig = z.infer<typeof lifeConfigSchema>;
+
 const lifeCountsSchema = z.object({
   banks: z.number(),
   cards: z.number(),
@@ -90,7 +92,6 @@ const lifeMetaSchema = z.object({
   expected: lifeExpectedSchema,
 });
 
-/** Months chunk the stream so the loader posts one batch per month and streams naturally. */
 const lifeMonthSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, "Expected a YYYY-MM month key"),
   rows: z.array(ingestRowInputSchema).min(1),
@@ -108,55 +109,45 @@ export type Life = z.infer<typeof lifeSchema>;
 export const allRows = (life: Life): Life["months"][number]["rows"] =>
   life.months.flatMap((month) => month.rows);
 
-const readText = async (path: string): Promise<Result<string, OledError>> => {
-  try {
-    return ok(await readFile(path, "utf8"));
-  } catch (cause) {
-    return err<OledError>({
-      kind: "not_found",
-      message: `Could not read ${path}: ${messageOf(cause)}`,
-      hint: "Author the dataset first with `pnpm demo:generate`.",
-    });
-  }
+const readText = async (): Promise<Result<string, OledError>> => {
+  const [cause, text] = await attemptAsync(() => readFile(LIFE_PATH, "utf8"));
+  return text === null
+    ? err<OledError>({
+        kind: "not_found",
+        message: `Could not read ${LIFE_PATH}: ${messageOf(cause)}`,
+        hint: "Author the dataset first with `pnpm demo:generate`.",
+      })
+    : ok(text);
 };
 
-const parseJson = (path: string, text: string): Result<unknown, OledError> => {
-  try {
-    return ok(JSON.parse(text) as unknown);
-  } catch (cause) {
-    return err<OledError>({
-      kind: "parse_failed",
-      message: `${path} is not valid JSON: ${messageOf(cause)}`,
-    });
-  }
+const parseJson = (text: string): Result<unknown, OledError> => {
+  const [cause, parsed] = attempt(() => JSON.parse(text) as unknown);
+  return cause === null
+    ? ok(parsed)
+    : err<OledError>({
+        kind: "parse_failed",
+        message: `${LIFE_PATH} is not valid JSON: ${messageOf(cause)}`,
+      });
 };
 
-const validate = (path: string, parsed: unknown): Result<Life, OledError> => {
+const validate = (parsed: unknown): Result<Life, OledError> => {
   const validated = lifeSchema.safeParse(parsed);
   return validated.success
     ? ok(validated.data)
     : err<OledError>({
         kind: "invalid",
-        message: `${path} does not match the dataset schema`,
+        message: `${LIFE_PATH} does not match the dataset schema`,
         hint: z.prettifyError(validated.error).slice(0, 2_000),
       });
 };
 
-export const readLife = async (
-  path: string = LIFE_PATH,
-): Promise<Result<Life, OledError>> =>
-  andThen(
-    andThen(await readText(path), (text) => parseJson(path, text)),
-    (parsed) => validate(path, parsed),
-  );
+export const readLife = async (): Promise<Result<Life, OledError>> =>
+  andThen(andThen(await readText(), parseJson), validate);
 
 /** Compact on purpose: the file is committed and read by machines, never edited by hand. */
-export const writeLife = async (
-  life: Life,
-  path: string = LIFE_PATH,
-): Promise<number> => {
+export const writeLife = async (life: Life): Promise<number> => {
   const text = JSON.stringify(life);
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, text, "utf8");
+  await mkdir(dirname(LIFE_PATH), { recursive: true });
+  await writeFile(LIFE_PATH, text, "utf8");
   return Buffer.byteLength(text, "utf8");
 };

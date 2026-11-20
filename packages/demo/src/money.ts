@@ -9,6 +9,9 @@ export const toUnits = (amount: number): number => Math.round(amount * 100);
 
 export const fromUnits = (units: number): number => units / 100;
 
+export const roundUpTo = (value: number, step: number): number =>
+  Math.ceil(value / step) * step;
+
 /** Quantities carry the precision their instrument trades in; money always two. */
 export const formatQuantity = (value: number, digits: number): string =>
   value.toLocaleString("en-US", {

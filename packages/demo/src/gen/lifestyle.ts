@@ -1,15 +1,14 @@
+import type { PaymentSource } from "../accounts";
 import type { Month } from "../calendar";
 import type { Merchant } from "../merchants";
 import type { Rng } from "../rng";
-import type { SeedContext, SeedRow } from "../types";
+import type { SeedContext, SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
 import { dayIn, within } from "../calendar";
-import { FUNDING } from "../funding";
 import { MERCHANT } from "../merchants";
 import { int, money, pick, skewedMoney } from "../rng";
-import { row } from "../types";
+import { row } from "../rows";
 
-/** The club bills the year in two halves, which is how it is actually sold. */
 const MEMBERSHIP_MONTHS = [1, 7];
 const MEMBERSHIP_DAY = 15;
 const MEMBERSHIP_FEE = 42_000;
@@ -23,13 +22,9 @@ interface Outing {
   minPerMonth: number;
   maxPerMonth: number;
   amount: (rng: Rng) => number;
-  funding: string;
+  funding: PaymentSource;
 }
 
-/**
- * The discretionary half of a senior salary: club golf, restaurants that take
- * reservations, and department stores rather than markets.
- */
 const OUTINGS: Outing[] = [
   {
     label: "Golf",
@@ -39,7 +34,7 @@ const OUTINGS: Outing[] = [
     minPerMonth: 1,
     maxPerMonth: 2,
     amount: (rng) => money(rng, 3_200, 5_600),
-    funding: FUNDING.up,
+    funding: ACCOUNT.cardScbUp,
   },
   {
     label: "Dinner",
@@ -54,7 +49,7 @@ const OUTINGS: Outing[] = [
     minPerMonth: 1,
     maxPerMonth: 1,
     amount: (rng) => money(rng, 4_000, 10_000),
-    funding: FUNDING.up,
+    funding: ACCOUNT.cardScbUp,
   },
   {
     label: "Cinema",
@@ -64,7 +59,7 @@ const OUTINGS: Outing[] = [
     minPerMonth: 1,
     maxPerMonth: 2,
     amount: (rng) => money(rng, 400, 1_400),
-    funding: FUNDING.first,
+    funding: ACCOUNT.cardKrungsriFirst,
   },
   {
     label: "Shopping",
@@ -78,7 +73,7 @@ const OUTINGS: Outing[] = [
     minPerMonth: 1,
     maxPerMonth: 2,
     amount: (rng) => skewedMoney(rng, 2_500, 10_000),
-    funding: FUNDING.first,
+    funding: ACCOUNT.cardKrungsriFirst,
   },
 ];
 

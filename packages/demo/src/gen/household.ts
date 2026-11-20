@@ -1,14 +1,13 @@
 import type { Month } from "../calendar";
 import type { Merchant } from "../merchants";
 import type { Rng } from "../rng";
-import type { SeedContext, SeedRow } from "../types";
+import type { SeedContext, SeedRow } from "../rows";
 import { ACCOUNT } from "../accounts";
 import { dayIn, within } from "../calendar";
 import { MERCHANT } from "../merchants";
 import { chance, money, pick } from "../rng";
-import { row } from "../types";
+import { row } from "../rows";
 
-/** Bangkok runs its aircon from March into May, and the meter shows it. */
 const AIRCON_MONTHS = [3, 4, 5];
 
 const TAX_REFUND_MONTH = 4;
@@ -25,7 +24,6 @@ interface Bill {
   merchant?: Merchant;
 }
 
-/** The bill account pays what arrives on paper; the salary hub pays the people. */
 const MONTHLY_BILLS: Bill[] = [
   {
     day: 8,
@@ -282,7 +280,6 @@ interface Drawdown {
   merchant?: Merchant;
 }
 
-/** What the emergency fund is for: without these it only ever takes deposits and interest. */
 const EMERGENCY_DRAWS: Drawdown[] = [
   {
     date: "2025-08-20",
@@ -300,7 +297,7 @@ const EMERGENCY_DRAWS: Drawdown[] = [
   },
 ];
 
-/** Thai tax years are Buddhist Era; a refund filed in 2026 settles 2568. */
+/** Thai tax years are Buddhist Era. */
 const buddhistYear = (year: number): number => year + 542;
 
 const billRow = (ctx: SeedContext, month: Month, bill: Bill): SeedRow[] => {
@@ -332,7 +329,6 @@ const monthRows = (ctx: SeedContext, month: Month): SeedRow[] => {
       (bill) => billRow(ctx, month, bill),
     ),
 
-    // Sent weekly rather than in one lump, which is how the money is actually used.
     ...ALLOWANCE_DAYS.map((day) => dayIn(month, day))
       .filter((date) => within(date, ctx.window))
       .map((date) =>
