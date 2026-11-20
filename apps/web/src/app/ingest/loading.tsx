@@ -1,8 +1,8 @@
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
+import { PaneFrame } from "~/app/_components/pane-frame";
 import { INGEST_GRID, INGEST_NARROW, INGEST_WIDE } from "~/app/ingest/grid";
-import { Breadcrumbs } from "~/components/breadcrumbs";
-import { LoadingLine } from "~/components/loading-line";
-import { PaneFrame } from "~/components/pane-frame";
-import { UPLOAD_HINT } from "~/domain/ingest-files";
+import { UPLOAD_HINT } from "~/ingest/files";
+import { LoadingLine } from "~/lib/ui/loading-line";
 
 /**
  * Soft on purpose: the ingest grid holds every pane's height, so the frames

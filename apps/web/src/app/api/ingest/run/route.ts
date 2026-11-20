@@ -1,10 +1,10 @@
 import { z } from "zod/v4";
 
-import type { StartFailure } from "~/server/ingest-run";
+import type { StartFailure } from "~/ingest/runner";
 import { fail } from "~/app/api/ingest/reply";
-import { RUN_MODES } from "~/domain/ingest-run";
-import { listEntries } from "~/server/ingest-journal";
-import { cancelRun, readRun, startRun } from "~/server/ingest-run";
+import { listEntries } from "~/ingest/journal";
+import { RUN_MODES } from "~/ingest/run";
+import { cancelRun, readRun, startRun } from "~/ingest/runner";
 
 // Memory the poller re-reads every couple of seconds; a cached answer is a lie.
 export const dynamic = "force-dynamic";

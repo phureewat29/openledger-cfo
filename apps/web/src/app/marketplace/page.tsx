@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
 import { ComingSoon } from "~/app/_components/coming-soon";
-import { Breadcrumbs } from "~/components/breadcrumbs";
 
 export const metadata: Metadata = { title: "Marketplace · OpenLedger CFO" };
 

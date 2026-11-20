@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 
 import { readGateway } from "@openledger-cfo/api";
 
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
 import { SetupCard } from "~/app/_components/setup-card";
 import { INGEST_GRID, INGEST_NARROW, INGEST_WIDE } from "~/app/ingest/grid";
-import { Breadcrumbs } from "~/components/breadcrumbs";
-import { CliLog } from "~/components/ingest/cli-log";
-import { FileList } from "~/components/ingest/file-list";
-import { InfoPane } from "~/components/ingest/info-pane";
-import { RunFeed } from "~/components/ingest/run-feed";
-import { SelectionProvider } from "~/components/ingest/selection";
-import { asLedgerLoad, ledgerHead } from "~/server/head";
+import { FileList } from "~/ingest/file-list";
+import { InfoPane } from "~/ingest/info-pane";
+import { RunFeed } from "~/ingest/run-feed";
+import { SelectionProvider } from "~/ingest/selection";
+import { asLedgerLoad, ledgerHead } from "~/ledger/load";
+import { CliLog } from "~/shell/cli-log-pane";
 import { HydrateClient, prefetch, trpc } from "~/trpc/server";
 
 export const metadata: Metadata = { title: "Ingest · OpenLedger CFO" };

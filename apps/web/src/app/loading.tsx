@@ -1,3 +1,6 @@
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
+import { PaneFrame } from "~/app/_components/pane-frame";
+import { GhostLine } from "~/app/_components/skeleton";
 import {
   ACTION_COL,
   EVERYTHING_GRID,
@@ -8,10 +11,7 @@ import {
   VITALS_BAND,
   VITALS_CELL,
   VITALS_GRID,
-} from "~/app/grid";
-import { Breadcrumbs } from "~/components/breadcrumbs";
-import { PaneFrame } from "~/components/pane-frame";
-import { GhostLine } from "~/components/skeleton";
+} from "~/dashboard/grid";
 
 /**
  * Soft on purpose: the grid constants and pane frames hold the layout, every

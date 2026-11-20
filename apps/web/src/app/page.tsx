@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
 
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
+import { SetupCard } from "~/app/_components/setup-card";
+import { buildActionQueue } from "~/dashboard/action";
+import { ActionPane } from "~/dashboard/action-pane";
+import { FlowPane } from "~/dashboard/flow-pane";
 import {
   ACTION_COL,
   EVERYTHING_GRID,
   FLOW_COL,
   TAPE_COL,
   TRAJECTORY_COL,
-} from "~/app/grid";
-import { Breadcrumbs } from "~/components/breadcrumbs";
-import { Vitals } from "~/components/monitor/vitals";
-import { ActionPane } from "~/components/panes/action-pane";
-import { FlowPane } from "~/components/panes/flow-pane";
-import { TapePane } from "~/components/panes/tape-pane";
-import { TrajectoryPane } from "~/components/panes/trajectory-pane";
-import { buildActionQueue } from "~/domain/action";
-import { mergeUpcoming } from "~/domain/upcoming";
-import { loadDashboard } from "~/server/dashboard";
-import { SetupCard } from "./_components/setup-card";
+} from "~/dashboard/grid";
+import { loadDashboard } from "~/dashboard/load";
+import { TapePane } from "~/dashboard/tape-pane";
+import { TrajectoryPane } from "~/dashboard/trajectory-pane";
+import { Vitals } from "~/dashboard/vitals";
+import { mergeUpcoming } from "~/plan/upcoming";
 
 export const metadata: Metadata = { title: "Everything · OpenLedger CFO" };
 

@@ -1,4 +1,4 @@
-import type { LedgerFailureReason } from "~/server/head";
+import type { LedgerFailureReason } from "~/ledger/load";
 
 interface Remedy {
   readonly caption: string;

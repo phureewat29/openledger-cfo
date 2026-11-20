@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 
 import { fail } from "~/app/api/ingest/reply";
-import { skipWaiting, submitPassword } from "~/server/ingest-run";
+import { skipWaiting, submitPassword } from "~/ingest/runner";
 
 export const dynamic = "force-dynamic";
 

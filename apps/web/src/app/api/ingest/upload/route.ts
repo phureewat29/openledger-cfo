@@ -11,7 +11,7 @@ import {
   safeUploadName,
   UPLOAD_TYPE_ERROR,
   uploadExtensionOf,
-} from "~/domain/ingest-files";
+} from "~/ingest/files";
 
 const MAX_BYTES = 30 * 1024 * 1024;
 

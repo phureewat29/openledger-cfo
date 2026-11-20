@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
 import { SetupCard } from "~/app/_components/setup-card";
 import { GOALS_COL, PLAN_GRID, SPLIT_COL } from "~/app/plan/grid";
-import { Breadcrumbs } from "~/components/breadcrumbs";
-import { BudgetsPane } from "~/components/panes/budgets-pane";
-import { GoalsPane } from "~/components/panes/goals-pane";
-import { RemindersPane } from "~/components/panes/reminders-pane";
-import { loadDashboard } from "~/server/dashboard";
+import { loadDashboard } from "~/dashboard/load";
+import { BudgetsPane } from "~/plan/budgets-pane";
+import { GoalsPane } from "~/plan/goals-pane";
+import { RemindersPane } from "~/plan/reminders-pane";
 
 export const metadata: Metadata = { title: "Plan · OpenLedger CFO" };
 

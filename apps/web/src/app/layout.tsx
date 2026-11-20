@@ -3,15 +3,15 @@ import type { Metadata } from "next";
 import { readGateway } from "@openledger-cfo/api";
 import { fontClassNames } from "@openledger-cfo/ui/fonts";
 
-import { ChatPane } from "~/components/chat/chat-pane";
-import { ChatDock } from "~/components/chat/dock";
-import { pickSuggestions } from "~/components/chat/suggestions";
-import { CliLogProvider } from "~/components/cli-log-provider";
-import { ConfigDialogProvider } from "~/components/config/config-dialog-provider";
-import { IngestRunProvider } from "~/components/ingest-run-provider";
-import { Rail } from "~/components/rail";
-import { StatusBar } from "~/components/status-bar";
-import { loadChrome, loadRailBadges, NO_BADGES } from "~/server/chrome";
+import { ChatPane } from "~/chat/chat-pane";
+import { ChatDock } from "~/chat/dock";
+import { pickSuggestions } from "~/chat/suggestions";
+import { ConfigDialogProvider } from "~/config/config-dialog-provider";
+import { IngestRunProvider } from "~/ingest/run-provider";
+import { CliLogProvider } from "~/shell/cli-log-provider";
+import { loadChrome, loadRailBadges, NO_BADGES } from "~/shell/load";
+import { Rail } from "~/shell/rail";
+import { StatusBar } from "~/shell/status-bar";
 import { TRPCReactProvider } from "~/trpc/react";
 
 import "~/app/styles.css";

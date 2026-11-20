@@ -1,5 +1,14 @@
 import type { Metadata } from "next";
 
+import { CompositionStrip } from "~/accounts/composition-strip";
+import {
+  BanksPane,
+  CardsPane,
+  InvestmentsPane,
+  LoansPane,
+} from "~/accounts/group-panes";
+import { splitPortfolio } from "~/accounts/portfolio";
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
 import { SetupCard } from "~/app/_components/setup-card";
 import {
   ACCOUNTS_GRID,
@@ -10,18 +19,9 @@ import {
   TOTALS_CELL,
   TOTALS_ROW,
 } from "~/app/accounts/grid";
-import { CompositionStrip } from "~/components/accounts/composition-strip";
-import {
-  BanksPane,
-  CardsPane,
-  InvestmentsPane,
-  LoansPane,
-} from "~/components/accounts/group-panes";
-import { Breadcrumbs } from "~/components/breadcrumbs";
-import { formatThb } from "~/domain/format";
-import { headlineOf } from "~/domain/insights/headline";
-import { splitPortfolio } from "~/domain/portfolio";
-import { loadDashboard } from "~/server/dashboard";
+import { loadDashboard } from "~/dashboard/load";
+import { headlineOf } from "~/insights/headline";
+import { formatThb } from "~/lib/format";
 
 export const metadata: Metadata = { title: "Accounts · OpenLedger CFO" };
 

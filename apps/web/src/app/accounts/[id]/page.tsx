@@ -4,16 +4,16 @@ import { notFound } from "next/navigation";
 import { ACCOUNT_ID_PATTERN } from "@openledger-cfo/openledger/ids";
 import { Pane } from "@openledger-cfo/ui/pane";
 
+import { loadAccount } from "~/accounts/account";
+import { AccountHead } from "~/accounts/account-head";
+import { ACCOUNT_GRID, POSTINGS_COL } from "~/accounts/grid";
+import { PAGE_SIZE } from "~/accounts/paging";
+import { PostingsTable } from "~/accounts/postings-table";
+import { VizRow } from "~/accounts/viz-row";
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
 import { SetupCard } from "~/app/_components/setup-card";
-import { ACCOUNT_GRID, POSTINGS_COL } from "~/app/accounts/[id]/grid";
-import { AccountHead } from "~/components/account/account-head";
-import { PAGE_SIZE } from "~/components/account/paging";
-import { PostingsTable } from "~/components/account/postings-table";
-import { VizRow } from "~/components/account/viz-row";
-import { Breadcrumbs } from "~/components/breadcrumbs";
-import { formatDay } from "~/domain/format";
-import { loadAccount } from "~/server/account";
-import { asLedgerLoad } from "~/server/head";
+import { asLedgerLoad } from "~/ledger/load";
+import { formatDay } from "~/lib/format";
 import { HydrateClient, prefetch, trpc } from "~/trpc/server";
 
 // The ledger is read per request; a build-time snapshot would go stale.

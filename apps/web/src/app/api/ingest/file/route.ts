@@ -6,7 +6,7 @@ import type { OledErrorKind } from "@openledger-cfo/openledger";
 import { ledger } from "@openledger-cfo/api";
 import { FILE_ID_PATTERN } from "@openledger-cfo/openledger/ids";
 
-import type { IngestFile } from "~/domain/ingest-files";
+import type { IngestFile } from "~/ingest/files";
 import { fail } from "~/app/api/ingest/reply";
 
 /**

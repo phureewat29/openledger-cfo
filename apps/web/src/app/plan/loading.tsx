@@ -1,6 +1,6 @@
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
+import { PaneFrame } from "~/app/_components/pane-frame";
 import { GOALS_COL, PLAN_GRID, SPLIT_COL } from "~/app/plan/grid";
-import { Breadcrumbs } from "~/components/breadcrumbs";
-import { PaneFrame } from "~/components/pane-frame";
 
 /**
  * Soft on purpose: the plan grid's row floors hold every pane's height, so

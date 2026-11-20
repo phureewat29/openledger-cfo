@@ -5,10 +5,10 @@ import {
   POSTINGS_COL,
   VIZ_NARROW,
   VIZ_WIDE,
-} from "~/app/accounts/[id]/grid";
-import { Breadcrumbs } from "~/components/breadcrumbs";
-import { PaneFrame } from "~/components/pane-frame";
-import { GhostLine } from "~/components/skeleton";
+} from "~/accounts/grid";
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
+import { PaneFrame } from "~/app/_components/pane-frame";
+import { GhostLine } from "~/app/_components/skeleton";
 
 /**
  * The head band keeps its fixed chrome — a title line and four stat cells,

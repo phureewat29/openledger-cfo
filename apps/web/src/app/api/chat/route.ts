@@ -4,9 +4,9 @@ import { z } from "zod/v4";
 import { createAgent, startIngestRunTool } from "@openledger-cfo/agent";
 import { readGateway } from "@openledger-cfo/api";
 
-import { accountViewBlock, buildBriefing } from "~/server/briefing";
-import { loadDashboard } from "~/server/dashboard";
-import { startRun } from "~/server/ingest-run";
+import { accountViewBlock, buildBriefing } from "~/chat/briefing";
+import { loadDashboard } from "~/dashboard/load";
+import { startRun } from "~/ingest/runner";
 
 export const maxDuration = 300;
 
