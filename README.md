@@ -100,7 +100,7 @@ pnpm dev         # start local development
 pnpm typecheck   # builds the dist-publishing packages first, then checks everything
 pnpm lint        # eslint across the workspace
 pnpm format      # prettier check
-pnpm test        # vitest in agent, web and openledger, plus the connector smoke
+pnpm test        # vitest in agent, demo, openledger and web, plus the connector smoke
 pnpm build       # full production build
 ```
 
@@ -109,8 +109,11 @@ pnpm build       # full production build
 ```
 apps/
   web/            the terminal app
-    src/app/      routes; each route pairs page and skeleton through one grid.ts
-    src/components, src/domain, src/server, src/trpc
+    src/app/      routes, layouts, skeletons and route handlers only
+    src/<slice>/  one folder per domain: ledger, insights, flows, accounts, plan,
+                  dashboard, ingest, chat, config, shell (pure logic, loaders, panes)
+    src/lib/      charts, formatting and ui primitives every slice shares
+    src/trpc/     the tRPC client and server helpers
 packages/
   openledger/     typed connector over the oled CLI, plus the smoke harness
   api/            tRPC routers
