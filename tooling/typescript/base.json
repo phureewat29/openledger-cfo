@@ -2,7 +2,6 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     /** Base Options */
-    "esModuleInterop": true,
     "skipLibCheck": true,
     "target": "ES2023",
     "lib": ["ES2023"],
@@ -14,7 +13,6 @@
 
     /** Keep TSC performant in monorepos */
     "incremental": true,
-    "disableSourceOfProjectReferenceRedirect": true,
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.json",
 
     /** Strictness */

@@ -1,11 +1,10 @@
 {
   "extends": "@openledger-cfo/tsconfig/base.json",
   "compilerOptions": {
-    "lib": ["ES2022", "dom", "dom.iterable"],
+    "lib": ["ES2023", "dom"],
     "jsx": "preserve",
     "rootDir": ".",
     "types": []
   },
-  "include": ["src"],
-  "exclude": ["node_modules"]
+  "include": ["src"]
 }

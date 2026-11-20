@@ -10,9 +10,6 @@ export const reactConfig = defineConfig(
     languageOptions: {
       ...reactPlugin.configs.flat.recommended?.languageOptions,
       ...reactPlugin.configs.flat["jsx-runtime"]?.languageOptions,
-      globals: {
-        React: "writable",
-      },
     },
   },
   reactHooks.configs.flat["recommended-latest"]!,

@@ -6,35 +6,22 @@ import turboPlugin from "eslint-plugin-turbo";
 import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 
-/**
- * Packages that validate env through an env.ts module should use this rule
- */
-export const restrictEnvAccess = defineConfig(
-  { ignores: ["**/env.ts"] },
-  {
-    files: ["**/*.js", "**/*.ts", "**/*.tsx"],
-    rules: {
-      "no-restricted-properties": [
-        "error",
-        {
-          object: "process",
-          property: "env",
-          message:
-            "Use `import { env } from '~/env'` instead to ensure validated types.",
-        },
-      ],
-      "no-restricted-imports": [
-        "error",
-        {
-          name: "process",
-          importNames: ["env"],
-          message:
-            "Use `import { env } from '~/env'` instead to ensure validated types.",
-        },
-      ],
-    },
+const ENV_MESSAGE =
+  "Configuration lives in the control plane, not the environment; only OLED_CONFIG is read from it.";
+
+export const restrictEnvAccess = defineConfig({
+  files: ["**/*.js", "**/*.ts", "**/*.tsx"],
+  rules: {
+    "no-restricted-properties": [
+      "error",
+      { object: "process", property: "env", message: ENV_MESSAGE },
+    ],
+    "no-restricted-imports": [
+      "error",
+      { name: "process", importNames: ["env"], message: ENV_MESSAGE },
+    ],
   },
-);
+});
 
 export const baseConfig = defineConfig(
   // Ignore files not tracked by VCS and any config files
@@ -48,7 +35,6 @@ export const baseConfig = defineConfig(
     },
     extends: [
       eslint.configs.recommended,
-      ...tseslint.configs.recommended,
       ...tseslint.configs.recommendedTypeChecked,
       ...tseslint.configs.stylisticTypeChecked,
     ],
@@ -63,7 +49,7 @@ export const baseConfig = defineConfig(
         { prefer: "type-imports", fixStyle: "separate-type-imports" },
       ],
       "@typescript-eslint/no-misused-promises": [
-        2,
+        "error",
         { checksVoidReturn: { attributes: false } },
       ],
       "@typescript-eslint/no-unnecessary-condition": [
