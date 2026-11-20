@@ -1,34 +1,25 @@
 import { sumBy } from "es-toolkit";
 
 import type { RuleInput } from "./types";
-import { isPrimaryCurrency } from "~/ledger/accounts";
+import type { BalanceSheet } from "~/ledger/accounts";
 
-/**
- * The numbers that must agree everywhere they appear — the stat row, the AI
- * briefing, and any copy that quotes them. Derived once so the page and the
- * model can never quote two different figures for the same thing.
- */
-interface Headline {
-  readonly netWorthThb: number;
-  readonly netWorthUsd: number;
+/** Derived once, so the stat row, the rules and the AI briefing can never quote two figures for one thing. */
+export interface Headline extends BalanceSheet {
   readonly monthIncome: number;
   readonly monthExpenses: number;
   readonly monthNet: number;
   readonly savingsRate: number | undefined;
   readonly savingsWindow: number;
+  /** Income across the savings window. */
+  readonly savingsEarned: number;
+  /** Net across the savings window: what of `savingsEarned` stayed. */
+  readonly savingsKept: number;
   readonly cash: number;
-  /**
-   * What is owed across baht cards and loans, as a positive magnitude. Baht
-   * only, because the figure is printed beside `netWorthThb` and added to it:
-   * a dollar debt in that sum would be counted at a rate nobody quoted.
-   */
-  readonly liabilities: number;
   readonly runwayMonths: number | undefined;
   readonly averageMonthlySpend: number | undefined;
-  readonly spendToDate: number;
   readonly projectedSpend: number;
   readonly lastMonthSpend: number | undefined;
-  /** Projected spend against last month's actual; above 1.2 is the alert line. */
+  /** Projected spend against last month's actual. */
   readonly pace: number | undefined;
 }
 
@@ -52,20 +43,15 @@ export const headlineOf = (input: RuleInput): Headline => {
     monthNet: input.currentMonth.net,
     savingsRate: earned > 0 ? kept / earned : undefined,
     savingsWindow: window.length,
+    savingsEarned: earned,
+    savingsKept: kept,
     cash: input.cash,
-    liabilities: sumBy(
-      input.accounts.filter(
-        (account) =>
-          account.kind === "liability" && isPrimaryCurrency(account.currency),
-      ),
-      (account) => account.balance,
-    ),
+    liabilities: input.liabilities,
     runwayMonths:
       averageMonthlySpend && averageMonthlySpend > 0
         ? input.cash / averageMonthlySpend
         : undefined,
     averageMonthlySpend,
-    spendToDate: input.spendToDate,
     projectedSpend: input.projectedSpend,
     lastMonthSpend: lastMonth?.expenses,
     pace:

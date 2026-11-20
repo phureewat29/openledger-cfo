@@ -1,7 +1,13 @@
-import { sumBy } from "es-toolkit";
+import { groupBy, sumBy, union } from "es-toolkit";
 
-import { matchesPrefix } from "~/ledger/accounts";
+import { matchesPrefix, PRIMARY } from "~/ledger/accounts";
 import { monthsUntil, shiftDays } from "~/ledger/period";
+
+/** One entry of a goal or budget picker. */
+export interface PrefixOption {
+  readonly value: string;
+  readonly label: string;
+}
 
 /**
  * `no-date` is the absence of a deadline, not a pace: a goal nobody set a date
@@ -10,11 +16,7 @@ import { monthsUntil, shiftDays } from "~/ledger/period";
 export type PaceVerdict =
   "done" | "overdue" | "ahead" | "on-track" | "behind" | "no-date";
 
-/**
- * Money gathering toward a target, or a debt coming down to nothing. The two
- * read the prefix's balance in opposite directions, so every figure below is
- * stated as progress toward the target and the mode says which it was.
- */
+/** Saving reads a prefix's balance as progress, paying down as what is left: figures below are progress either way. */
 type GoalMode = "save" | "paydown";
 
 interface GoalFacts {
@@ -87,11 +89,8 @@ export interface PrefixFacts {
 /** What the window moved toward each account it touched, netted per account. */
 type NetMovement = ReadonlyMap<string, number>;
 
-/**
- * Every prefix reads the same window, so the rows are folded onto their accounts
- * once — each prefix then sums its own share of a set the size of the chart of accounts.
- */
-export const netMovement = (
+/** Folded onto accounts once, so each prefix sums a set the size of the chart of accounts. */
+const netMovement = (
   movements: readonly MovementRow[],
   today: string,
 ): NetMovement => {
@@ -109,12 +108,10 @@ export const netMovement = (
 };
 
 /**
- * A goal prefix's balance means opposite things by mode — assets hold
- * progress itself, a liability holds what is still owed. Parent accounts
- * carry zero balance (children hold the total), so a prefix sum is never
- * double-counted.
+ * Assets hold progress itself, a liability what is still owed. Parents carry
+ * zero balance, so a prefix sum is never double-counted.
  */
-export const prefixFacts = (
+const prefixFacts = (
   prefix: string,
   accounts: readonly BalanceRow[],
   movement: NetMovement,
@@ -136,6 +133,69 @@ export const prefixFacts = (
         : "save",
     perMonth: growth / (OBSERVATION_DAYS / DAYS_PER_MONTH),
   };
+};
+
+interface PrefixAccount extends BalanceRow {
+  readonly name: string;
+  readonly parent_id: string | null;
+}
+
+/** A group whose title-cased name repeats its only child's adds nothing; several children read "All X". */
+const groupLabel = (
+  groupName: string,
+  children: readonly { readonly name: string }[],
+): string | undefined => {
+  if (children.length === 1 && children[0]?.name === groupName) {
+    return undefined;
+  }
+  return children.length > 1 ? `All ${groupName}` : groupName;
+};
+
+/** Every asset leaf, plus each three-segment parent worth an "all of X" goal. */
+export const goalPrefixOptions = (
+  accounts: readonly PrefixAccount[],
+): PrefixOption[] => {
+  const childrenByParent = groupBy(accounts, (row) => row.parent_id ?? "");
+  const isAssetPrefix = (id: string) => {
+    if (!matchesPrefix(id, `${PRIMARY}:asset`)) return false;
+    const depth = id.split(":").length;
+    return depth === 4 || (depth === 3 && childrenByParent[id] !== undefined);
+  };
+
+  return accounts
+    .filter((row) => row.type === "asset" && isAssetPrefix(row.id))
+    .flatMap((row): PrefixOption[] => {
+      const isGroup = row.id.split(":").length === 3;
+      if (!isGroup) return [{ value: row.id, label: row.name }];
+      const label = groupLabel(row.name, childrenByParent[row.id] ?? []);
+      return label === undefined ? [] : [{ value: row.id, label }];
+    });
+};
+
+/**
+ * Facts for every prefix a goal can name, offered or already claimed: a goal
+ * on a debt names one the picker never offers. Adding a goal moves none of it.
+ */
+export const goalPrefixFacts = ({
+  options,
+  goals,
+  accounts,
+  movements,
+  asOf,
+}: {
+  readonly options: readonly PrefixOption[];
+  readonly goals: readonly { readonly accountPrefix: string }[];
+  readonly accounts: readonly BalanceRow[];
+  readonly movements: readonly MovementRow[];
+  readonly asOf: string;
+}): Record<string, PrefixFacts> => {
+  const movement = netMovement(movements, asOf);
+  return Object.fromEntries(
+    union(
+      options.map((option) => option.value),
+      goals.map((goal) => goal.accountPrefix),
+    ).map((prefix) => [prefix, prefixFacts(prefix, accounts, movement)]),
+  );
 };
 
 /** A goal whose prefix names nothing in the ledger has no progress to report. */
@@ -208,11 +268,7 @@ const computeGoal = (facts: GoalFacts, today: string): GoalProgress => {
   };
 };
 
-/**
- * Contributions are observed from where the ledger's data ends, which is what
- * `facts` was measured against; deadlines are real dates, so `today` decides
- * whether one has passed.
- */
+/** Pace is observed where the ledger ends, as `facts` was; deadlines are real dates, judged against `today`. */
 export const goalProgress = (
   goals: readonly GoalRow[],
   facts: Readonly<Record<string, PrefixFacts>>,

@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { sankey, sankeyLinkHorizontal } from "d3-sankey";
 import { compact, groupBy, identity, sortBy, sum } from "es-toolkit";
 
-import type { FlowGraph, NodeKind } from "~/flows/types";
+import type { FlowGraph, NodeKind } from "~/flows/flow";
 import type { ChartSize } from "~/lib/charts/frame";
 import type { TipRow } from "~/lib/charts/tooltip";
 import { quantize, useChartSize } from "~/lib/charts/frame";
@@ -13,12 +13,7 @@ import { formatPercent, formatThb, formatThbCompact } from "~/lib/format";
 
 const WIDTH = 960;
 const HEIGHT = 500;
-/**
- * The side margins are the label columns; a narrower margin clips names instead.
- * They hold at one width in both views: expanded, the labels shrink against the
- * viewBox faster than the gutter does, so the same gutter seats longer names
- * without the ribbons paying for it.
- */
+// The side margins are the label columns, one width in both views; narrower clips names.
 const MARGIN = { top: 26, right: 220, bottom: 14, left: 220 };
 const NODE_WIDTH = 14;
 const NODE_PADDING = 12;
@@ -28,11 +23,7 @@ const LABEL_GAP = 8;
 const HIT_WIDTH = 12;
 const HIT_HEIGHT = 16;
 
-/**
- * Labels hold near the app's own type size no matter how the viewBox scales:
- * the measured render scale is countered, then curved back in slightly so a
- * bigger diagram reads a touch bigger rather than proportionally bigger.
- */
+// Labels counter the render scale, then curve back so a bigger diagram reads a touch bigger.
 const TYPE_CURVE = 0.25;
 const BASE_NAME = 12;
 const BASE_VALUE = 10;
@@ -65,10 +56,7 @@ const ACCENT = "var(--color-accent)";
 const FOREGROUND = "var(--color-foreground)";
 const MUTED = "var(--color-muted-foreground)";
 
-/**
- * Colour marks the role a node plays — money in, money out, money kept — never
- * its rank. A rank-based highlight would repaint a different node mid-drag.
- */
+// Colour marks a node's role, never its rank: a rank highlight would repaint mid-drag.
 const NODE_FILL: Record<NodeKind, string> = {
   income: FOREGROUND,
   hub: FOREGROUND,
@@ -76,11 +64,7 @@ const NODE_FILL: Record<NodeKind, string> = {
   outcome: ACCENT,
 };
 
-/**
- * Neutral ribbons stay recessive so the accent "kept" flow reads first; on the
- * dark canvas the accent carries its own contrast and needs no outline. `dim`
- * is what everything the cursor did not pick falls back to.
- */
+// Neutral ribbons stay recessive so the accent "kept" flow reads first.
 const LINK_TONE: Record<
   NodeKind,
   { stroke: string; rest: number; lit: number }
@@ -92,13 +76,6 @@ const LINK_TONE: Record<
 };
 
 const DIM = 0.08;
-
-const LABEL_ANCHOR: Record<NodeKind, "start" | "middle" | "end"> = {
-  income: "end",
-  hub: "middle",
-  category: "start",
-  outcome: "start",
-};
 
 const LABEL_TONE: Record<NodeKind, string> = {
   income: "fill-foreground",
@@ -142,16 +119,13 @@ interface LabelledNode extends PlacedNode {
 
 interface Note {
   readonly id: string;
-  /** The glyph drawn beside the node, or a dot where the column drew none. */
+  /** The number drawn beside the node, or empty where it drew none. */
   readonly glyph: string;
   readonly label: string;
   readonly value: string;
 }
 
-/**
- * A node too crowded even for a number is listed with no prefix at all: the
- * app spends `·` joining clauses, so a dot here would read as a separator.
- */
+// No prefix for an unnumbered entry: a `·` would read as the app's clause separator.
 const UNMARKED = "";
 
 interface PlacedLink {
@@ -226,10 +200,8 @@ const markColumn = (
   ).marked;
 
 /**
- * Labels are placed greedily down each column: a node whose neighbour left it
- * room keeps its name, one that did not gets a number, and one with room for
- * neither is only listed. Everything that lost its name is listed either way,
- * so no figure is reachable by hover alone.
+ * Greedy down each column: room keeps the name, less gets a number, none only a
+ * listing. Everything that lost its name is listed, so nothing needs a hover.
  */
 const placeLabels = (
   nodes: readonly PlacedNode[],
@@ -336,15 +308,35 @@ const buildLayout = (graph: FlowGraph) => {
   return { nodes, links };
 };
 
-const labelX = (node: PlacedNode) => {
-  if (node.kind === "income") return node.x0 - LABEL_GAP;
-  if (node.kind === "hub") return (node.x0 + node.x1) / 2;
-  return node.x1 + LABEL_GAP;
+interface LabelPlace {
+  readonly x: (node: PlacedNode) => number;
+  readonly y: (node: PlacedNode) => number;
+  readonly textAnchor: "start" | "middle" | "end";
+  readonly dominantBaseline: "auto" | "middle";
+}
+
+const BESIDE_RIGHT: LabelPlace = {
+  x: (node) => node.x1 + LABEL_GAP,
+  y: centerOf,
+  textAnchor: "start",
+  dominantBaseline: "middle",
 };
 
-const labelY = (node: PlacedNode) => {
-  if (node.kind === "hub") return node.y0 - LABEL_GAP;
-  return centerOf(node);
+const LABEL_PLACE: Record<NodeKind, LabelPlace> = {
+  income: {
+    x: (node) => node.x0 - LABEL_GAP,
+    y: centerOf,
+    textAnchor: "end",
+    dominantBaseline: "middle",
+  },
+  hub: {
+    x: (node) => (node.x0 + node.x1) / 2,
+    y: (node) => node.y0 - LABEL_GAP,
+    textAnchor: "middle",
+    dominantBaseline: "auto",
+  },
+  category: BESIDE_RIGHT,
+  outcome: BESIDE_RIGHT,
 };
 
 function NodeLabel({
@@ -358,12 +350,12 @@ function NodeLabel({
 }) {
   if (node.mark === "none") return null;
 
+  const place = LABEL_PLACE[node.kind];
   const shared = {
-    x: labelX(node),
-    y: labelY(node),
-    textAnchor: LABEL_ANCHOR[node.kind],
-    dominantBaseline:
-      node.kind === "hub" ? ("auto" as const) : ("middle" as const),
+    x: place.x(node),
+    y: place.y(node),
+    textAnchor: place.textAnchor,
+    dominantBaseline: place.dominantBaseline,
   };
 
   if (node.mark === "marker") {
@@ -418,11 +410,7 @@ const scaleOf = (width: number, height: number) =>
   // `meet` fits to the smaller axis; quantizing stops per-pixel re-layouts.
   Math.max(Math.round(Math.min(width / WIDTH, height / HEIGHT) * 20) / 20, 0.2);
 
-/**
- * The legend's box, worked out from its text rather than measured: Geist Mono
- * gives Latin one fixed advance, and the fallback glyphs of a script it lacks
- * only approximate it. The list's own style is built from these numbers.
- */
+// The legend's box comes from its text (Geist Mono's fixed advance), not a measurement.
 const LEGEND = { size: 11, line: 16.5, gapX: 12, gapY: 2, padX: 8, top: 4 };
 
 const LEGEND_STYLE: React.CSSProperties = {
@@ -476,12 +464,8 @@ const legendOf = (note: string | undefined, notes: readonly Note[]) =>
   ]);
 
 /**
- * The legend shares the plot's column and lists what the scale left unlabelled,
- * so a scale read off the plot resizes the legend that sized the plot. It is
- * solved against the whole frame instead: from the server render's guess, each
- * step takes the scale the plot would measure beside the legend the last step
- * implied. A return to an earlier scale is a cycle with no fixed point; it
- * settles on the smallest, so labels err larger rather than smaller.
+ * The legend and the scale size each other, so each step takes the scale the plot
+ * would have beside the last step's legend; a cycle settles on its smallest scale.
  */
 export const fitScale = (
   frame: ChartSize,
@@ -549,8 +533,7 @@ export function Sankey({
     (id: string, kind: Hot["kind"]) => (event: React.PointerEvent) =>
       setHot({ id, kind, ...at(event.clientX, event.clientY) });
 
-  // Keyboard focus can land without a pointer ever entering, so there is no
-  // cached box to trust — measure directly instead.
+  // Focus can land without a pointer visit, so there is no cached box; measure.
   const focus = (id: string) => (event: React.FocusEvent<SVGRectElement>) => {
     const plot = ref.current?.getBoundingClientRect();
     const mark = event.currentTarget.getBoundingClientRect();
@@ -577,17 +560,16 @@ export function Sankey({
       ];
     }
     if (hotNode === undefined) return [];
-    const rows: TipRow[] = [
+    const hasShare =
+      hotNode.kind === "category" && hub !== undefined && hub.total > 0;
+    return compact([
       { key: "total", label: "per month", value: formatThb(hotNode.total) },
-    ];
-    if (hotNode.kind === "category" && hub !== undefined && hub.total > 0) {
-      rows.push({
+      hasShare && {
         key: "share",
         label: `of ${hub.label.toLowerCase()}`,
         value: formatPercent(hotNode.total / hub.total),
-      });
-    }
-    return rows;
+      },
+    ]);
   };
 
   return (
@@ -627,8 +609,7 @@ export function Sankey({
             ))}
           </g>
 
-          {/* A hairline ribbon is unhittable; the twin gives every one of them
-              the same reach without widening what is drawn. */}
+          {/* A transparent twin gives every hairline ribbon the same reach. */}
           <g
             fill="none"
             stroke="transparent"
@@ -683,8 +664,7 @@ export function Sankey({
             })}
           </g>
 
-          {/* The hit rects above already carry every label as their accessible
-              name, and they are what a pointer and a tab both land on. */}
+          {/* The hit rects above already carry every label as their accessible name. */}
           <g aria-hidden pointerEvents="none">
             {labelled.map((node) => (
               <NodeLabel
@@ -715,7 +695,7 @@ export function Sankey({
           {note === undefined ? null : <li>{note}</li>}
           {notes.map((item) => (
             <li key={item.id}>
-              {item.glyph === "" ? null : (
+              {item.glyph === UNMARKED ? null : (
                 <span className="text-foreground">{item.glyph} </span>
               )}
               {item.label} <span className="text-foreground">{item.value}</span>

@@ -1,3 +1,5 @@
+import { orderBy, sumBy } from "es-toolkit";
+
 /** One sample of a series. `x` is already the label its axis prints. */
 export interface Point {
   readonly x: string;
@@ -17,32 +19,38 @@ export interface CategoryTotal {
   readonly value: number;
 }
 
-/**
- * What kind of story an account has to tell. One declaration, so the header
- * cells and the charts can never drift into disagreeing about the taxonomy.
- */
-export type AccountKind = "card" | "loan" | "cash" | "position" | "basic";
+/** Largest first; past `limit` the tail folds into one "Other" row. */
+export const foldTail = (
+  rows: readonly CategoryTotal[],
+  limit: number,
+): CategoryTotal[] => {
+  const ranked = orderBy(
+    rows.filter((row) => row.value > 0),
+    [(row) => row.value],
+    ["desc"],
+  );
+  const rest = ranked.slice(limit);
+  if (rest.length === 0) return ranked;
+  return [
+    ...ranked.slice(0, limit),
+    { key: "other", label: "Other", value: sumBy(rest, (row) => row.value) },
+  ];
+};
 
-/** What each kind of account is worth plotting. */
-export type AccountSeries =
-  | {
-      readonly kind: "card";
-      readonly months: readonly string[];
-      readonly categories: readonly BarSeries[];
-      readonly cycle: readonly CategoryTotal[];
-    }
-  | {
-      readonly kind: "loan";
-      readonly months: readonly string[];
-      readonly principal: readonly number[];
-      readonly interest: readonly number[];
-      readonly balance: readonly Point[];
-    }
-  | { readonly kind: "cash"; readonly balance: readonly Point[] }
-  | {
-      readonly kind: "position";
-      readonly basis: readonly Point[];
-      /** Indices into `basis` whose month the position was bought in. */
-      readonly buyPoints: readonly number[];
-    }
-  | { readonly kind: "basic" };
+/**
+ * A series sampled on a fixed grid still yields every point for a dormant
+ * account, all at one level: nothing to plot, which a caller must know first.
+ */
+export const hasMovement = (points: readonly Point[]): boolean =>
+  points.some((point) => point.y !== points[0]?.y);
+
+/** The span a flat series is lent, having none of its own to be drawn against. */
+const MIN_SPAN = 1;
+
+/** A series too flat to fill MIN_SPAN is lent the shortfall evenly at both ends. */
+export const paddedDomain = (bottom: number, top: number) => {
+  const raw = top - bottom;
+  const span = Math.max(raw, MIN_SPAN);
+  const pad = (span - raw) / 2;
+  return { low: bottom - pad, high: top + pad };
+};

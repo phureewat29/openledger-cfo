@@ -99,11 +99,7 @@ export function RemindersPane({
   const [monthly, setMonthly] = useState(false);
   const [added, setAdded] = useState<string | undefined>(undefined);
 
-  /**
-   * Only the reminders are re-read after a write. Statement days, installments
-   * and subscriptions are read off postings, so nothing this form does can
-   * move them — they arrive once and the list re-merges around them.
-   */
+  // Only the reminders are re-read after a write; the ledger's due dates cannot move.
   const list = useQuery(
     trpc.reminders.list.queryOptions(undefined, { initialData: rows }),
   );
@@ -118,8 +114,7 @@ export function RemindersPane({
   const complete = useMutation(trpc.reminders.complete.mutationOptions(reread));
   const remove = useMutation(trpc.reminders.remove.mutationOptions(reread));
   const items = mergeUpcoming(ledger, list.data, today);
-  // Scoped to the row whose reminder is actually in flight, so completing or
-  // removing one reminder never dims its siblings.
+  // Scoped to the reminder in flight, so no other row dims.
   const busyId =
     (complete.isPending ? complete.variables.id : undefined) ??
     (remove.isPending ? remove.variables.id : undefined);
@@ -184,8 +179,6 @@ export function RemindersPane({
         )}
       </div>
 
-      {/* A saved reminder past the horizon never lists, so the added note is
-          its only proof — the form stays open to show it. */}
       <PlanForm
         label="Add reminder"
         open={adding}

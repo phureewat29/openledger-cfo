@@ -1,6 +1,6 @@
-import { groupBy, orderBy, sumBy } from "es-toolkit";
+import { groupBy, maxBy, orderBy, sum, sumBy } from "es-toolkit";
 
-import type { RouterOutputs } from "@openledger-cfo/api";
+import type { Status } from "@openledger-cfo/openledger";
 
 import type {
   AccountSummary,
@@ -16,8 +16,20 @@ import type {
 } from "./types";
 import type { AccountRow } from "~/ledger/accounts";
 import type { Posting, TransactionRow } from "~/ledger/postings";
-import { COMMITTED_GROUPS, LIQUID_GROUPS, PRIMARY } from "~/ledger/accounts";
-import { interestAccountFor, interestPaidFor } from "~/ledger/loans";
+import {
+  accountKindOf,
+  accountLabel,
+  balanceSheetOf,
+  COMMITTED_GROUPS,
+  leavesOf,
+  PRIMARY,
+  segmentOf,
+} from "~/ledger/accounts";
+import {
+  interestAccountFor,
+  interestPaidFor,
+  isClosedLoan,
+} from "~/ledger/loans";
 import {
   clampDay,
   dayOf,
@@ -29,30 +41,26 @@ import {
   monthsUntil,
   windowOf,
 } from "~/ledger/period";
-import {
-  average,
-  inMonth,
-  median,
-  segmentOf,
-  toPostings,
-  total,
-  upToDay,
-} from "~/ledger/postings";
-import { accountLabel } from "~/lib/format";
+import { median, toPostings } from "~/ledger/postings";
 
-type LedgerStatus = RouterOutputs["ledger"]["status"];
+const total = (postings: readonly Posting[]) =>
+  sumBy(postings, (posting) => posting.signed);
+
+const inMonth = (postings: readonly Posting[], month: string) =>
+  postings.filter((posting) => posting.month === month);
+
+const upToDay = (postings: readonly Posting[], day: number) =>
+  postings.filter((posting) => posting.day <= day);
+
+const average = (values: readonly number[]) =>
+  values.length === 0 ? 0 : sum(values) / values.length;
 
 interface LedgerSnapshot {
   /** Wall clock, for deadlines and anything the reader experiences as "now". */
   readonly today: string;
-  /**
-   * The date the ledger's own story ends — `today` for a ledger kept current,
-   * earlier for one that is not. Every trailing window is measured from here,
-   * so a ledger last touched months ago still reports its final real month
-   * instead of a page of zeroes.
-   */
+  /** Where the ledger's story ends; trailing windows end here, so a stale ledger still reports its last real month. */
   readonly asOf: string;
-  readonly status: LedgerStatus;
+  readonly status: Status;
   readonly accounts: readonly AccountRow[];
   /** A trailing window wide enough for month-over-month and 12-month figures. */
   readonly transactions: readonly TransactionRow[];
@@ -75,13 +83,8 @@ const toSpendLine = (posting: Posting): SpendLine => ({
 });
 
 const toSummary = (row: AccountRow): AccountSummary => ({
-  id: row.id,
   name: row.name,
-  kind: row.type,
-  currency: row.currency,
   balance: row.balance,
-  debitsPosted: row.debits_posted,
-  creditsPosted: row.credits_posted,
 });
 
 const recurringLines = (postings: readonly Posting[]): RecurringLine[] => {
@@ -102,11 +105,8 @@ const recurringLines = (postings: readonly Posting[]): RecurringLine[] => {
 const FOREIGN = "usd";
 
 /**
- * The ledger stores no exchange rate. The two legs of a conversion group do
- * imply one, so the most recent pair is the only rate this app will quote.
- * Every instrument keeps a conversion account in its own unit head, so the
- * other side has to be named rather than taken as whatever is not baht: a share
- * count against a cost is a price, not a rate.
+ * The newest conversion group's two legs imply the only rate this app quotes. The
+ * foreign side is named: a unit head's conversion leg is a share price, not a rate.
  */
 const toFxPosition = (
   rows: readonly TransactionRow[],
@@ -145,7 +145,8 @@ const selectFx = (
 };
 
 export const selectRuleInput = (snapshot: LedgerSnapshot): RuleInput => {
-  const { today, asOf, status, accounts, transactions } = snapshot;
+  const { today, asOf, status, accounts, transactions, closedLoanHistory } =
+    snapshot;
   const month = monthOf(asOf);
   const dayOfMonth = dayOf(asOf);
 
@@ -257,43 +258,27 @@ export const selectRuleInput = (snapshot: LedgerSnapshot): RuleInput => {
     .slice(0, DISCRETIONARY_LIMIT)
     .map(toSpendLine);
 
-  const paydayDays = completeMonths
-    .map((key) => {
-      const earners = orderBy(
-        inMonth(income, key).filter((posting) => posting.signed > 0),
-        [(posting) => posting.amount],
-        ["desc"],
-      );
-      return earners[0]?.day;
-    })
-    .filter((day): day is number => day !== undefined);
+  const paydayDays = completeMonths.flatMap((key) => {
+    const earner = maxBy(
+      inMonth(income, key).filter((posting) => posting.signed > 0),
+      (posting) => posting.amount,
+    );
+    return earner === undefined ? [] : [earner.day];
+  });
   const incomeToDate = total(inMonth(income, month));
 
-  const parentIds = new Set(
-    accounts
-      .map((row) => row.parent_id)
-      .filter((id): id is string => id !== null),
+  const leaves = leavesOf(accounts).filter((row) =>
+    row.id.startsWith(`${PRIMARY}:`),
   );
-  const leaves = accounts.filter(
-    (row) => !parentIds.has(row.id) && row.id.startsWith(`${PRIMARY}:`),
-  );
-  const cashRows = leaves.filter(
-    (row) => row.type === "asset" && LIQUID_GROUPS.has(segmentOf(row.id, 2)),
-  );
-  const settlementRow = orderBy(
+  const cashRows = leaves.filter((row) => accountKindOf(row) === "cash");
+  const settlementRow = maxBy(
     cashRows.filter((row) => segmentOf(row.id, 2) === "bank"),
-    [(row) => row.credits_posted],
-    ["desc"],
-  )[0];
-
-  const loanRows = leaves.filter(
-    (row) => row.type === "liability" && segmentOf(row.id, 2) === "loan",
+    (row) => row.credits_posted,
   );
-  const mortgageRow = orderBy(
-    loanRows.filter((row) => row.balance > 0),
-    [(row) => row.balance],
-    ["desc"],
-  )[0];
+  const mortgageRow = maxBy(
+    leaves.filter((row) => accountKindOf(row) === "loan" && row.balance > 0),
+    (row) => row.balance,
+  );
 
   const paidIn = (accountId: string, key: string) =>
     sumBy(
@@ -326,7 +311,6 @@ export const selectRuleInput = (snapshot: LedgerSnapshot): RuleInput => {
     const priorInterest = previous ? interestIn(previous) : monthlyInterest;
     return {
       id: row.id,
-      name: row.name,
       balance: row.balance,
       principalPaid: row.debits_posted,
       original: row.credits_posted,
@@ -336,28 +320,29 @@ export const selectRuleInput = (snapshot: LedgerSnapshot): RuleInput => {
     };
   };
 
-  const closedLoans = loanRows
-    .filter((row) => row.balance <= 0 && row.credits_posted > 0)
-    .map((row): ClosedLoan | undefined => {
-      const history = snapshot.closedLoanHistory.filter(
+  const closedLoans = leaves
+    .filter(isClosedLoan)
+    .flatMap((row): ClosedLoan[] => {
+      const history = closedLoanHistory.filter(
         (entry) =>
           entry.debit_account_id === row.id ||
           entry.credit_account_id === row.id,
       );
       const closedOn = latestOf(history.map((entry) => entry.date));
-      if (closedOn === undefined) return undefined;
+      if (closedOn === undefined) return [];
       const payments = history
         .filter((entry) => entry.debit_account_id === row.id)
         .map((entry) => entry.amount);
-      return {
-        id: row.id,
-        name: row.name,
-        closedOn,
-        typicalPayment: median(payments) ?? 0,
-        monthsSinceClosed: monthsUntil(closedOn, asOf),
-      };
-    })
-    .filter((loan): loan is ClosedLoan => loan !== undefined);
+      return [
+        {
+          id: row.id,
+          name: row.name,
+          closedOn,
+          typicalPayment: median(payments) ?? 0,
+          monthsSinceClosed: monthsUntil(closedOn, asOf),
+        },
+      ];
+    });
 
   const cash = sumBy(cashRows, (row) => row.balance);
   const interestIncome = total(
@@ -366,21 +351,16 @@ export const selectRuleInput = (snapshot: LedgerSnapshot): RuleInput => {
         posting.group === "interest" && completeMonths.includes(posting.month),
     ),
   );
-  const netWorth = status.net_worth;
-
   return {
     today,
     asOf,
     month,
     dayOfMonth,
     daysInMonth: daysInMonth(month),
-    netWorthThb: netWorth?.net_worth.THB ?? 0,
-    netWorthUsd: netWorth?.net_worth.USD ?? 0,
-    accounts: leaves.map(toSummary),
+    ...balanceSheetOf(status, leaves),
     months,
     currentMonth,
     spendToDate,
-    priorSpendToDateAvg,
     projectedSpend,
     categories,
     subscriptions,
@@ -398,12 +378,7 @@ export const selectRuleInput = (snapshot: LedgerSnapshot): RuleInput => {
       ),
       (row) => row.balance,
     ),
-    cards: leaves
-      .filter(
-        (row) =>
-          row.type === "liability" && segmentOf(row.id, 2) === "credit_card",
-      )
-      .map(toSummary),
+    cards: leaves.filter((row) => accountKindOf(row) === "card").map(toSummary),
     settlement: settlementRow ? toSummary(settlementRow) : undefined,
     mortgage: mortgageRow ? toMortgage(mortgageRow) : undefined,
     closedLoans,

@@ -1,9 +1,5 @@
-/**
- * Calendar helpers over ISO date strings (`YYYY-MM-DD`) and month keys
- * (`YYYY-MM`). Everything runs in UTC arithmetic so a server in any timezone
- * derives the same month boundaries; only "what day is it" needs a timezone,
- * and that belongs to the ledger rather than to this app.
- */
+// UTC arithmetic over `YYYY-MM-DD` and `YYYY-MM`, so any server derives the same months;
+// only "what day is it" needs a timezone, and the ledger's `isoToday` owns it.
 
 export { isoToday } from "@openledger-cfo/openledger/calendar";
 
@@ -85,10 +81,8 @@ const WINDOW_MONTHS = 12;
 export const MONTHS_PER_YEAR = 12;
 
 /**
- * The trailing whole months before `asOf`'s own month, and the dates that
- * bracket them. The month `asOf` falls in is deliberately excluded: a ledger
- * read on the 10th would otherwise average a third of a month in with twelve
- * full ones. Every trailing figure in the app is measured over this.
+ * The whole months before `asOf`'s own, which every trailing figure is measured over;
+ * a part month would drag an average of twelve full ones.
  */
 export const windowOf = (
   asOf: string,
@@ -101,11 +95,7 @@ export const windowOf = (
   };
 };
 
-/**
- * The same span counted through `asOf`'s own month. A column of totals is not
- * distorted by a part month the way an average is, so a chart of them runs to
- * the present rather than stopping a month short of the postings beside it.
- */
+/** The same span through `asOf`'s own month: a part month distorts an average, not a column of totals. */
 export const monthsThrough = (asOf: string): readonly string[] => {
   const month = monthOf(asOf);
   return [...monthsBefore(month, WINDOW_MONTHS - 1), month];

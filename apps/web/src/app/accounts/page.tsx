@@ -2,15 +2,6 @@ import type { Metadata } from "next";
 
 import { CompositionStrip } from "~/accounts/composition-strip";
 import {
-  BanksPane,
-  CardsPane,
-  InvestmentsPane,
-  LoansPane,
-} from "~/accounts/group-panes";
-import { splitPortfolio } from "~/accounts/portfolio";
-import { Breadcrumbs } from "~/app/_components/breadcrumbs";
-import { SetupCard } from "~/app/_components/setup-card";
-import {
   ACCOUNTS_GRID,
   GROUP_COL,
   GROUP_HALF,
@@ -18,9 +9,17 @@ import {
   STRIP_ROW,
   TOTALS_CELL,
   TOTALS_ROW,
-} from "~/app/accounts/grid";
-import { loadDashboard } from "~/dashboard/load";
-import { headlineOf } from "~/insights/headline";
+} from "~/accounts/grid";
+import {
+  BanksPane,
+  CardsPane,
+  InvestmentsPane,
+  LoansPane,
+} from "~/accounts/group-panes";
+import { loadPortfolio } from "~/accounts/load";
+import { splitPortfolio } from "~/accounts/portfolio";
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
+import { SetupCard } from "~/app/_components/setup-card";
 import { formatThb } from "~/lib/format";
 
 export const metadata: Metadata = { title: "Accounts · OpenLedger CFO" };
@@ -40,18 +39,17 @@ function Total({ label, value }: { label: string; value: string }) {
 }
 
 export default async function AccountsPage() {
-  const loaded = await loadDashboard();
+  const loaded = await loadPortfolio();
   if (!loaded.ok) {
     return (
       <SetupCard reason={loaded.error.reason} message={loaded.error.message} />
     );
   }
 
-  const dashboard = loaded.value;
-  const portfolio = splitPortfolio(dashboard.accounts);
-  const headline = headlineOf(dashboard.input);
-  const net = headline.netWorthThb;
-  const owed = headline.liabilities;
+  const view = loaded.value;
+  const portfolio = splitPortfolio(view.accounts);
+  const net = view.netWorthThb;
+  const owed = view.liabilities;
 
   return (
     <div className="flex min-h-full flex-col @4xl/main:h-full">
@@ -68,8 +66,8 @@ export default async function AccountsPage() {
 
         <BanksPane
           rows={portfolio.banks}
-          activity={dashboard.activity}
-          sparks={dashboard.sparks}
+          activity={view.activity}
+          sparks={view.sparks}
           className={GROUP_HALF}
         />
         <CardsPane rows={portfolio.cards} className={GROUP_HALF} />

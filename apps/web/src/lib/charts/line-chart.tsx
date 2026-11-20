@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { extent } from "d3-array";
 import { scaleLinear, scalePoint } from "d3-scale";
 import {
@@ -9,14 +9,14 @@ import {
   area as toArea,
   line as toLine,
 } from "d3-shape";
-import { range } from "es-toolkit";
+import { clamp, compact, range } from "es-toolkit";
+
+import { cn } from "@openledger-cfo/ui";
 
 import type { Point } from "~/lib/charts/data";
 import type { ChartSize } from "~/lib/charts/frame";
-import type { SnapHandlers } from "~/lib/charts/hover";
-import { hasMovement, paddedDomain } from "~/ledger/history";
+import { hasMovement, paddedDomain } from "~/lib/charts/data";
 import { ChartFrame } from "~/lib/charts/frame";
-import { ChartReadout, CrosshairLayer, useSnapIndex } from "~/lib/charts/hover";
 import { compactOf } from "~/lib/format";
 
 /**
@@ -33,11 +33,7 @@ const EXPANDED_LABELS = 12;
 const NO_MARKS: readonly number[] = [];
 const NO_PROJECTION: readonly Point[] = [];
 
-/**
- * One authority for where sample `i` sits. The plot asks in pixels and the
- * axis in percent, which is what lets the type render before anything is
- * measured.
- */
+// One authority for where sample `i` sits: the plot asks in pixels, the axis in percent.
 const pointScale = (count: number, width: number) =>
   scalePoint<number>().domain(range(count)).range([0, width]);
 
@@ -67,6 +63,132 @@ const anchorOf = (at: number, total: number) => {
   return "translateX(-50%)";
 };
 
+/** Arrow keys walk the same samples the pointer snaps to. */
+const STEP: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1 };
+
+// Snaps to the nearest sample; the box is read once per pointer visit, never per move.
+const useSnapIndex = (count: number) => {
+  const [index, setIndex] = useState<number | null>(null);
+  const box = useRef<DOMRect | null>(null);
+  const clientX = useRef(0);
+  const frame = useRef(0);
+
+  const snap = () => {
+    frame.current = 0;
+    const rect = box.current;
+    if (rect === null || rect.width === 0) return;
+    const share = (clientX.current - rect.left) / rect.width;
+    setIndex(clamp(Math.round(share * (count - 1)), 0, count - 1));
+  };
+
+  const cancel = () => {
+    cancelAnimationFrame(frame.current);
+    frame.current = 0;
+  };
+
+  const handlers = {
+    onPointerEnter: (event: React.PointerEvent<HTMLElement>) => {
+      box.current = event.currentTarget.getBoundingClientRect();
+    },
+    onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
+      // Not `??=`: the React Compiler skips any hook that uses it.
+      const rect = box.current ?? event.currentTarget.getBoundingClientRect();
+      box.current = rect;
+      clientX.current = event.clientX;
+      if (frame.current === 0) frame.current = requestAnimationFrame(snap);
+    },
+    onPointerLeave: () => {
+      cancel();
+      box.current = null;
+      setIndex(null);
+    },
+    onFocus: () => setIndex(count - 1),
+    onBlur: () => {
+      cancel();
+      setIndex(null);
+    },
+    onKeyDown: (event: React.KeyboardEvent) => {
+      // Escape only belongs to the chart while it has something to clear;
+      // otherwise it is the enclosing dialog's to act on.
+      if (event.key === "Escape") {
+        if (index === null) return;
+        event.preventDefault();
+        setIndex(null);
+        return;
+      }
+      const step = STEP[event.key];
+      if (step === undefined) return;
+      event.preventDefault();
+      setIndex((current) => clamp((current ?? count - 1) + step, 0, count - 1));
+    },
+  };
+
+  return { index, handlers };
+};
+
+type SnapHandlers = ReturnType<typeof useSnapIndex>["handlers"];
+
+// HTML over the plot, not SVG marks: a stretched viewBox would flatten the dot.
+function CrosshairLayer({
+  x,
+  y,
+  accent = false,
+  rule = true,
+}: {
+  x: number;
+  y: number;
+  accent?: boolean;
+  /** The dot marks where the series ends even at rest; the rule is the cursor. */
+  rule?: boolean;
+}) {
+  return (
+    <>
+      {rule ? (
+        <span
+          aria-hidden
+          className="bg-border absolute inset-y-0 w-px"
+          style={{ left: x }}
+        />
+      ) : null}
+      <span
+        aria-hidden
+        className={cn(
+          "ring-card absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2",
+          accent ? "bg-accent" : "bg-foreground",
+        )}
+        style={{ left: x, top: y }}
+      />
+    </>
+  );
+}
+
+interface ReadoutRow {
+  readonly key: string;
+  readonly value: string;
+}
+
+// Every figure the cursor reaches also lands here, clear of the plot.
+function ChartReadout({
+  x,
+  rows,
+}: {
+  x: string | undefined;
+  rows: readonly ReadoutRow[];
+}) {
+  return (
+    <div className="flex h-4 shrink-0 items-baseline justify-end gap-2 text-[11px] tabular-nums">
+      {x === undefined ? null : (
+        <span className="text-muted-foreground mr-auto text-[10px]">{x}</span>
+      )}
+      {rows.map((row) => (
+        <span key={row.key} className="flex items-baseline gap-1">
+          {row.value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 interface Plotted {
   readonly points: readonly Point[];
   readonly projection: readonly Point[];
@@ -75,6 +197,9 @@ interface Plotted {
   readonly accent: boolean;
   readonly marks: readonly number[];
   readonly ticks: number;
+  readonly low: number;
+  readonly high: number;
+  readonly crossesZero: boolean;
 }
 
 function Plot({
@@ -89,23 +214,29 @@ function Plot({
   handlers: SnapHandlers;
 }) {
   const { w, h } = size;
-  const { points, projection, step, area, accent, marks, ticks } = plotted;
+  const {
+    points,
+    projection,
+    step,
+    area,
+    accent,
+    marks,
+    ticks,
+    low,
+    high,
+    crossesZero,
+  } = plotted;
 
   // Keyed on the data and the box alone, so a pointer move, a focus or a poll
   // can never reach the layout.
   const geometry = useMemo(() => {
-    const { top, bottom } = extremesOf(points, projection);
-    const { low, high } = paddedDomain(bottom, top);
-    // No `.nice()`: the axis beside it prints this domain rather than round
-    // numbers of its own, so there is nothing for a rounded one to line up with.
+    // No `.nice()`: the axis prints this exact domain, so rounding has nothing to line up with.
     const yOf = scaleLinear()
       .domain([low, high])
       .range([h - INSET, INSET]);
     const x = pointScale(points.length + projection.length, w);
     const xOf = (at: number) => x(at) ?? 0;
     const curve = step ? curveStepAfter : curveLinear;
-    // A series that crosses zero is measured against zero, not against its floor.
-    const crossesZero = bottom < 0 && top > 0;
     const base = crossesZero ? yOf(0) : h - INSET;
 
     const linePath = toLine<Point>()
@@ -126,12 +257,11 @@ function Plot({
       xOf,
       yOf,
       base,
-      crossesZero,
       line: linePath(points) ?? "",
       area: areaPath(points) ?? "",
       tail: last === undefined ? "" : (tailPath([last, ...projection]) ?? ""),
     };
-  }, [points, projection, step, w, h]);
+  }, [points, projection, step, w, h, low, high, crossesZero]);
 
   const marked = index ?? points.length - 1;
   const point = points[marked];
@@ -160,7 +290,7 @@ function Plot({
             />
           );
         })}
-        {geometry.crossesZero ? (
+        {crossesZero ? (
           <line
             x1={0}
             x2={w}
@@ -271,6 +401,8 @@ export function LineChart({
 
   const { top, bottom } = extremesOf(points, projection);
   const { low, high } = paddedDomain(bottom, top);
+  // A series that crosses zero is measured against zero, not against its floor.
+  const crossesZero = bottom < 0 && top > 0;
   const ticks = expanded ? EXPANDED_TICKS : TICKS;
   const marked = hover.index ?? points.length - 1;
   const point = points[marked];
@@ -291,12 +423,12 @@ export function LineChart({
           </p>
           <ChartReadout
             x={point?.x}
-            rows={[
-              ...(point === undefined
-                ? []
-                : [{ key: "value", value: format(point.y) }]),
-              ...(marks.includes(marked) ? [{ key: "buy", value: "buy" }] : []),
-            ]}
+            rows={compact([
+              point === undefined
+                ? undefined
+                : { key: "value", value: format(point.y) },
+              marks.includes(marked) ? { key: "buy", value: "buy" } : undefined,
+            ])}
           />
         </>
       }
@@ -328,7 +460,18 @@ export function LineChart({
       plot={(size) => (
         <Plot
           size={size}
-          plotted={{ points, projection, step, area, accent, marks, ticks }}
+          plotted={{
+            points,
+            projection,
+            step,
+            area,
+            accent,
+            marks,
+            ticks,
+            low,
+            high,
+            crossesZero,
+          }}
           index={hover.index}
           handlers={hover.handlers}
         />

@@ -2,14 +2,20 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { compact } from "es-toolkit";
 
 import type { RouterOutputs } from "@openledger-cfo/api";
 import { cn } from "@openledger-cfo/ui";
 import { Input, Select } from "@openledger-cfo/ui/input";
 import { Pane } from "@openledger-cfo/ui/pane";
 
-import type { PrefixOption } from "~/dashboard/load";
-import type { GoalProgress, PaceVerdict, PrefixFacts } from "~/plan/goals";
+import type { TipRow } from "~/lib/charts/tooltip";
+import type {
+  GoalProgress,
+  PaceVerdict,
+  PrefixFacts,
+  PrefixOption,
+} from "~/plan/goals";
 import { ChartTip } from "~/lib/charts/tooltip";
 import { formatPercent, formatThb, formatThbCompact } from "~/lib/format";
 import { Field } from "~/lib/ui/field";
@@ -50,55 +56,45 @@ const paceLine = (goal: GoalProgress) => {
       ? "Cleared — nothing left to repay."
       : "Funded — point the money elsewhere.";
   }
-  const need =
+  return compact([
     goal.requiredPerMonth === undefined
-      ? []
-      : [`needs ${formatThbCompact(goal.requiredPerMonth)}/mo`];
-  const eta =
-    goal.etaMonths === undefined ? [] : [`≈ ${formatEta(goal.etaMonths)}`];
-  return [
-    ...need,
+      ? undefined
+      : `needs ${formatThbCompact(goal.requiredPerMonth)}/mo`,
     `${movementVerb(goal.mode)} ${formatThbCompact(goal.observedPerMonth)}/mo`,
-    ...eta,
-  ].join(" · ");
+    goal.etaMonths === undefined ? undefined : `≈ ${formatEta(goal.etaMonths)}`,
+  ]).join(" · ");
 };
 
-/**
- * The pace line has to fit one truncated row; the tip is the same facts with
- * room to keep each figure beside its own name.
- */
-const paceRows = (goal: GoalProgress) => [
-  {
-    key: "current",
-    label: "held",
-    value: formatThb(goal.current),
-    note: formatPercent(goal.progress),
-  },
-  { key: "target", label: "target", value: formatThb(goal.targetAmount) },
-  {
-    key: "observed",
-    label: `${movementVerb(goal.mode)} per month`,
-    value: formatThb(goal.observedPerMonth),
-  },
-  ...(goal.requiredPerMonth === undefined
-    ? []
-    : [
-        {
+// The pace line's facts again, each figure beside its own name.
+const paceRows = (goal: GoalProgress): TipRow[] =>
+  compact([
+    {
+      key: "current",
+      label: "held",
+      value: formatThb(goal.current),
+      note: formatPercent(goal.progress),
+    },
+    { key: "target", label: "target", value: formatThb(goal.targetAmount) },
+    {
+      key: "observed",
+      label: `${movementVerb(goal.mode)} per month`,
+      value: formatThb(goal.observedPerMonth),
+    },
+    goal.requiredPerMonth === undefined
+      ? undefined
+      : {
           key: "required",
           label: "needs per month",
           value: formatThb(goal.requiredPerMonth),
         },
-      ]),
-  ...(goal.etaMonths === undefined
-    ? []
-    : [
-        {
+    goal.etaMonths === undefined
+      ? undefined
+      : {
           key: "eta",
           label: "at this pace",
           value: formatEta(goal.etaMonths),
         },
-      ]),
-];
+  ]);
 
 function Row({
   goal,
@@ -177,11 +173,7 @@ export function GoalsPane({
   const [date, setDate] = useState("");
   const [prefix, setPrefix] = useState(prefixOptions[0]?.value ?? "");
 
-  /**
-   * Only the goals themselves are re-read after a write. What each prefix
-   * holds and how fast it moves are ledger figures no goal can change, so
-   * they arrive once with the page and every row re-derives against them.
-   */
+  // Only the goals are re-read after a write; the ledger figures they derive from cannot move.
   const list = useQuery(
     trpc.goals.list.queryOptions(undefined, { initialData: rows }),
   );
@@ -193,8 +185,7 @@ export function GoalsPane({
   const create = useMutation(trpc.goals.create.mutationOptions(reread));
   const remove = useMutation(trpc.goals.remove.mutationOptions(reread));
   const goals = goalProgress(list.data, facts, today);
-  // Scoped to the goal actually being removed, so adding a goal or removing
-  // a sibling never dims a row the user did not touch.
+  // Scoped to the goal being removed, so no other row dims.
   const removingId = remove.isPending ? remove.variables.id : undefined;
   const error = create.error ?? remove.error;
 

@@ -24,21 +24,19 @@ import {
 const FIGURE = "text-[20px] leading-6 font-medium tabular-nums";
 const HERO = "text-[28px] leading-8 font-medium";
 
-/**
- * A month-to-date net that looks alarming is usually just a month whose salary
- * has not posted yet, so the hint says which of the two it is.
- */
+// An alarming month-to-date net is usually a salary not yet posted; the hint says which.
 const paydayHint = (dashboard: Dashboard) => {
   const { payday, dayOfMonth } = dashboard.input;
   if (payday.landed) return `${formatThb(payday.incomeToDate)} in so far`;
-  if (payday.typicalDay === undefined) return "no income posted yet";
-  if (payday.typicalDay <= dayOfMonth) return "no income posted yet";
+  if (payday.typicalDay === undefined || payday.typicalDay <= dayOfMonth) {
+    return "no income posted yet";
+  }
   return `payday lands day ${payday.typicalDay}`;
 };
 
-const paceHint = (projected: number, lastMonth: number | undefined) => {
-  if (lastMonth === undefined || lastMonth <= 0) return "no month to compare";
-  const change = projected / lastMonth - 1;
+const paceHint = (pace: number | undefined) => {
+  if (pace === undefined) return "no month to compare";
+  const change = pace - 1;
   return `${formatPercent(Math.abs(change))} ${change >= 0 ? "above" : "below"} last month`;
 };
 
@@ -175,7 +173,7 @@ export function Vitals({
         <Cell
           label="Projected spend"
           value={formatThb(headline.projectedSpend)}
-          hint={paceHint(headline.projectedSpend, headline.lastMonthSpend)}
+          hint={paceHint(headline.pace)}
         />
         <Cell
           label="Owed"

@@ -1,10 +1,15 @@
-import { sumBy } from "es-toolkit";
+import { attemptAsync, sumBy } from "es-toolkit";
+
+import { caller } from "@openledger-cfo/api";
 
 import type { Dashboard } from "~/dashboard/load";
 import type { Insight } from "~/insights/types";
 import type { GoalProgress } from "~/plan/goals";
-import { loadAccount } from "~/accounts/account";
+import { loadAccount } from "~/accounts/load";
 import { headlineOf } from "~/insights/headline";
+import { insightsFrom } from "~/insights/load";
+import { ledgerWindow } from "~/ledger/load";
+import { isStale } from "~/ledger/period";
 import {
   formatDay,
   formatMonth,
@@ -15,6 +20,10 @@ import {
   moneyOf,
 } from "~/lib/format";
 import { goalProgress, movementVerb } from "~/plan/goals";
+import { planFrom } from "~/plan/load";
+
+/** All the briefing quotes of the Everything page's read model. */
+type Facts = Pick<Dashboard, "today" | "stale" | "input" | "insights">;
 
 const MAX_BRIEFED_INSIGHTS = 8;
 
@@ -48,22 +57,27 @@ const briefGoal = (goal: GoalProgress) => {
   return `- ${goal.name}: ${formatThb(goal.current)} of ${formatThb(goal.targetAmount)} (${formatPercent(goal.progress)}), ${goal.verdict}${due} — ${pace}`;
 };
 
-const paydayLine = (dashboard: Dashboard) => {
-  const { payday } = dashboard.input;
+const paydayLine = (facts: Facts) => {
+  const { payday } = facts.input;
   if (payday.landed) return undefined;
   if (payday.typicalDay === undefined) return undefined;
   return `Income normally posts around day ${payday.typicalDay} of the month, so a month-to-date income of ${formatThb(0)} before then is the normal pattern, not a lost salary.`;
 };
 
-const briefing = (dashboard: Dashboard) => {
-  const headline = headlineOf(dashboard.input);
-  const { input } = dashboard;
+interface Lifetime {
+  readonly income: number;
+  readonly expenses: number;
+}
+
+const briefing = (facts: Facts, lifetime: Lifetime) => {
+  const headline = headlineOf(facts.input);
+  const { input } = facts;
   const lines = [
     `Net worth: ${formatThb(headline.netWorthThb)} in baht net worth plus ${formatUsd(headline.netWorthUsd)} held in USD.`,
     `Cash on hand: ${formatThb(headline.cash)}${headline.runwayMonths === undefined ? "" : ` (${formatMonths(headline.runwayMonths)} of spending)`}.`,
     `Invested (baht accounts): ${formatThb(input.investments)}.`,
     `${formatMonth(input.month)} through day ${input.dayOfMonth}: income ${formatThb(headline.monthIncome)}, expenses ${formatThb(headline.monthExpenses)}, net ${formatThb(headline.monthNet)}.`,
-    paydayLine(dashboard),
+    paydayLine(facts),
     headline.savingsRate === undefined
       ? undefined
       : `Savings rate over the last ${headline.savingsWindow} complete months: ${formatPercent(headline.savingsRate)}.`,
@@ -73,23 +87,18 @@ const briefing = (dashboard: Dashboard) => {
     headline.lastMonthSpend === undefined
       ? undefined
       : `On pace for ${formatThb(headline.projectedSpend)} this month against ${formatThb(headline.lastMonthSpend)} last month.`,
-    `Lifetime in this ledger: income ${formatThb(dashboard.lifetime.income)}, expenses ${formatThb(dashboard.lifetime.expenses)}.`,
+    `Lifetime in this ledger: income ${formatThb(lifetime.income)}, expenses ${formatThb(lifetime.expenses)}.`,
   ];
   return lines.filter((line) => line !== undefined).join("\n");
 };
 
-/**
- * The facts the page is showing, for the agent to answer from. Persona, tool
- * guidance and the untrusted-data note belong to the agent package, which
- * appends this as context.
- */
-export const buildBriefing = (dashboard: Dashboard): string => {
-  const { input, insights } = dashboard;
-  const goals = goalProgress(
-    dashboard.goalRows,
-    dashboard.prefixFacts,
-    dashboard.today,
-  );
+/** Page facts only: persona, tool guidance and the untrusted-data note belong to the agent package. */
+const buildBriefing = (
+  facts: Facts,
+  goals: readonly GoalProgress[],
+  lifetime: Lifetime,
+): string => {
+  const { input, insights } = facts;
   const verdicts = insights
     .slice(0, MAX_BRIEFED_INSIGHTS)
     .map(briefInsight)
@@ -99,15 +108,15 @@ export const buildBriefing = (dashboard: Dashboard): string => {
       ? "No goals defined yet. Suggest one only if the question invites it."
       : goals.map(briefGoal).join("\n");
 
-  const staleNote = dashboard.stale
+  const staleNote = facts.stale
     ? ` The ledger has nothing newer than that, so "this month" in the briefing means ${formatMonth(input.month)}, not the current calendar month. Say so if the user asks about right now.`
     : "";
 
   return `## Ledger
-Today is ${formatDay(dashboard.today)}. The ledger holds activity through ${formatDay(input.asOf)}.${staleNote}
+Today is ${formatDay(facts.today)}. The ledger holds activity through ${formatDay(input.asOf)}.${staleNote}
 
 ## Briefing
-${briefing(dashboard)}
+${briefing(facts, lifetime)}
 
 ## Verdicts already on the page
 ${verdicts.length > 0 ? verdicts : "No rule fired this month."}
@@ -116,14 +125,40 @@ ${verdicts.length > 0 ? verdicts : "No rule fired this month."}
 ${goalLines}`;
 };
 
+/** Wide enough to be "everything"; `report` echoes back the range it used. */
+const LEDGER_EPOCH = "2000-01-01";
+
 /**
- * The client sends only the route; every fact in the block is re-derived here
- * so the model can never be fed figures the server did not compute.
+ * Undefined when the ledger does not answer: the agent then works from its tools
+ * alone. One window read feeds both views, since a route handler has no request cache.
  */
-export const accountViewBlock = async (
-  id: string,
-): Promise<string | undefined> => {
-  const view = await loadAccount(id).catch(() => null);
+const ledgerFacts = async (): Promise<string | undefined> => {
+  const [, facts] = await attemptAsync(async () => {
+    const window = await ledgerWindow();
+    const [{ input, insights }, plan, report] = await Promise.all([
+      insightsFrom(window),
+      planFrom(window),
+      caller.ledger.report({ from: LEDGER_EPOCH, to: window.today }),
+    ]);
+    return buildBriefing(
+      {
+        today: window.today,
+        stale: isStale(window.asOf, window.today),
+        input,
+        insights,
+      },
+      goalProgress(plan.goalRows, plan.prefixFacts, plan.today),
+      {
+        income: report.income.THB ?? 0,
+        expenses: report.expenses.THB ?? 0,
+      },
+    );
+  });
+  return facts ?? undefined;
+};
+
+const accountViewBlock = async (id: string): Promise<string | undefined> => {
+  const [, view] = await attemptAsync(() => loadAccount(id));
   if (!view) return undefined;
 
   const inflow = sumBy(view.monthly, (month) => month.in);
@@ -140,4 +175,21 @@ export const accountViewBlock = async (
     `Trailing window ${from} → ${view.asOf}: in ${money(inflow)}, out ${money(outflow)}.`,
     'Answer questions about "this account" against these figures; use tools for anything deeper.',
   ].join("\n");
+};
+
+/** `/` or `/accounts/<id>`; any other path briefs as `/`. */
+const VIEW_PATH = /^\/(?:accounts\/([A-Za-z0-9:%._-]+))?$/;
+
+/**
+ * The client sends only its route; every fact here is re-derived on the server,
+ * so the model is never fed a figure the server did not compute.
+ */
+export const systemFor = async (path = "/"): Promise<string | undefined> => {
+  const facts = await ledgerFacts();
+  const account = VIEW_PATH.exec(path)?.[1];
+  if (account === undefined) return facts;
+
+  const view = await accountViewBlock(decodeURIComponent(account));
+  if (!view) return facts;
+  return facts ? `${facts}\n\n${view}` : view;
 };

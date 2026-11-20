@@ -1,4 +1,4 @@
-import type { Baseline } from "~/flows/types";
+import type { Baseline } from "~/flows/flow";
 import { Sankey } from "~/flows/sankey";
 import { ChartPane } from "~/lib/charts/chart-pane";
 import { formatThbCompact } from "~/lib/format";
@@ -14,6 +14,9 @@ export function FlowPane({
   // nothing. A window with no complete month is what leaves it undrawable.
   const empty = baseline.months === 0;
   const note = `${baseline.months} mo avg`;
+  const sankey = (expanded: boolean) => (
+    <Sankey graph={baseline.graph} note={note} expanded={expanded} />
+  );
 
   return (
     <ChartPane
@@ -26,14 +29,14 @@ export function FlowPane({
       expandable={!empty}
       className={className}
       bodyClassName="flex min-h-0 flex-1 flex-col p-1"
-      expandedChildren={<Sankey graph={baseline.graph} note={note} expanded />}
+      expandedChildren={sankey(true)}
     >
       {empty ? (
         <p className="text-muted-foreground p-2 text-xs">
           No complete month carries both income and spending.
         </p>
       ) : (
-        <Sankey graph={baseline.graph} note={note} />
+        sankey(false)
       )}
     </ChartPane>
   );

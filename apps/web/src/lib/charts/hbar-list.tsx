@@ -1,20 +1,23 @@
 import { sumBy } from "es-toolkit";
 
+import { cn } from "@openledger-cfo/ui";
+
 import type { CategoryTotal } from "~/lib/charts/data";
-import { flipTipClassName, shouldFlipTip } from "~/lib/charts/flip-tip";
-import { foldTail } from "~/lib/charts/fold";
+import { foldTail } from "~/lib/charts/data";
 import { ChartTip } from "~/lib/charts/tooltip";
 import { formatPercent, moneyOf } from "~/lib/format";
 
 /** Past eight rows the tail stops being worth a line of its own. */
 const TOP_ROWS = 8;
 
-/**
- * The form that is readable by construction: every bar carries its own label
- * and its own figure, so nothing depends on a legend or a hover. The tip only
- * rescues the names the row was too narrow to print in full, and flips side at
- * the halfway row so the list can never push one out of the pane.
- */
+// For a clipped, non-scrolling list only: rows past halfway open their tip upward.
+const tipClassName = (index: number, length: number) =>
+  cn(
+    "left-0 opacity-0 group-hover:opacity-100",
+    index >= length / 2 ? "bottom-full" : "top-full",
+  );
+
+// Every bar carries its own label and figure; the tip only rescues a truncated name.
 export function HBarList({
   rows,
   currency,
@@ -39,37 +42,32 @@ export function HBarList({
 
   return (
     <ul className="flex flex-col" data-chart="hbar">
-      {lines.map((line, index) => {
-        const share = total > 0 ? formatPercent(line.value / total) : "—";
-        return (
-          <li
-            key={line.key}
-            className="group hover:bg-secondary/60 relative flex h-6 cursor-crosshair items-center gap-2 px-1 text-[11px]"
-          >
-            <span className="w-[38%] shrink-0 truncate">{line.label}</span>
-            <span className="bg-secondary h-[4px] min-w-0 flex-1 rounded-[1px]">
-              <span
-                className="bg-foreground block h-full rounded-[1px] opacity-75 transition-opacity duration-150 group-hover:opacity-100"
-                style={{ width: `${(line.value / peak) * 100}%` }}
-              />
-            </span>
-            <span className="text-muted-foreground w-10 shrink-0 text-right text-[10px] tabular-nums opacity-0 group-hover:opacity-100">
-              {share}
-            </span>
-            <span className="w-20 shrink-0 text-right tabular-nums">
-              {format(line.value)}
-            </span>
-            {/* This list sits in a clipped box, not a scroller — the flip is
-                earned here, where a floor-row tip would otherwise be cut. */}
-            <ChartTip
-              rows={[
-                { key: line.key, label: line.label, value: format(line.value) },
-              ]}
-              className={flipTipClassName(shouldFlipTip(index, lines.length))}
+      {lines.map((line, index) => (
+        <li
+          key={line.key}
+          className="group hover:bg-secondary/60 relative flex h-6 cursor-crosshair items-center gap-2 px-1 text-[11px]"
+        >
+          <span className="w-[38%] shrink-0 truncate">{line.label}</span>
+          <span className="bg-secondary h-[4px] min-w-0 flex-1 rounded-[1px]">
+            <span
+              className="bg-foreground block h-full rounded-[1px] opacity-75 transition-opacity duration-150 group-hover:opacity-100"
+              style={{ width: `${(line.value / peak) * 100}%` }}
             />
-          </li>
-        );
-      })}
+          </span>
+          <span className="text-muted-foreground w-10 shrink-0 text-right text-[10px] tabular-nums opacity-0 group-hover:opacity-100">
+            {formatPercent(line.value / total)}
+          </span>
+          <span className="w-20 shrink-0 text-right tabular-nums">
+            {format(line.value)}
+          </span>
+          <ChartTip
+            rows={[
+              { key: line.key, label: line.label, value: format(line.value) },
+            ]}
+            className={tipClassName(index, lines.length)}
+          />
+        </li>
+      ))}
     </ul>
   );
 }

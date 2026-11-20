@@ -1,14 +1,17 @@
-import { orderBy, sumBy } from "es-toolkit";
+import { groupBy, mapValues, orderBy, sumBy } from "es-toolkit";
 
 import type { TransactionRow } from "~/ledger/postings";
+import type { Point } from "~/lib/charts/data";
 import {
-  CASH_DISPLAY_GROUPS,
+  accountKindOf,
   isMoneyCurrency,
   isPrimaryCurrency,
   parseAccountMetadata,
+  segmentOf,
   unitCurrencies,
 } from "~/ledger/accounts";
-import { segmentOf } from "~/ledger/postings";
+import { weeklyBalance } from "~/ledger/history";
+import { latestOf } from "~/ledger/period";
 
 /** Every field the account grid reads; the ledger row carries more. */
 export interface PortfolioAccount {
@@ -177,19 +180,18 @@ export const tradesOf = (input: {
     .toSorted((left, right) => left.date.localeCompare(right.date));
 };
 
+/** "Banks & cash" also lists the USD brokerage cash leg: held money, but not baht runway. */
 const isBank = (row: PortfolioAccount) =>
-  row.type === "asset" && CASH_DISPLAY_GROUPS.has(segmentOf(row.id, 2));
+  accountKindOf(row) === "cash" ||
+  (row.type === "asset" && segmentOf(row.id, 2) === "brokerage");
 
-const isCard = (row: PortfolioAccount) =>
-  row.type === "liability" && segmentOf(row.id, 2) === "credit_card";
+const isCard = (row: PortfolioAccount) => accountKindOf(row) === "card";
 
-const isLoan = (row: PortfolioAccount) =>
-  row.type === "liability" && segmentOf(row.id, 2) === "loan";
+const isLoan = (row: PortfolioAccount) => accountKindOf(row) === "loan";
 
 /**
- * The four classes the account grid is grouped by, each already sorted the way
- * its pane reads. Liabilities keep their positive ledger magnitude: the column
- * head says they are owed, so a minus sign would only say it twice.
+ * The account grid's four classes, each sorted the way its pane reads. Liabilities
+ * keep their positive magnitude: the column head already says they are owed.
  */
 export const splitPortfolio = (
   accounts: readonly PortfolioAccount[],
@@ -237,5 +239,50 @@ export const splitPortfolio = (
     closedLoans: loans.length - openLoans.length,
     holdings,
     positions: sumBy(holdings, (holding) => holding.rows.length),
+  };
+};
+
+/** Half a year of weekly samples: as much shape as a 60px line can carry. */
+const SPARK_WEEKS = 24;
+
+interface RecentActivity {
+  /** Account id to the newest date it moved, which is what makes a dormant account visible. */
+  readonly activity: Readonly<Record<string, string | undefined>>;
+  /** Recent weekly balances per bank leaf, folded from rows already in hand. */
+  readonly sparks: Readonly<Record<string, readonly Point[]>>;
+}
+
+export const recentActivity = (
+  leaves: readonly PortfolioAccount[],
+  rows: readonly TransactionRow[],
+  asOf: string,
+): RecentActivity => {
+  // One walk re-files every row under both accounts it touches.
+  const byAccount = mapValues(
+    groupBy(
+      rows.flatMap((row) => [
+        { account: row.debit_account_id, row },
+        { account: row.credit_account_id, row },
+      ]),
+      (leg) => leg.account,
+    ),
+    (legs) => legs.map((leg) => leg.row),
+  );
+  return {
+    activity: mapValues(byAccount, (legs) =>
+      latestOf(legs.map((row) => row.date)),
+    ),
+    sparks: Object.fromEntries(
+      splitPortfolio(leaves).banks.map((row) => [
+        row.id,
+        weeklyBalance(
+          byAccount[row.id] ?? [],
+          row.id,
+          asOf,
+          row.balance,
+          SPARK_WEEKS,
+        ),
+      ]),
+    ),
   };
 };

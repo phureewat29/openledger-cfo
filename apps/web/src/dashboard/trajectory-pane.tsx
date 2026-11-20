@@ -1,6 +1,6 @@
 import type { Point } from "~/lib/charts/data";
-import { hasMovement } from "~/ledger/history";
 import { ChartPane } from "~/lib/charts/chart-pane";
+import { hasMovement } from "~/lib/charts/data";
 import { LineChart } from "~/lib/charts/line-chart";
 import { formatThbCompactSigned } from "~/lib/format";
 
@@ -19,6 +19,16 @@ export function TrajectoryPane({
   className?: string;
 }) {
   const delta = deltaOf(points);
+  const chart = (expanded: boolean) => (
+    <LineChart
+      points={points}
+      currency="THB"
+      area
+      accent
+      expanded={expanded}
+      empty="Not enough history to plot."
+    />
+  );
 
   return (
     <ChartPane
@@ -31,17 +41,9 @@ export function TrajectoryPane({
       expandable={hasMovement(points)}
       className={className}
       bodyClassName="flex min-h-0 flex-1 flex-col p-3"
-      expandedChildren={
-        <LineChart points={points} currency="THB" area accent expanded />
-      }
+      expandedChildren={chart(true)}
     >
-      <LineChart
-        points={points}
-        currency="THB"
-        area
-        accent
-        empty="Not enough history to plot."
-      />
+      {chart(false)}
     </ChartPane>
   );
 }

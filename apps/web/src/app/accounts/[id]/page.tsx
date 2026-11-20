@@ -4,9 +4,9 @@ import { notFound } from "next/navigation";
 import { ACCOUNT_ID_PATTERN } from "@openledger-cfo/openledger/ids";
 import { Pane } from "@openledger-cfo/ui/pane";
 
-import { loadAccount } from "~/accounts/account";
 import { AccountHead } from "~/accounts/account-head";
 import { ACCOUNT_GRID, POSTINGS_COL } from "~/accounts/grid";
+import { loadAccount } from "~/accounts/load";
 import { PAGE_SIZE } from "~/accounts/paging";
 import { PostingsTable } from "~/accounts/postings-table";
 import { VizRow } from "~/accounts/viz-row";

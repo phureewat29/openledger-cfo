@@ -1,8 +1,8 @@
-import { orderBy, sumBy } from "es-toolkit";
+import { orderBy, sumBy, union } from "es-toolkit";
 
 import type { Posting } from "~/ledger/postings";
-import { matchesPrefix } from "~/ledger/accounts";
-import { accountLabel } from "~/lib/format";
+import type { PrefixOption } from "~/plan/goals";
+import { accountLabel, matchesPrefix, PRIMARY } from "~/ledger/accounts";
 
 export interface BudgetRow {
   readonly category: string;
@@ -22,11 +22,8 @@ interface BudgetLimit {
 }
 
 /**
- * Both figures are measured over the same slice of the month: a limit is a
- * whole-month allowance, so comparing a part-month spend against it only
- * reads as "over" or "under" once the elapsed share of the month is divided
- * back out. What each category has cost arrives already summed, because
- * setting or clearing a limit changes none of it.
+ * A limit is a whole-month allowance, so part-month spend reads over or under only once
+ * the elapsed share is divided out. Spend arrives summed: a limit changes none of it.
  */
 export const budgetRows = (
   budgets: readonly BudgetLimit[],
@@ -54,13 +51,7 @@ export const budgetRows = (
   );
 };
 
-/**
- * What a category has already cost this month, regardless of whether it
- * carries a budget yet: it is both what a row is measured against and what
- * the form ranks its picker by, so the largest un-budgeted category surfaces
- * first and a category budgeted a moment ago already knows its own spend.
- */
-export const monthToDateSpend = (
+const monthToDateSpend = (
   postings: readonly Posting[],
   category: string,
   month: string,
@@ -77,3 +68,59 @@ export const monthToDateSpend = (
     ),
     (posting) => posting.signed,
   );
+
+/** Every top-level spending category hangs directly off this account. */
+const EXPENSE_ROOT = `${PRIMARY}:expense`;
+
+interface BudgetPicker {
+  readonly options: readonly PrefixOption[];
+  /** Month-to-date spend per category, budgeted or not, so a new limit already knows its spend. */
+  readonly spend: Readonly<Record<string, number>>;
+}
+
+/**
+ * Un-budgeted categories first, then by spend, so the picker defaults to the
+ * largest one still worth a limit. A limit set outside the picker is measured too.
+ */
+export const budgetPicker = ({
+  accounts,
+  budgets,
+  postings,
+  month,
+  dayOfMonth,
+}: {
+  readonly accounts: readonly {
+    readonly id: string;
+    readonly type: string;
+    readonly parent_id: string | null;
+  }[];
+  readonly budgets: readonly { readonly category: string }[];
+  readonly postings: readonly Posting[];
+  readonly month: string;
+  readonly dayOfMonth: number;
+}): BudgetPicker => {
+  const budgetable = accounts.filter(
+    (row) => row.type === "expense" && row.parent_id === EXPENSE_ROOT,
+  );
+  const spend: Record<string, number> = Object.fromEntries(
+    union(
+      budgetable.map((row) => row.id),
+      budgets.map((budget) => budget.category),
+    ).map((category) => [
+      category,
+      monthToDateSpend(postings, category, month, dayOfMonth),
+    ]),
+  );
+  const budgeted = new Set(budgets.map((budget) => budget.category));
+  return {
+    options: orderBy(
+      budgetable.map((row) => ({ value: row.id, label: accountLabel(row.id) })),
+      [
+        (option) => budgeted.has(option.value),
+        (option) => spend[option.value] ?? 0,
+      ],
+      ["asc", "desc"],
+    ),
+    spend,
+  };
+};

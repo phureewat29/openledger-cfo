@@ -1,11 +1,12 @@
-import type { AccountView } from "~/accounts/account";
-import type { AccountKind, AccountSeries } from "~/lib/charts/data";
+import type { AccountSeries, AccountView } from "~/accounts/account";
+import type { AccountKind } from "~/ledger/accounts";
+import { payoffPoints } from "~/accounts/account";
 import { VIZ_FULL, VIZ_NARROW, VIZ_WIDE } from "~/accounts/grid";
 import { MonthlyBars, peakOf } from "~/accounts/monthly-bars";
 import { Sankey } from "~/flows/sankey";
 import { isPrimaryCurrency } from "~/ledger/accounts";
-import { hasMovement, payoffPoints } from "~/ledger/history";
 import { ChartPane } from "~/lib/charts/chart-pane";
+import { hasMovement } from "~/lib/charts/data";
 import { HBarList } from "~/lib/charts/hbar-list";
 import { LineChart } from "~/lib/charts/line-chart";
 import { StackedBars } from "~/lib/charts/stacked-bars";
@@ -49,6 +50,13 @@ function BarsPane({
   title: string;
 }) {
   const peak = peakOf(account.monthly);
+  const bars = (expanded: boolean) => (
+    <MonthlyBars
+      months={account.monthly}
+      currency={account.currency}
+      expanded={expanded}
+    />
+  );
   return (
     <ChartPane
       title={title}
@@ -56,15 +64,9 @@ function BarsPane({
       expandable={peak > 0}
       className={className}
       bodyClassName={CHART}
-      expandedChildren={
-        <MonthlyBars
-          months={account.monthly}
-          currency={account.currency}
-          expanded
-        />
-      }
+      expandedChildren={bars(true)}
     >
-      <MonthlyBars months={account.monthly} currency={account.currency} />
+      {bars(false)}
     </ChartPane>
   );
 }
@@ -78,6 +80,15 @@ function CashViz({
   account: AccountView;
   series: SeriesOf<"cash">;
 }) {
+  const balance = (expanded: boolean) => (
+    <LineChart
+      points={series.balance}
+      currency={account.currency}
+      step
+      expanded={expanded}
+      empty="No movement in this window."
+    />
+  );
   return (
     <>
       <FlowPane account={account} />
@@ -87,21 +98,9 @@ function CashViz({
         expandable={hasMovement(series.balance)}
         className={VIZ_NARROW}
         bodyClassName={CHART}
-        expandedChildren={
-          <LineChart
-            points={series.balance}
-            currency={account.currency}
-            step
-            expanded
-          />
-        }
+        expandedChildren={balance(true)}
       >
-        <LineChart
-          points={series.balance}
-          currency={account.currency}
-          step
-          empty="No movement in this window."
-        />
+        {balance(false)}
       </ChartPane>
     </>
   );
@@ -114,6 +113,21 @@ function CardViz({
   account: AccountView;
   series: SeriesOf<"card">;
 }) {
+  const spend = (expanded: boolean) => (
+    <StackedBars
+      months={series.months}
+      series={series.categories}
+      currency={account.currency}
+      expanded={expanded}
+    />
+  );
+  const cycle = (expanded: boolean) => (
+    <HBarList
+      rows={series.cycle}
+      currency={account.currency}
+      expanded={expanded}
+    />
+  );
   return (
     <>
       <ChartPane
@@ -122,20 +136,9 @@ function CardViz({
         expandable={series.categories.length > 0}
         className={VIZ_WIDE}
         bodyClassName={CHART}
-        expandedChildren={
-          <StackedBars
-            months={series.months}
-            series={series.categories}
-            currency={account.currency}
-            expanded
-          />
-        }
+        expandedChildren={spend(true)}
       >
-        <StackedBars
-          months={series.months}
-          series={series.categories}
-          currency={account.currency}
-        />
+        {spend(false)}
       </ChartPane>
       <ChartPane
         title="Cycle"
@@ -143,21 +146,13 @@ function CardViz({
         expandable={series.cycle.length > 0}
         className={VIZ_NARROW}
         bodyClassName={CHART}
-        expandedChildren={
-          <HBarList rows={series.cycle} currency={account.currency} expanded />
-        }
+        expandedChildren={cycle(true)}
       >
-        <HBarList rows={series.cycle} currency={account.currency} />
+        {cycle(false)}
       </ChartPane>
     </>
   );
 }
-
-/** Both views draw the same two bands; the split is the whole story here. */
-const paymentBands = (series: SeriesOf<"loan">) => [
-  { key: "principal", label: "Principal", values: series.principal },
-  { key: "interest", label: "Interest", values: series.interest },
-];
 
 function LoanViz({
   account,
@@ -166,8 +161,7 @@ function LoanViz({
   account: AccountView;
   series: SeriesOf<"loan">;
 }) {
-  // Drawn only where the pace the ledger has seen can defend a date; past that
-  // horizon the pane says nothing rather than a shape nobody can read.
+  // Only drawn where the observed pace can defend a date.
   const projection = payoffPoints(
     series.balance,
     series.principal,
@@ -175,35 +169,42 @@ function LoanViz({
     account.asOf,
   );
 
+  // The installment never changes; the interest share is what caps each column.
+  const payments = (expanded: boolean) => (
+    <StackedBars
+      months={series.months}
+      series={[
+        { key: "principal", label: "Principal", values: series.principal },
+        { key: "interest", label: "Interest", values: series.interest },
+      ]}
+      currency={account.currency}
+      accentKey="principal"
+      capShareKey="interest"
+      expanded={expanded}
+      empty="No payments in this window."
+    />
+  );
+  const remaining = (expanded: boolean) => (
+    <LineChart
+      points={series.balance}
+      currency={account.currency}
+      projection={projection}
+      step
+      expanded={expanded}
+      empty="Nothing left to repay."
+    />
+  );
   return (
     <>
-      {/* The installment is the same every month; what moves is how much of it
-          is still rent on the balance, so that is what caps each column. */}
       <ChartPane
         title="Payments"
         meta="interest share"
         expandable={series.months.length > 0}
         className={VIZ_WIDE}
         bodyClassName={CHART}
-        expandedChildren={
-          <StackedBars
-            months={series.months}
-            series={paymentBands(series)}
-            currency={account.currency}
-            accentKey="principal"
-            capShareKey="interest"
-            expanded
-          />
-        }
+        expandedChildren={payments(true)}
       >
-        <StackedBars
-          months={series.months}
-          series={paymentBands(series)}
-          currency={account.currency}
-          accentKey="principal"
-          capShareKey="interest"
-          empty="No payments in this window."
-        />
+        {payments(false)}
       </ChartPane>
       <ChartPane
         title="Remaining"
@@ -211,23 +212,9 @@ function LoanViz({
         expandable={hasMovement(series.balance)}
         className={VIZ_NARROW}
         bodyClassName={CHART}
-        expandedChildren={
-          <LineChart
-            points={series.balance}
-            currency={account.currency}
-            projection={projection}
-            step
-            expanded
-          />
-        }
+        expandedChildren={remaining(true)}
       >
-        <LineChart
-          points={series.balance}
-          currency={account.currency}
-          projection={projection}
-          step
-          empty="Nothing left to repay."
-        />
+        {remaining(false)}
       </ChartPane>
     </>
   );
@@ -240,6 +227,18 @@ function PositionViz({
   account: AccountView;
   series: SeriesOf<"position">;
 }) {
+  // The steps in the line are the buys; the dots say which month each one landed in.
+  const basis = (expanded: boolean) => (
+    <LineChart
+      points={series.basis}
+      currency={account.currency}
+      step
+      area
+      marks={series.buyPoints}
+      expanded={expanded}
+      empty="No buys in this window."
+    />
+  );
   return (
     <>
       <ChartPane
@@ -248,26 +247,9 @@ function PositionViz({
         expandable={hasMovement(series.basis)}
         className={VIZ_WIDE}
         bodyClassName={CHART}
-        expandedChildren={
-          <LineChart
-            points={series.basis}
-            currency={account.currency}
-            step
-            area
-            marks={series.buyPoints}
-            expanded
-          />
-        }
+        expandedChildren={basis(true)}
       >
-        {/* The steps in the line are the buys; the dots say which month each one landed in. */}
-        <LineChart
-          points={series.basis}
-          currency={account.currency}
-          step
-          area
-          marks={series.buyPoints}
-          empty="No buys in this window."
-        />
+        {basis(false)}
       </ChartPane>
       <BarsPane account={account} className={VIZ_NARROW} title="Buys" />
     </>
@@ -304,11 +286,7 @@ const vizOf = <K extends AccountKind>(
   return <Viz account={account} series={series} />;
 };
 
-/**
- * The account's type only chooses which two charts sit here; every other part
- * of the page is the same recipe for every account. Two measures of different
- * scale are always two panes — never one pane with two axes.
- */
+// The account's type picks the two charts; two scales are two panes, never two axes.
 export function VizRow({ account }: { account: AccountView }) {
   return vizOf(account.series.kind, account, account.series);
 }

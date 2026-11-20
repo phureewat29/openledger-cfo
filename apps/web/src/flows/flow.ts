@@ -1,25 +1,60 @@
 import { groupBy, orderBy, sumBy } from "es-toolkit";
 
-import type {
-  Baseline,
-  CategoryLine,
-  FlowGraph,
-  FlowLink,
-  FlowNode,
-  IncomeLine,
-} from "./types";
 import type { Posting, TransactionRow } from "~/ledger/postings";
-import { COMMITTED_GROUPS, PRIMARY } from "~/ledger/accounts";
-import { windowOf } from "~/ledger/period";
+import type { CategoryTotal } from "~/lib/charts/data";
+import {
+  accountLabel,
+  categoryOf,
+  PRIMARY,
+  segmentOf,
+} from "~/ledger/accounts";
+import { monthOf, windowOf } from "~/ledger/period";
 import { toPostings } from "~/ledger/postings";
-import { accountLabel } from "~/lib/format";
+import { foldTail } from "~/lib/charts/data";
+
+export type NodeKind = "income" | "hub" | "category" | "outcome";
+
+interface FlowNode {
+  readonly id: string;
+  readonly label: string;
+  readonly kind: NodeKind;
+  /** Monthly average in THB — the same unit every link carries. */
+  readonly total: number;
+}
+
+interface FlowLink {
+  readonly source: string;
+  readonly target: string;
+  readonly value: number;
+}
+
+export interface FlowGraph {
+  readonly nodes: readonly FlowNode[];
+  readonly links: readonly FlowLink[];
+}
+
+/** The trailing window's cash flow, as monthly averages. */
+export interface Baseline {
+  /** Months inside the window the ledger actually covered — the divisor. */
+  readonly months: number;
+  readonly monthlyIncome: number;
+  readonly monthlySpend: number;
+  readonly monthlySaved: number;
+  readonly graph: FlowGraph;
+}
+
+/** One income account or top-level expense group, averaged over the window. */
+interface FlowLine {
+  readonly id: string;
+  readonly label: string;
+  readonly monthly: number;
+}
 
 const TOP_CATEGORIES = 10;
 
 const HUB_ID = "hub:cash-in";
 const SAVED_ID = "outcome:saved";
-const OTHER_KEY = "other";
-const OTHER_ID = `${PRIMARY}:expense:${OTHER_KEY}`;
+const OTHER_ID = `${PRIMARY}:expense:other`;
 
 const node = (
   id: string,
@@ -28,14 +63,10 @@ const node = (
   total: number,
 ): FlowNode => ({ id, label, kind, total });
 
-/**
- * Income accounts feed one hub, the hub feeds every expense group plus what
- * survived. Whatever is not spent is "Saved" by definition — it went to a
- * savings balance, an investment, or a loan principal.
- */
+/** Income feeds one hub; the hub feeds every expense group, and whatever is not spent is "Saved". */
 const toFlowGraph = (
-  income: readonly IncomeLine[],
-  categories: readonly CategoryLine[],
+  income: readonly FlowLine[],
+  categories: readonly FlowLine[],
   saved: number,
 ): FlowGraph => {
   const cashIn = sumBy(income, (line) => line.monthly);
@@ -72,8 +103,7 @@ export const toBaseline = (
   rows: readonly TransactionRow[],
   asOf: string,
 ): Baseline => {
-  const { from, to, months } = windowOf(asOf);
-  const covered = new Set(months);
+  const covered = new Set(windowOf(asOf).months);
   const postings = toPostings(rows).filter(
     (posting) => posting.currency === PRIMARY && covered.has(posting.month),
   );
@@ -100,7 +130,7 @@ export const toBaseline = (
 
   const income = orderBy(
     Object.entries(groupBy(incomePostings, (posting) => posting.account)).map(
-      ([id, group]): IncomeLine => ({
+      ([id, group]): FlowLine => ({
         id,
         label: accountLabel(id, group[0]?.name),
         monthly: perMonth(group),
@@ -112,12 +142,10 @@ export const toBaseline = (
 
   const ranked = orderBy(
     Object.entries(groupBy(expensePostings, (posting) => posting.group)).map(
-      ([key, group]): CategoryLine => ({
-        key,
-        id: `${PRIMARY}:expense:${key}`,
-        label: accountLabel(`${PRIMARY}:expense:${key}`),
-        monthly: perMonth(group),
-        committed: COMMITTED_GROUPS.has(key),
+      ([group, postings]): FlowLine => ({
+        id: `${PRIMARY}:expense:${group}`,
+        label: accountLabel(`${PRIMARY}:expense:${group}`),
+        monthly: perMonth(postings),
       }),
     ),
     [(line) => line.monthly],
@@ -131,11 +159,9 @@ export const toBaseline = (
       : [
           ...ranked.slice(0, TOP_CATEGORIES),
           {
-            key: OTHER_KEY,
             id: OTHER_ID,
             label: "Other",
             monthly: sumBy(rest, (line) => line.monthly),
-            committed: false,
           },
         ];
 
@@ -144,16 +170,141 @@ export const toBaseline = (
   const monthlySaved = monthlyIncome - monthlySpend;
 
   return {
-    asOf,
-    from,
-    to,
     months: active.size,
-    income,
-    categories,
     monthlyIncome,
     monthlySpend,
     monthlySaved,
-    savingsRate: monthlyIncome > 0 ? monthlySaved / monthlyIncome : 0,
     graph: toFlowGraph(income, categories, monthlySaved),
   };
+};
+
+const TOP_PER_SIDE = 8;
+
+const BALANCE_ID = "source:balance";
+const RETAINED_ID = "outcome:retained";
+
+/** The counterparty side of one row, or nothing when the row is the other way. */
+type Side = (
+  row: TransactionRow,
+) => { readonly id: string; readonly name: string | null } | undefined;
+
+/** An income or expense counterparty only means something as its category; any other leaf is a real account. */
+const keyOf = (accountId: string): string => {
+  const kind = segmentOf(accountId, 1);
+  if (kind !== "income" && kind !== "expense") return accountId;
+  return categoryOf(accountId);
+};
+
+const linesOf = (
+  rows: readonly TransactionRow[],
+  side: Side,
+  divisor: number,
+): CategoryTotal[] => {
+  const tagged = rows.flatMap((row) => {
+    const counterparty = side(row);
+    if (counterparty === undefined) return [];
+    const key = keyOf(counterparty.id);
+    return [
+      {
+        key,
+        // The row names the leaf it touched, which is wrong for a rolled-up category.
+        label: accountLabel(
+          key,
+          key === counterparty.id ? counterparty.name : undefined,
+        ),
+        amount: row.amount,
+      },
+    ];
+  });
+
+  return foldTail(
+    Object.entries(groupBy(tagged, (line) => line.key)).map(
+      ([key, group]): CategoryTotal => ({
+        key,
+        label: group[0]?.label ?? accountLabel(key),
+        value: sumBy(group, (line) => line.amount) / divisor,
+      }),
+    ),
+    TOP_PER_SIDE,
+  );
+};
+
+/**
+ * One account as a hub, averaged over the app's trailing window. A counterparty
+ * can sit on both sides, so node ids carry their side or the graph would loop.
+ */
+export const toAccountFlow = (
+  rows: readonly TransactionRow[],
+  accountId: string,
+  accountName: string,
+  asOf: string,
+): FlowGraph | null => {
+  if (!accountId.startsWith(`${PRIMARY}:`)) return null;
+
+  const covered = new Set(windowOf(asOf).months);
+  const inWindow = rows.filter((row) => covered.has(monthOf(row.date)));
+  // A month the account never traded in would drag every average toward zero.
+  const active = new Set(inWindow.map((row) => monthOf(row.date)));
+  const divisor = Math.max(active.size, 1);
+
+  const inflow = linesOf(
+    inWindow,
+    (row) =>
+      row.debit_account_id === accountId
+        ? { id: row.credit_account_id, name: row.credit_account_name }
+        : undefined,
+    divisor,
+  );
+  const outflow = linesOf(
+    inWindow,
+    (row) =>
+      row.credit_account_id === accountId
+        ? { id: row.debit_account_id, name: row.debit_account_name }
+        : undefined,
+    divisor,
+  );
+
+  const inTotal = sumBy(inflow, (line) => line.value);
+  const outTotal = sumBy(outflow, (line) => line.value);
+  if (inTotal <= 0 && outTotal <= 0) return null;
+
+  // A hub has to balance; the balance sheet absorbs whichever side is short.
+  const difference = inTotal - outTotal;
+  const retained =
+    difference > 0
+      ? [node(RETAINED_ID, "Retained", "outcome", difference)]
+      : [];
+  const drawn =
+    difference < 0
+      ? [node(BALANCE_ID, "From balance", "income", -difference)]
+      : [];
+
+  const sources = [
+    ...drawn,
+    ...inflow.map((line) =>
+      node(`in:${line.key}`, line.label, "income", line.value),
+    ),
+  ];
+  const targets = [
+    ...retained,
+    ...outflow.map((line) =>
+      node(`out:${line.key}`, line.label, "category", line.value),
+    ),
+  ];
+  const hub = node(accountId, accountName, "hub", Math.max(inTotal, outTotal));
+
+  const links: FlowLink[] = [
+    ...sources.map((source) => ({
+      source: source.id,
+      target: hub.id,
+      value: source.total,
+    })),
+    ...targets.map((target) => ({
+      source: hub.id,
+      target: target.id,
+      value: target.total,
+    })),
+  ];
+
+  return { nodes: [...sources, hub, ...targets], links };
 };

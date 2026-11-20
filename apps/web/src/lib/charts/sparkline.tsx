@@ -3,17 +3,13 @@ import { scaleLinear } from "d3-scale";
 import { line as toLine } from "d3-shape";
 
 import type { Point } from "~/lib/charts/data";
-import { paddedDomain } from "~/ledger/history";
+import { paddedDomain } from "~/lib/charts/data";
 
 const STROKE = 1.25;
 /** Half of the 3px dot that says which end is now. */
 const DOT = 1.5;
 
-/**
- * A shape beside a figure the reader already has — no axis, no hover, no
- * readout. Drawn at its final size rather than stretched to a slot, so the
- * stroke and the dot stay round.
- */
+// Drawn at its final size rather than stretched to a slot, so the stroke and dot stay round.
 export function Sparkline({
   points,
   width,

@@ -1,16 +1,13 @@
-import { sum, sumBy } from "es-toolkit";
-
-import type { RouterOutputs } from "@openledger-cfo/api";
+import type { TransactionRow } from "@openledger-cfo/openledger";
 import {
   sanitizeLabel,
   sanitizeOptional,
 } from "@openledger-cfo/agent/sanitize";
 
-import { categoryOf } from "./accounts";
+import { accountLabel, categoryOf, segmentOf } from "./accounts";
 import { dayOf, monthOf } from "./period";
 
-export type TransactionRow =
-  RouterOutputs["ledger"]["transactions"]["listAll"][number];
+export type { TransactionRow };
 
 export interface Posting {
   readonly date: string;
@@ -33,8 +30,22 @@ export interface Posting {
   readonly merchant: string | null;
 }
 
-export const segmentOf = (accountId: string, index: number) =>
-  accountId.split(":")[index] ?? "";
+/** The leg that says what the money was for: the expense or income side, else the debit side. */
+export const categoryLabelOf = (row: TransactionRow): string => {
+  if (segmentOf(row.debit_account_id, 1) === "expense") {
+    return accountLabel(row.debit_account_id, row.debit_account_name);
+  }
+  if (segmentOf(row.credit_account_id, 1) === "income") {
+    return accountLabel(row.credit_account_id, row.credit_account_name);
+  }
+  return accountLabel(row.debit_account_id, row.debit_account_name);
+};
+
+/** The leg `accountId` is not on: who it traded with. */
+export const counterpartyOf = (row: TransactionRow, accountId: string) =>
+  row.debit_account_id === accountId
+    ? accountLabel(row.credit_account_id, row.credit_account_name)
+    : accountLabel(row.debit_account_id, row.debit_account_name);
 
 export const toPosting = (
   row: TransactionRow,
@@ -69,18 +80,6 @@ export const toPostings = (rows: readonly TransactionRow[]): Posting[] =>
     toPosting(row, row.debit_account_id, row.debit_account_name, "debit"),
     toPosting(row, row.credit_account_id, row.credit_account_name, "credit"),
   ]);
-
-export const total = (postings: readonly Posting[]) =>
-  sumBy(postings, (posting) => posting.signed);
-
-export const inMonth = (postings: readonly Posting[], month: string) =>
-  postings.filter((posting) => posting.month === month);
-
-export const upToDay = (postings: readonly Posting[], day: number) =>
-  postings.filter((posting) => posting.day <= day);
-
-export const average = (values: readonly number[]) =>
-  values.length === 0 ? 0 : sum(values) / values.length;
 
 export const median = (values: readonly number[]): number | undefined => {
   if (values.length === 0) return undefined;

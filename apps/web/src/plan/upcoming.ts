@@ -2,7 +2,7 @@ import { groupBy, orderBy, sumBy } from "es-toolkit";
 
 import type { AccountRow } from "~/ledger/accounts";
 import type { Posting } from "~/ledger/postings";
-import { PRIMARY } from "~/ledger/accounts";
+import { accountKindOf, isMoneyCurrency, PRIMARY } from "~/ledger/accounts";
 import { interestAccountFor, interestPaidFor } from "~/ledger/loans";
 import {
   clampDay,
@@ -13,7 +13,7 @@ import {
   shiftDays,
   shiftMonth,
 } from "~/ledger/period";
-import { median, segmentOf } from "~/ledger/postings";
+import { median } from "~/ledger/postings";
 
 const HORIZON_DAYS = 45;
 /** Three complete months is the shortest run that separates a subscription from a repeat purchase. */
@@ -51,9 +51,22 @@ interface ReminderRow {
   readonly doneAt: Date | null;
 }
 
+/** A recurring chore rolls to its next cycle instead of going late; only an open one-shot can be overdue. */
+const isOverdue = (
+  row: Pick<ReminderRow, "dueDate" | "monthly" | "doneAt">,
+  today: string,
+): boolean => !row.monthly && row.doneAt === null && row.dueDate < today;
+
+export const overdueCount = (
+  reminders: readonly Pick<ReminderRow, "dueDate" | "monthly" | "doneAt">[],
+  today: string,
+): number => reminders.filter((row) => isOverdue(row, today)).length;
+
 interface LedgerInput {
   /** Leaves only: a parent carries no balance and no statement days. */
-  readonly accounts: readonly AccountRow[];
+  readonly leaves: readonly AccountRow[];
+  /** Unit heads, whose quantities schedule nothing. */
+  readonly units: ReadonlySet<string>;
   readonly postings: readonly Posting[];
   readonly today: string;
 }
@@ -75,10 +88,7 @@ const cardItems = (
   today: string,
 ): UpcomingItem[] =>
   accounts
-    .filter(
-      (row) =>
-        row.type === "liability" && segmentOf(row.id, 2) === "credit_card",
-    )
+    .filter((row) => accountKindOf(row) === "card")
     .flatMap((row): UpcomingItem[] => [
       ...(row.statement_day === null
         ? []
@@ -152,12 +162,7 @@ const loanItems = (
 ): UpcomingItem[] => {
   const lastComplete = shiftMonth(monthOf(today), -1);
   return accounts
-    .filter(
-      (row) =>
-        row.type === "liability" &&
-        segmentOf(row.id, 2) === "loan" &&
-        row.balance > 0,
-    )
+    .filter((row) => accountKindOf(row) === "loan" && row.balance > 0)
     .map((row) => ({
       key: `loan:${row.id}`,
       date: nextOnDay(today, LOAN_DUE_DAY),
@@ -235,7 +240,7 @@ const reminderItems = (
     if (!row.monthly) {
       // A one-shot that was completed has no next occurrence.
       if (row.doneAt !== null) return [];
-      return [{ ...base, date: row.dueDate, overdue: row.dueDate < today }];
+      return [{ ...base, date: row.dueDate, overdue: isOverdue(row, today) }];
     }
 
     const day = dayOf(row.dueDate);
@@ -251,20 +256,20 @@ const reminderItems = (
     return [{ ...base, date }];
   });
 
-/**
- * Everything the ledger itself schedules. Statement days, installments and
- * subscriptions are read off postings, so nothing anyone types can change
- * them — which is what lets the two halves of the list be derived apart.
- */
+/** Read off postings, so nothing anyone types changes it: reminders merge in beside it. */
 export const ledgerUpcoming = ({
-  accounts,
+  leaves,
+  units,
   postings,
   today,
-}: LedgerInput): UpcomingItem[] => [
-  ...cardItems(accounts, today),
-  ...loanItems(accounts, postings, today),
-  ...subscriptionItems(postings, today),
-];
+}: LedgerInput): UpcomingItem[] => {
+  const accounts = leaves.filter((row) => isMoneyCurrency(row.currency, units));
+  return [
+    ...cardItems(accounts, today),
+    ...loanItems(accounts, postings, today),
+    ...subscriptionItems(postings, today),
+  ];
+};
 
 /** The whole list, in horizon order. Who caps it belongs to whoever shows it. */
 export const mergeUpcoming = (

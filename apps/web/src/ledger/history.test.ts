@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { TransactionRow } from "./postings";
 import type { Point } from "~/lib/charts/data";
-import { monthlyBalance, paddedDomain, weeklyBalance } from "./history";
+import {
+  monthlyBalance,
+  netWorthSeries,
+  TRAJECTORY_MONTHS,
+  weeklyBalance,
+} from "./history";
 
 const BANK = "thb:asset:bank:a";
 const FOOD = "thb:expense:food:b";
@@ -111,16 +116,24 @@ describe("weeklyBalance", () => {
   });
 });
 
-describe("paddedDomain", () => {
-  it("lends a flat series the minimum span, evenly at both ends", () => {
-    expect(paddedDomain(5, 5)).toEqual({ low: 4.5, high: 5.5 });
+describe("netWorthSeries", () => {
+  it("replays each month end backwards from today's figure, oldest first", () => {
+    const rows = [
+      row("2026-03-10", 100, "thb:asset:bank:a", "thb:income:salary:x"),
+      row("2026-02-12", 50, "thb:expense:food:b", "thb:liability:card:c"),
+    ];
+    const points = netWorthSeries(rows, "2026-03", 1000.4);
+    expect(points).toHaveLength(TRAJECTORY_MONTHS + 1);
+    expect(points.slice(-3).map((point) => point.y)).toEqual([950, 900, 1000]);
+    expect(points[0]?.y).toBe(950);
   });
 
-  it("lends a narrow series only its shortfall", () => {
-    expect(paddedDomain(2, 2.5)).toEqual({ low: 1.75, high: 2.75 });
-  });
-
-  it("leaves a series wider than the minimum as drawn", () => {
-    expect(paddedDomain(-3, 10)).toEqual({ low: -3, high: 10 });
+  it("leaves out bookkeeping and foreign holdings", () => {
+    const rows = [
+      row("2026-03-01", 500, "thb:asset:bank:a", "thb:equity:opening"),
+      row("2026-03-02", 7, "usd:asset:brokerage:d", "usd:income:dividend:e"),
+    ];
+    const points = netWorthSeries(rows, "2026-03", 1000);
+    expect(new Set(points.map((point) => point.y))).toEqual(new Set([1000]));
   });
 });

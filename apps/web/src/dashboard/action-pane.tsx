@@ -13,16 +13,13 @@ import { Pane } from "@openledger-cfo/ui/pane";
 import type { ActionQueue } from "~/dashboard/action";
 import type { Insight, Severity } from "~/insights/types";
 import type { UpcomingItem, UpcomingSource } from "~/plan/upcoming";
-import { accountLabel, formatDayMonth, formatThb } from "~/lib/format";
+import { accountHref, accountLabel } from "~/ledger/accounts";
+import { formatDayMonth, formatThb } from "~/lib/format";
 import { RemoveButton } from "~/lib/ui/remove-button";
 import { SOURCE_LABEL } from "~/plan/upcoming";
 import { useTRPC } from "~/trpc/react";
 
-/**
- * Severity is carried by one hairline and the title colour, nothing else.
- * Left side only: the rows sit in a divide-y list, and an all-side border
- * colour would repaint the divider beside a critical flag red.
- */
+// Left border only: an all-side colour would repaint the divide-y line red.
 const TONE: Record<Severity, string> = {
   crit: "border-l-destructive",
   warn: "border-l-border",
@@ -66,11 +63,7 @@ function SourceMark({ source }: { source: UpcomingSource }) {
 function DueRow({ item }: { item: UpcomingItem }) {
   const overdue = item.overdue === true;
   const accountId = item.accountId;
-  /**
-   * A subscription row names its merchant, but the ledger files it under a
-   * category, so the row says where following it actually lands. One line
-   * cannot seat both at every pane width, so the category takes a second line.
-   */
+  // A subscription names its merchant; the category it files under takes a second line.
   const filedUnder =
     item.source === "subscription" && accountId !== undefined
       ? accountLabel(accountId)
@@ -124,7 +117,7 @@ function DueRow({ item }: { item: UpcomingItem }) {
   return (
     <li>
       <Link
-        href={`/accounts/${encodeURIComponent(accountId)}`}
+        href={accountHref(accountId)}
         className={cn(rowShell(filedUnder), "hover:bg-secondary/60")}
         title={label}
       >
@@ -190,11 +183,7 @@ export function ActionPane({
   className?: string;
 }) {
   const trpc = useTRPC();
-  /**
-   * Dismissing a flag hides a row and moves no figure: the queue is the same
-   * ledger read either way. So which flags are hidden lives here, and the
-   * write only records the choice for the next visit.
-   */
+  // Dismissing moves no figure, so hiding lives here; the write is for the next visit.
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(
     () => new Set(queue.dismissedIds),
   );

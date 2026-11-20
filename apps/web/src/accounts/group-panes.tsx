@@ -3,27 +3,36 @@ import Link from "next/link";
 import { cn } from "@openledger-cfo/ui";
 import { Pane } from "@openledger-cfo/ui/pane";
 
-import type { Holding, PortfolioAccount } from "~/accounts/portfolio";
+import type {
+  Holding,
+  PortfolioAccount,
+  UnitPosition,
+} from "~/accounts/portfolio";
 import type { Point } from "~/lib/charts/data";
 import { repaidShare, thbTotal, tickerOf } from "~/accounts/portfolio";
+import { accountHref } from "~/ledger/accounts";
 import { Sparkline } from "~/lib/charts/sparkline";
 import { ChartTip } from "~/lib/charts/tooltip";
 import {
   formatDayMonth,
-  formatHeld,
   formatPercent,
+  formatQuantity,
   formatThb,
   formatThbCompact,
   moneyOf,
 } from "~/lib/format";
 
+const formatHeld = (
+  position: UnitPosition | undefined,
+  unitWord: string,
+): string =>
+  position === undefined
+    ? "—"
+    : `${formatQuantity(position.quantity)}${unitWord === "" ? "" : ` ${unitWord}`}`;
+
 const ROW =
   "flex h-7 items-center gap-2 px-3 text-[11px] hover:bg-secondary/60";
-/**
- * A card or loan name is the whole reason to click the row, and sharing one
- * line with a cycle and a figure left it about seven characters. These panes
- * hold four rows and two, so the second line was already paid for.
- */
+// Two lines per row, so the name is not squeezed beside the cycle and the figure.
 const STACKED = "flex flex-col gap-0.5 px-3 py-1.5 hover:bg-secondary/60";
 const NAME = "min-w-0 flex-1 truncate";
 const SUB = "text-muted-foreground text-[10px] tabular-nums";
@@ -33,18 +42,27 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-muted-foreground px-3 py-2 text-xs">{children}</p>;
 }
 
-function Meter({ share, tone }: { share: number; tone?: string }) {
+function Meter({ share }: { share: number }) {
   return (
     <span className="bg-secondary h-[3px] w-16 shrink-0 overflow-hidden">
       <span
-        className={cn("block h-full", tone ?? "bg-accent")}
+        className="bg-accent block h-full"
         style={{ width: `${Math.min(share, 1) * 100}%` }}
       />
     </span>
   );
 }
 
-const href = (id: string) => `/accounts/${encodeURIComponent(id)}`;
+function NameLine({ name, value }: { name: string; value: string }) {
+  return (
+    <span className="flex items-baseline gap-2 text-[11px]">
+      <span className={NAME} title={name}>
+        {name}
+      </span>
+      <span className="shrink-0 tabular-nums">{value}</span>
+    </span>
+  );
+}
 
 export function BanksPane({
   rows,
@@ -74,15 +92,11 @@ export function BanksPane({
               const moved = activity[row.id];
               return (
                 <li key={row.id}>
-                  <Link href={href(row.id)} className={STACKED}>
-                    <span className="flex items-baseline gap-2 text-[11px]">
-                      <span className={NAME} title={row.name}>
-                        {row.name}
-                      </span>
-                      <span className="shrink-0 tabular-nums">
-                        {moneyOf(row.currency)(row.balance)}
-                      </span>
-                    </span>
+                  <Link href={accountHref(row.id)} className={STACKED}>
+                    <NameLine
+                      name={row.name}
+                      value={moneyOf(row.currency)(row.balance)}
+                    />
                     <span className="flex items-center gap-2">
                       <span className={cn(SUB, "min-w-0 flex-1 truncate")}>
                         {moved === undefined
@@ -128,15 +142,8 @@ export function CardsPane({
           <ul className="divide-border divide-y">
             {rows.map((row) => (
               <li key={row.id}>
-                <Link href={href(row.id)} className={STACKED}>
-                  <span className="flex items-baseline gap-2 text-[11px]">
-                    <span className={NAME} title={row.name}>
-                      {row.name}
-                    </span>
-                    <span className="shrink-0 tabular-nums">
-                      {formatThb(row.balance)}
-                    </span>
-                  </span>
+                <Link href={accountHref(row.id)} className={STACKED}>
+                  <NameLine name={row.name} value={formatThb(row.balance)} />
                   <span className={SUB}>
                     {row.statement_day === null || row.due_day === null
                       ? "no cycle"
@@ -178,26 +185,17 @@ export function LoansPane({
               return (
                 <li key={row.id}>
                   <Link
-                    href={href(row.id)}
+                    href={accountHref(row.id)}
                     className={cn(STACKED, "group/loan relative")}
                   >
-                    <span className="flex items-baseline gap-2 text-[11px]">
-                      <span className={NAME} title={row.name}>
-                        {row.name}
-                      </span>
-                      <span className="shrink-0 tabular-nums">
-                        {formatThb(row.balance)}
-                      </span>
-                    </span>
+                    <NameLine name={row.name} value={formatThb(row.balance)} />
                     <span className="flex items-center gap-2">
                       <Meter share={repaid} />
                       <span className={SUB}>
                         {formatPercent(repaid)} repaid
                       </span>
                     </span>
-                    {/* The share is the only figure the bar states; the two it
-                        was divided from belong to the same glance. The tip
-                        covers the row's own balance, so it restates it first. */}
+                    {/* The tip covers the row's balance, so it restates it first. */}
                     <ChartTip
                       className="top-1/2 right-3 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/loan:opacity-100"
                       rows={[
@@ -265,7 +263,7 @@ export function InvestmentsPane({
               <ul className="divide-border divide-y border-t">
                 {holding.rows.map((row) => (
                   <li key={row.id}>
-                    <Link href={href(row.id)} className={ROW}>
+                    <Link href={accountHref(row.id)} className={ROW}>
                       <span
                         className="text-muted-foreground w-16 shrink-0 truncate"
                         title={tickerOf(row)}

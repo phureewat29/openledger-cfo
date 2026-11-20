@@ -1,4 +1,4 @@
-import type { AccountType } from "@openledger-cfo/openledger";
+import type { BalanceSheet } from "~/ledger/accounts";
 
 export type Severity = "info" | "warn" | "crit";
 
@@ -28,13 +28,8 @@ export interface Insight {
 }
 
 export interface AccountSummary {
-  readonly id: string;
   readonly name: string;
-  readonly kind: AccountType;
-  readonly currency: string;
   readonly balance: number;
-  readonly debitsPosted: number;
-  readonly creditsPosted: number;
 }
 
 export interface MonthTotals {
@@ -55,10 +50,8 @@ export interface SpendLine {
 }
 
 /**
- * A category measured over the same slice of the month across periods. The
- * day-aligned window is what makes the comparison honest: a fixed charge that
- * always posts on the 5th shows up on both sides of it, where a
- * spend-per-day projection would inflate it into a fake spike.
+ * A category over the same slice of each month: a charge that always posts on the 5th
+ * lands on both sides, where a spend-per-day projection would read a fake spike.
  */
 export interface CategoryWindow {
   readonly id: string;
@@ -87,7 +80,6 @@ export interface Subscriptions {
 
 export interface MortgageProgress {
   readonly id: string;
-  readonly name: string;
   readonly balance: number;
   readonly principalPaid: number;
   readonly original: number;
@@ -118,21 +110,17 @@ export interface FxPosition {
   readonly lastTransferThb: number;
 }
 
-export interface RuleInput {
+export interface RuleInput extends BalanceSheet {
   readonly today: string;
   /** Latest date the ledger actually has activity for. */
   readonly asOf: string;
   readonly month: string;
   readonly dayOfMonth: number;
   readonly daysInMonth: number;
-  readonly netWorthThb: number;
-  readonly netWorthUsd: number;
-  readonly accounts: readonly AccountSummary[];
   /** Complete months only, oldest first. */
   readonly months: readonly MonthTotals[];
   readonly currentMonth: MonthTotals;
   readonly spendToDate: number;
-  readonly priorSpendToDateAvg: number;
   readonly projectedSpend: number;
   readonly categories: readonly CategoryWindow[];
   readonly subscriptions: Subscriptions;
@@ -154,8 +142,3 @@ export type Rule = (input: RuleInput) => Insight[];
 
 export const insightId = (rule: RuleKey, subject: string): string =>
   `${rule}:${subject}`;
-
-const SEVERITY_RANK: Record<Severity, number> = { crit: 0, warn: 1, info: 2 };
-
-export const severityRank = (severity: Severity): number =>
-  SEVERITY_RANK[severity];

@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { compact } from "es-toolkit";
 
 import type { RouterOutputs } from "@openledger-cfo/api";
 import { cn } from "@openledger-cfo/ui";
 import { Input, Select } from "@openledger-cfo/ui/input";
 import { Pane } from "@openledger-cfo/ui/pane";
 
-import type { PrefixOption } from "~/dashboard/load";
 import type { BudgetRow } from "~/plan/budgets";
+import type { PrefixOption } from "~/plan/goals";
 import { ChartTip } from "~/lib/charts/tooltip";
 import { formatMultiple, formatThb } from "~/lib/format";
 import { Field } from "~/lib/ui/field";
@@ -84,20 +85,18 @@ function Row({
       <ChartTip
         className="top-full left-0 opacity-0 group-hover:opacity-100"
         header={row.label}
-        rows={[
+        rows={compact([
           { key: "spent", label: "spent", value: formatThb(row.spent) },
           { key: "limit", label: "limit", value: formatThb(row.limit) },
           { key: "pace", label: "pace", value: formatMultiple(row.pacing) },
-          ...(projected === undefined
-            ? []
-            : [
-                {
-                  key: "projected",
-                  label: "month end at this rate",
-                  value: formatThb(projected),
-                },
-              ]),
-        ]}
+          projected === undefined
+            ? undefined
+            : {
+                key: "projected",
+                label: "month end at this rate",
+                value: formatThb(projected),
+              },
+        ])}
       />
     </li>
   );
@@ -123,11 +122,7 @@ export function BudgetsPane({
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
 
-  /**
-   * Only the limits are re-read after a write. What each category has already
-   * cost is a ledger figure that setting or clearing a limit cannot move, so
-   * it arrives once with the page and the rows re-derive against it.
-   */
+  // Only the limits are re-read after a write; a limit cannot move what was already spent.
   const list = useQuery(
     trpc.budgets.list.queryOptions(undefined, { initialData: limits }),
   );
@@ -141,8 +136,7 @@ export function BudgetsPane({
   const upsert = useMutation(trpc.budgets.upsert.mutationOptions(reread));
   const remove = useMutation(trpc.budgets.remove.mutationOptions(reread));
   const rows = budgetRows(list.data, spend, elapsed);
-  // Scoped to the row actually being removed, so removing one budget or
-  // submitting the form never dims a sibling row.
+  // Scoped to the row being removed, so no other row dims.
   const removingCategory = remove.isPending
     ? remove.variables.category
     : undefined;

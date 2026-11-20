@@ -6,32 +6,17 @@ import { useQueries } from "@tanstack/react-query";
 import { cn } from "@openledger-cfo/ui";
 import { Button } from "@openledger-cfo/ui/button";
 
-import type { TransactionRow } from "~/ledger/postings";
-import { toPosting } from "~/ledger/postings";
-import {
-  accountLabel,
-  formatDayMonth,
-  formatStamp,
-  moneyOf,
-} from "~/lib/format";
+import { counterpartyOf, toPosting } from "~/ledger/postings";
+import { formatDayMonth, formatStamp, moneyOf } from "~/lib/format";
 import { LoadingLine } from "~/lib/ui/loading-line";
 import { useTRPC } from "~/trpc/react";
 import { PAGE_SIZE } from "./paging";
 
-/**
- * A page of postings is a slice of what the ledger already recorded, so it does
- * not move while somebody reads it: coming back to the tab is not news.
- */
+// A page of postings is already recorded history; coming back to the tab is not news.
 const PAGE_STALE_MS = 5 * 60 * 1000;
 
 /** Past this the list is no longer a list, and every page is another read. */
 const MAX_PAGES = 40;
-
-/** The side of the row this account is not on — who it traded with. */
-const counterpartyOf = (row: TransactionRow, debited: boolean) =>
-  debited
-    ? accountLabel(row.credit_account_id, row.credit_account_name)
-    : accountLabel(row.debit_account_id, row.debit_account_name);
 
 function Cell({
   children,
@@ -90,17 +75,17 @@ export function PostingsTable({
     setOffsets((current) => [...current, current.length * PAGE_SIZE]);
   };
 
+  if (rows.length === 0 && error !== null) {
+    return <p className="text-destructive p-3 text-xs">{error.message}</p>;
+  }
+  if (rows.length === 0 && last?.isPending === true) {
+    return (
+      <div className="p-3">
+        <LoadingLine />
+      </div>
+    );
+  }
   if (rows.length === 0) {
-    if (error !== null) {
-      return <p className="text-destructive p-3 text-xs">{error.message}</p>;
-    }
-    if (last?.isPending === true) {
-      return (
-        <div className="p-3">
-          <LoadingLine />
-        </div>
-      );
-    }
     return (
       <p className="text-muted-foreground p-3 text-xs">No transactions.</p>
     );
@@ -125,12 +110,7 @@ export function PostingsTable({
           <tbody className="divide-border divide-y">
             {rows.map((row) => {
               const debited = row.debit_account_id === account;
-              /**
-               * Direction depends on the account's own kind, not merely which
-               * side of the row it sits on: a debit pays down a liability but
-               * funds an asset, so the sign follows `toPosting`'s authority —
-               * which also sanitizes the description on the way through.
-               */
+              // The sign follows the account's kind, so `toPosting` decides it.
               const posting = toPosting(
                 row,
                 account,
@@ -147,7 +127,7 @@ export function PostingsTable({
                   </Cell>
                   <Cell title={posting.label}>{posting.label}</Cell>
                   <Cell className="text-muted-foreground">
-                    {counterpartyOf(row, debited)}
+                    {counterpartyOf(row, account)}
                   </Cell>
                   <Cell
                     className={cn(

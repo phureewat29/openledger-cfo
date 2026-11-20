@@ -1,12 +1,61 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+
 import { Button } from "@openledger-cfo/ui/button";
 
-import { AddDisclosure } from "~/plan/add-disclosure";
+// A quiet footer row until asked; Escape closes and the trigger takes focus back.
+function AddDisclosure({
+  label,
+  open,
+  onOpen,
+  onClose,
+  children,
+}: {
+  label: string;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(open);
 
-/**
- * The disclosure, field shell, and submit/cancel/status footer every plan
- * form repeats. Fully controlled — callers keep the open/added state so an
- * action outside the form (like completing a list row) can still clear it.
- */
+  // Closing unmounts whatever held focus; hand it back to the trigger.
+  useEffect(() => {
+    if (wasOpen.current && !open) trigger.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
+
+  if (!open) {
+    return (
+      <div className="border-border shrink-0 border-t px-1 py-1.5">
+        <Button
+          ref={trigger}
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground w-full justify-start px-2"
+          onClick={onOpen}
+        >
+          + {label}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="shrink-0"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Fully controlled: callers keep open/added so an action outside the form can clear them.
 export function PlanForm({
   label,
   open,

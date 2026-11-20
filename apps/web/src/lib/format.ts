@@ -1,5 +1,3 @@
-import type { UnitPosition } from "~/accounts/portfolio";
-
 const thb = (options: Intl.NumberFormatOptions) =>
   new Intl.NumberFormat("th-TH", {
     style: "currency",
@@ -90,14 +88,6 @@ export const formatQuantity = (quantity: number): string =>
     minimumFractionDigits: 2,
     maximumFractionDigits: quantity < 1 ? 5 : 2,
   });
-
-export const formatHeld = (
-  position: UnitPosition | undefined,
-  unitWord: string,
-): string =>
-  position === undefined
-    ? "—"
-    : `${formatQuantity(position.quantity)}${unitWord === "" ? "" : ` ${unitWord}`}`;
 
 const ORDINAL: Record<number, string> = {
   1: "st",
@@ -196,56 +186,6 @@ export const formatStamp = (isoDate: string): string =>
 
 export const formatDayMonth = (isoDate: string): string =>
   dayFirst(DAY_MONTH, utc(isoDate)).toUpperCase();
-
-/** Segments whose title-cased form reads wrong. */
-const SEGMENT_LABELS: Record<string, string> = {
-  "credit-card": "Credit card",
-  donation: "Donations",
-  entertainment: "Entertainment",
-  fees: "Bank fees",
-  family: "Family support",
-  food: "Food & dining",
-  interest: "Loan interest",
-  subscriptions: "Subscriptions",
-  tax: "Tax & social security",
-  "bts-mrt": "BTS / MRT",
-  "condo-fee": "Condo fee",
-  "income-tax": "Income tax",
-  "kbank-visa": "KBank Visa",
-  "real-estate": "Real estate",
-  "social-security": "Social security",
-  credit_card: "Credit cards",
-  etf: "ETFs",
-  fx: "FX",
-  kbank: "KBank",
-  pvd: "Provident fund",
-  rmf: "RMF",
-  rsu: "RSUs",
-  scb: "SCB",
-  ssf: "SSF",
-  truemoney: "TrueMoney",
-  ttb: "ttb",
-  uob: "UOB",
-};
-
-const titleCase = (segment: string) =>
-  segment
-    .split(/[-_]/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-
-/**
- * The ledger already names every account, so a caller with the row in hand
- * should pass it; the table only rescues ids read straight off a transaction.
- */
-export const accountLabel = (
-  accountId: string,
-  name?: string | null,
-): string => {
-  if (name && name.length > 0) return name;
-  const segment = accountId.slice(accountId.lastIndexOf(":") + 1);
-  return SEGMENT_LABELS[segment] ?? titleCase(segment);
-};
 
 export const countNoun = (
   count: number,

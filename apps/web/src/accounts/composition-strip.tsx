@@ -5,25 +5,17 @@ import { cn } from "@openledger-cfo/ui";
 import type { Portfolio } from "~/accounts/portfolio";
 import type { CategoryTotal } from "~/lib/charts/data";
 import { thbTotal } from "~/accounts/portfolio";
-import { foldTail } from "~/lib/charts/fold";
+import { foldTail } from "~/lib/charts/data";
 import { toneOf } from "~/lib/charts/tone";
 import { ChartTip } from "~/lib/charts/tooltip";
 import { formatPercent, formatThb } from "~/lib/format";
 
 /** Past six the segments stop being wide enough to tell apart. */
 const TOP_SEGMENTS = 6;
-/**
- * Below this a segment is narrower than its own name at every tier this page
- * renders at, so the name goes to the tooltip rather than into a truncation.
- */
+// Below this share a segment is narrower than its name, so the name goes to the tooltip.
 const LABEL_SHARE = 0.1;
 
-/**
- * What the money is made of, as one bar. The totals above say how much there
- * is; proportion is the one thing a row of separate pane headings cannot show.
- * Baht only — the group panes keep each currency's total apart, and a mixed
- * bar would be adding them.
- */
+// What the money is made of, as one bar; baht only, since a mixed bar would add currencies.
 export function CompositionStrip({
   portfolio,
   className,
@@ -47,8 +39,7 @@ export function CompositionStrip({
   if (total <= 0) return null;
 
   const width = (slice: CategoryTotal) => `${(slice.value / total) * 100}%`;
-  // Where each segment's middle falls along the bar, which is the side its tip
-  // has room to open toward.
+  // Where each segment's middle falls, which decides the side its tip opens toward.
   const middles = slices.map(
     (slice, rank) =>
       (sumBy(slices.slice(0, rank), (before) => before.value) +
@@ -58,13 +49,11 @@ export function CompositionStrip({
 
   return (
     <section
-      // The tips are the only thing here wider than their own segment, and a
-      // tip is never worth a horizontal scrollbar on the page behind it.
+      // A tip wider than its segment must never add a horizontal scrollbar.
       className={cn("flex flex-col gap-1 overflow-x-clip", className)}
       aria-label={`Baht assets by class, ${formatThb(total)}`}
     >
-      {/* No total of its own: the assets figure directly above is the same
-          baht-only sum, and this bar is what it is made of. */}
+      {/* No total of its own: the assets figure above is the same sum. */}
       <div className="flex h-3 gap-[2px]">
         {slices.map((slice, rank) => (
           <div
@@ -96,8 +85,7 @@ export function CompositionStrip({
         ))}
       </div>
 
-      {/* Names sit under their own segment rather than inside it: the ladder's
-          dimmer steps cannot carry legible type on a 12px bar. */}
+      {/* Names sit under their segment: the dimmer tones cannot carry type on a 12px bar. */}
       <div className="flex gap-[2px]">
         {slices.map((slice) => (
           <span
