@@ -1,6 +1,6 @@
 {
   "name": "@openledger-cfo/db",
-  "description": "Drizzle schema for budgets, goals, reminders, and insight state",
+  "description": "Drizzle schema and client for the control plane: plans, insight state and the AI gateway setting",
   "private": true,
   "type": "module",
   "exports": {
@@ -30,8 +30,7 @@
   },
   "dependencies": {
     "better-sqlite3": "catalog:",
-    "drizzle-orm": "^0.45.4",
-    "zod": "catalog:"
+    "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {
     "@openledger-cfo/eslint-config": "workspace:*",
