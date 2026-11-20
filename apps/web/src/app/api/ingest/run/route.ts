@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   }
 
   const { pathOrIds, mode } = start.data;
-  const started = await startRun({ pathOrIds }, mode);
+  const started = await startRun(pathOrIds, mode);
   if (!started.ok) {
     return fail(START_STATUS[started.error.reason], started.error.message);
   }

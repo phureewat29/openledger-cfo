@@ -4,30 +4,16 @@ import { z } from "zod/v4";
 
 import type { OledErrorKind } from "@openledger-cfo/openledger";
 import { ledger } from "@openledger-cfo/api";
-import { FILE_ID_PATTERN } from "@openledger-cfo/openledger/ids";
+import { fileIdSchema } from "@openledger-cfo/openledger";
 
 import type { IngestFile } from "~/ingest/files";
 import { fail } from "~/app/api/ingest/reply";
-
-/**
- * How a row leaves the queue, by the status it was listed with. A file the
- * ledger never registered is only a file on disk; a registered one has to be
- * dropped first, or its rows and questions would outlive the statement they
- * came from. A closed file keeps both — un-ingesting is a ledger correction,
- * not a queue action.
- */
-const RECIPE: Record<IngestFile["status"], "unlink" | "drop" | "refuse"> = {
-  new: "unlink",
-  unreadable: "unlink",
-  pending: "drop",
-  failed: "drop",
-  ingested: "refuse",
-};
+import { REMOVAL } from "~/ingest/files";
 
 const bodySchema = z.object({
   relPath: z.string().min(1).max(500),
-  status: z.enum(["new", "pending", "ingested", "failed", "unreadable"]),
-  fileId: z.string().regex(FILE_ID_PATTERN).optional(),
+  status: z.enum(Object.keys(REMOVAL) as IngestFile["status"][]),
+  fileId: fileIdSchema.optional(),
 });
 
 /** The two a stale queue can cause; every other kind is this server's problem. */
@@ -47,7 +33,7 @@ export async function DELETE(request: Request) {
     }
 
     const { relPath, status, fileId } = body.data;
-    const recipe = RECIPE[status];
+    const recipe = REMOVAL[status];
     if (recipe === "refuse") {
       return fail(
         409,

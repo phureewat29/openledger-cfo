@@ -152,7 +152,6 @@ export function Dropzone({ onUploaded }: { onUploaded: () => void }) {
           <RemoveButton
             label="Dismiss upload failures"
             className="size-5 shrink-0"
-            disabled={false}
             onClick={() => setOutcome(null)}
           />
         </div>

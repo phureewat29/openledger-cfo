@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { attempt } from "es-toolkit";
 
 import { Button } from "@openledger-cfo/ui/button";
 
@@ -27,42 +28,26 @@ const CHOICES: readonly {
 
 const MODE_KEY = "cfo.ingest.mode";
 
+// Storage can refuse reads and writes (private mode, embeds); nothing is kept then.
 const rememberedMode = (): RunMode | null => {
-  try {
-    return (
-      RUN_MODES.find((mode) => mode === localStorage.getItem(MODE_KEY)) ?? null
-    );
-  } catch {
-    // Storage refused the read (blocked in some embeds); nothing is remembered.
-    return null;
-  }
+  const [, stored] = attempt(() => localStorage.getItem(MODE_KEY));
+  return RUN_MODES.find((mode) => mode === stored) ?? null;
 };
 
 const remember = (mode: RunMode): void => {
-  try {
-    localStorage.setItem(MODE_KEY, mode);
-  } catch {
-    // Storage refused the write (private mode); the choice just is not kept.
-  }
+  attempt(() => localStorage.setItem(MODE_KEY, mode));
 };
 
 /** Locked names said in full before the line folds into a count. */
 const NAMED_LOCKED = 3;
 
-/**
- * A count, never a promise: the queue tells the app a file is encrypted and
- * untouched, and only `oled` finds out whether the password behind it works.
- */
+// A count, never a promise: only `oled` finds out whether a password works.
 const lockedLine = (locked: number): string => {
   const them = locked === 1 ? "it" : "them";
   return `${countNoun(locked, "locked file")} in this selection will be skipped — unlock ${them} in the list first to include ${them}.`;
 };
 
-/**
- * Mounted per opening, so the remembered read happens on the client each time
- * the dialog shows. The remembered choice takes `autofocus`, which is what
- * `showModal` hands focus to — Enter starts the run the way it started last.
- */
+// Mounted per opening; the remembered choice takes `autofocus`, which `showModal` focuses.
 function Choices({
   files,
   locked,
@@ -132,12 +117,8 @@ function Choices({
   );
 }
 
-/**
- * Every pane on this page sits inside an `@container`, which makes its
- * ancestor the containing block for anything fixed — a hand-rolled overlay
- * lands inside the column it came from. A native modal renders in the top
- * layer, and brings the focus trap, the focus restore and Escape with it.
- */
+// Panes sit inside `@container`s, which trap fixed overlays; a native modal
+// escapes to the top layer and brings focus trap and Escape with it.
 export function ModeDialog({
   open,
   files,

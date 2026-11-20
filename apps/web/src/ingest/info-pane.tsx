@@ -55,17 +55,17 @@ function QuestionRow({ row }: { row: IngestQuestion }) {
   const [response, setResponse] = useState("");
   const [deferDays, setDeferDays] = useState<number>(DEFER_CHOICES[0].days);
 
-  const settled = {
+  const reread = {
     onSuccess: () =>
       void queryClient.invalidateQueries(
         trpc.ledger.questions.list.queryFilter(),
       ),
   };
   const answer = useMutation(
-    trpc.ledger.questions.answer.mutationOptions(settled),
+    trpc.ledger.questions.answer.mutationOptions(reread),
   );
   const defer = useMutation(
-    trpc.ledger.questions.defer.mutationOptions(settled),
+    trpc.ledger.questions.defer.mutationOptions(reread),
   );
 
   const busy = answer.isPending || defer.isPending;
@@ -137,11 +137,6 @@ function QuestionRow({ row }: { row: IngestQuestion }) {
   );
 }
 
-/**
- * One pane over the file the operator is looking at: its extracted text, or
- * the questions the ledger raised from it. Which one is the selection's to
- * decide — View opens the document, a row's question chip opens the queue.
- */
 function ModeButton({
   active,
   onClick,
@@ -193,11 +188,7 @@ export function InfoPane({ className }: { className?: string }) {
         : { fileId: viewerFileId },
     ),
   );
-  /**
-   * Off, this is the key the file list already polls and the pane rides its
-   * cache entry; on, it is a second key with nobody else watching it, so this
-   * is the one that carries an interval.
-   */
+  // Off, this rides the file list's poll; on, it is a key nobody else polls.
   const questions = useQuery(
     trpc.ledger.questions.list.queryOptions(
       includeDeferred ? { includeDeferred: true } : {},
@@ -219,20 +210,20 @@ export function InfoPane({ className }: { className?: string }) {
           (row) => row.file_id === viewerFileId,
         );
 
-  // The full id when the queue does not know the file: six trailing characters
-  // name nothing the operator can find or act on.
+  // The full id when the queue does not know the file; a short id names nothing findable.
   const name = viewed?.rel_path ?? viewerFileId ?? undefined;
 
+  // The queue settled without the row: the file was deleted.
+  const gone = viewed === undefined && files.isSuccess;
+  const goneNote = (
+    <p className="text-muted-foreground text-xs">
+      This file is no longer in the queue.
+    </p>
+  );
+
   const documentBody = () => {
+    if (document.isError && gone) return goneNote;
     if (document.isError) {
-      // The queue settled without the row and the read failed: it was deleted.
-      if (viewed === undefined && files.isSuccess) {
-        return (
-          <p className="text-muted-foreground text-xs">
-            This file is no longer in the queue.
-          </p>
-        );
-      }
       return (
         <p className="text-destructive text-xs">{document.error.message}</p>
       );
@@ -274,7 +265,6 @@ export function InfoPane({ className }: { className?: string }) {
     );
   };
 
-  /** A closed file's story: which accounts its rows hit and by how much. */
   const summaryBody = () => {
     if (posted.isError) {
       return <p className="text-destructive text-xs">{posted.error.message}</p>;
@@ -335,15 +325,8 @@ export function InfoPane({ className }: { className?: string }) {
   };
 
   const questionsBody = () => {
-    // Without this, a deleted file's questions view claims there is nothing
-    // left to answer, which sounds like the file is fine.
-    if (viewed === undefined && files.isSuccess) {
-      return (
-        <p className="text-muted-foreground text-xs">
-          This file is no longer in the queue.
-        </p>
-      );
-    }
+    // Otherwise a deleted file would read as having nothing left to answer.
+    if (gone) return goneNote;
     if (questions.isError) {
       return (
         <p className="text-destructive text-xs">{questions.error.message}</p>
@@ -385,11 +368,10 @@ export function InfoPane({ className }: { className?: string }) {
   // says it, and the same number twice three characters apart reads as two.
   const detail = () => {
     if (viewerMode === "questions") return undefined;
-    if (settled) {
-      if (posted.data === undefined) return undefined;
+    if (settled && posted.data !== undefined) {
       return `${countNoun(posted.data.length, "row")} posted`;
     }
-    if (extraction === undefined) return undefined;
+    if (settled || extraction === undefined) return undefined;
     return countNoun(extraction.page_count, "page");
   };
 
@@ -448,14 +430,13 @@ export function InfoPane({ className }: { className?: string }) {
             <RemoveButton
               label="Stop reading this file"
               className="size-5 shrink-0"
-              disabled={false}
               onClick={() => view(null)}
             />
           </span>
         )
       }
-      scroll
       className={className}
+      bodyClassName="flex-1 overflow-y-auto"
     >
       {body()}
     </Pane>

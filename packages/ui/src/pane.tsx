@@ -4,7 +4,6 @@ function Pane({
   title,
   meta,
   actions,
-  scroll = false,
   className,
   bodyClassName,
   children,
@@ -14,7 +13,6 @@ function Pane({
   title: React.ReactNode;
   meta?: React.ReactNode;
   actions?: React.ReactNode;
-  scroll?: boolean;
   bodyClassName?: string;
 }) {
   return (
@@ -40,15 +38,7 @@ function Pane({
           </span>
         )}
       </header>
-      <div
-        className={cn(
-          "min-h-0 p-3",
-          scroll && "flex-1 overflow-y-auto",
-          bodyClassName,
-        )}
-      >
-        {children}
-      </div>
+      <div className={cn("min-h-0 p-3", bodyClassName)}>{children}</div>
     </section>
   );
 }

@@ -4,26 +4,16 @@ import { cn } from "@openledger-cfo/ui";
 import { Pane } from "@openledger-cfo/ui/pane";
 
 import { countNoun } from "~/lib/format";
-import { useHydrated } from "~/lib/ui/use-hydrated";
+import { Pulse } from "~/lib/ui/loading-line";
 import { useTailFollow } from "~/lib/ui/use-tail-follow";
-import { exitLine, NO_ENTRIES } from "~/shell/cli-log";
+import { exitLine } from "~/shell/cli-log";
 import { useCliLog } from "~/shell/cli-log-provider";
 
 const timeOf = (startedAt: number) =>
   new Date(startedAt).toLocaleTimeString("en-GB", { hour12: false });
 
 export function CliLog({ className }: { className?: string }) {
-  const hydrated = useHydrated();
-  const log = useCliLog();
-
-  /**
-   * Both gated on hydrated, not just on what the poll holds: the provider polls
-   * from the layout, outside this page's suspense boundary, so it can already
-   * hold commands before this subtree finishes hydrating — rendering them then
-   * would diverge from the empty server HTML.
-   */
-  const entries = hydrated ? log.entries : NO_ENTRIES;
-  const error = hydrated ? log.error : null;
+  const { entries, error } = useCliLog();
   const { ref: scrollRef, onScroll } = useTailFollow(entries);
 
   return (
@@ -65,10 +55,7 @@ export function CliLog({ className }: { className?: string }) {
                   $ {entry.line}
                 </span>
                 {entry.exitCode === null ? (
-                  <span
-                    aria-label="Running"
-                    className="bg-accent size-1.5 shrink-0 animate-pulse rounded-full"
-                  />
+                  <Pulse label="Running" />
                 ) : (
                   <span
                     className={cn(

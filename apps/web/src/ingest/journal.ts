@@ -26,9 +26,8 @@ const appended = (journal: Journal, entry: NewEntry, at: number): Journal => {
 };
 
 /**
- * A step that lands rewrites a row the reader has already been handed, so it
- * takes a fresh seq to come back past that reader's cursor. Its slot does not
- * move: the feed is ordered by when work started, not by when it finished.
+ * A landed step takes a fresh seq to come back past the reader's cursor, but keeps
+ * its slot: the feed is ordered by when work started, not when it finished.
  */
 const patched = (journal: Journal, id: string, patch: EntryPatch): Journal => {
   const index = journal.entries.findIndex((entry) => entry.id === id);
@@ -42,10 +41,8 @@ const patched = (journal: Journal, id: string, patch: EntryPatch): Journal => {
 };
 
 /**
- * One journal per process, for the reason the command log has one: the runner
- * writes from a detached turn while the reader polls from a request, and two
- * copies would leave the reader watching an empty one. The seq lives in the
- * same value so a re-evaluated module cannot hand out one already used.
+ * One per process: the runner writes from a detached turn and the reader polls from a
+ * request. The seq shares the value, so a re-evaluated module never reissues one.
  */
 const holder = perProcess<{ current: Journal }>("ingestRunJournal", () => ({
   current: { entries: [], seq: 0 },

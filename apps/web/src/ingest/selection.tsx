@@ -1,6 +1,9 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { useTRPC } from "~/trpc/react";
 
 /** Which face of a file the info pane is showing. */
 type InfoMode = "document" | "questions";
@@ -32,11 +35,7 @@ interface Viewer {
 
 const CLOSED: Viewer = { fileId: null, mode: "document" };
 
-/**
- * Two selections, kept apart on purpose: what is acted on vs what is read.
- * Both stay in memory, not the URL — this page is force-dynamic, so a
- * navigation would re-run the `oled` reads behind it.
- */
+// In memory, not the URL: the page is force-dynamic, so a navigation re-runs its `oled` reads.
 export function SelectionProvider({ children }: { children: React.ReactNode }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(NOTHING);
   const [viewer, setViewer] = useState<Viewer>(CLOSED);
@@ -59,11 +58,7 @@ export function SelectionProvider({ children }: { children: React.ReactNode }) {
     [selected, viewer],
   );
 
-  return (
-    <SelectionContext.Provider value={value}>
-      {children}
-    </SelectionContext.Provider>
-  );
+  return <SelectionContext value={value}>{children}</SelectionContext>;
 }
 
 export function useSelection(): Selection {
@@ -72,4 +67,15 @@ export function useSelection(): Selection {
     throw new Error("useSelection must be used inside a SelectionProvider");
   }
   return selection;
+}
+
+export function useQueueRefresh(): () => void {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries(trpc.ledger.ingest.list.queryFilter());
+    void queryClient.invalidateQueries(
+      trpc.ledger.questions.list.queryFilter(),
+    );
+  };
 }

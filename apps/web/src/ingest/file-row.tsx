@@ -17,9 +17,10 @@ import { Input } from "@openledger-cfo/ui/input";
 import type { IngestFile } from "~/ingest/files";
 import { isLocked, SETTLED, STATUS_LABEL } from "~/ingest/files";
 import { runLine } from "~/ingest/run";
-import { useSelection } from "~/ingest/selection";
+import { useQueueRefresh, useSelection } from "~/ingest/selection";
 import { countNoun } from "~/lib/format";
 import { Field } from "~/lib/ui/field";
+import { Pulse } from "~/lib/ui/loading-line";
 import { useTRPC } from "~/trpc/react";
 
 const CHIP = "shrink-0 rounded-sm px-1.5 text-[10px] uppercase";
@@ -43,15 +44,11 @@ function Row({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const refreshQueue = useQueueRefresh();
   const { selected, toggle, viewerFileId, view } = useSelection();
   const fileId = row.file_id;
 
-  /**
-   * A prepare that never got its password registers the file anyway: pending,
-   * with an id and nothing extracted behind it. Only the extraction itself
-   * tells that apart from a file that is genuinely ready, so a registered
-   * encrypted file is asked for one — a read off disk, no command behind it.
-   */
+  // A prepare without its password still registers the file; only a missing extraction tells.
   const extraction = useQuery(
     trpc.ledger.ingest.document.queryOptions(
       row.encrypted && !SETTLED.has(row.status) && fileId !== null
@@ -60,26 +57,16 @@ function Row({
       { retry: false },
     ),
   );
-  /**
-   * Only a missing extraction means the password is what stands in the way; a
-   * read the ledger failed for any other reason is its own problem, and a
-   * password prompt over it would claim something nobody knows.
-   */
+  // Any other failed read is its own problem, not a password prompt.
   const missingExtraction = extraction.error?.data?.code === "NOT_FOUND";
   const locked = isLocked(row) || missingExtraction;
   const unreadable = extraction.isError && !missingExtraction;
   const [password, setPassword] = useState("");
   const [panelOpen, setPanelOpen] = useState(false);
 
-  // A prepare raises questions of its own, which at the queue's own pace would
-  // sit unread for a poll or two after the command that asked them.
+  // A prepare raises questions and writes the extraction the row reads to learn it is unlocked.
   const refresh = () => {
-    void queryClient.invalidateQueries(trpc.ledger.ingest.list.queryFilter());
-    void queryClient.invalidateQueries(
-      trpc.ledger.questions.list.queryFilter(),
-    );
-    // Preparing writes the extraction, and the row reads it back to learn
-    // whether it is still locked.
+    refreshQueue();
     if (fileId !== null) {
       void queryClient.invalidateQueries(
         trpc.ledger.ingest.document.queryFilter({ fileId }),
@@ -87,7 +74,6 @@ function Row({
     }
   };
 
-  /** Unlocking is the one command a row still runs itself; the agent does the rest. */
   const prepare = useMutation(
     trpc.ledger.ingest.prepare.mutationOptions({
       onSuccess: (result) => {
@@ -168,19 +154,12 @@ function Row({
             aria-label="Password protected"
           />
         ) : null}
-        {prepare.isPending ? (
-          <span
-            aria-label="Preparing"
-            className="bg-accent size-1.5 shrink-0 animate-pulse rounded-full"
-          />
-        ) : null}
+        {prepare.isPending ? <Pulse label="Preparing" /> : null}
         {openQuestions === 0 || fileId === null ? null : (
           <button
             type="button"
             onClick={() => view(fileId, "questions")}
-            /* Filled, not outlined: an open question is the queue waiting on
-               the operator, and the row's loudest mark should be the one
-               asking for a person. */
+            // Filled: an open question is the row's loudest mark.
             className={cn(
               CHIP,
               "bg-accent text-accent-foreground cursor-pointer font-medium hover:brightness-[0.97]",
@@ -242,11 +221,7 @@ function Row({
   );
 }
 
-/**
- * Compares by value, not identity: the queue arrives as fresh objects each
- * poll, and most change nothing worth losing. Picking still re-renders —
- * selection arrives through context, which memo cannot block.
- */
+// By value: every poll delivers fresh objects. Picking still re-renders through context.
 export const FileRow = memo(
   Row,
   (previous, next) =>

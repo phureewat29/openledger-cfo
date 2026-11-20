@@ -1,5 +1,3 @@
-import { mergeById } from "~/shell/cli-log";
-
 export type RunStatus =
   "running" | "waiting-password" | "done" | "failed" | "cancelled";
 
@@ -48,10 +46,8 @@ interface Phase {
 }
 
 /**
- * One line per tool, in both tenses: a step is journalled when it starts and
- * rewritten when it lands, and a running step must not claim it finished.
- * A tool absent from this table never reaches the feed, which is what keeps
- * the agent's file and todo built-ins out of a log about money.
+ * Both tenses, so a running step never claims it finished. A tool absent here never
+ * reaches the feed, which keeps the agent's file and todo built-ins out of it.
  */
 export const PHASE_LABEL: Record<string, Phase> = {
   ingestList: { live: "Reading the queue", done: "Read the queue" },
@@ -83,11 +79,6 @@ export const isRunLive = (status: RunStatus): boolean =>
 export const RUN_MODES = ["auto", "normal"] as const;
 export type RunMode = (typeof RUN_MODES)[number];
 
-/** A run is always asked for by name; there is no whole-queue scope anywhere. */
-export interface RunScope {
-  readonly pathOrIds: readonly string[];
-}
-
 /** What the runner can tell the agent about one file before it opens it. */
 export interface RunTarget {
   readonly relPath: string;
@@ -104,12 +95,7 @@ const preparedNote = (target: RunTarget): string | undefined => {
     : "registered with nothing extracted, so prepare it again before reading it";
 };
 
-/**
- * The one line the two modes differ by. Auto finishes the queue alone. Normal
- * hands the ambiguous back: a file whose questions are still open is not
- * finished, and closing it would bury the ask behind an ingested status
- * nobody looks at again.
- */
+/** Normal leaves open questions to the operator: closing their file would bury the ask. */
 const CLOSING_RULE: Record<RunMode, string> = {
   auto: "Post every one of them, close each file, answer the questions they raise, then report.",
   normal:
@@ -133,8 +119,3 @@ export const objectiveOf = (
 export const RUN_JOURNAL_CAPACITY = 300;
 
 export const NO_RUN_ENTRIES: RunEntry[] = [];
-
-export const mergeRunEntries = (
-  current: readonly RunEntry[],
-  delta: readonly RunEntry[],
-): RunEntry[] => mergeById(current, delta, RUN_JOURNAL_CAPACITY);

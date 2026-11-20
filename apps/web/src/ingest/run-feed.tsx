@@ -8,11 +8,11 @@ import { Input } from "@openledger-cfo/ui/input";
 import { Pane } from "@openledger-cfo/ui/pane";
 
 import type { RunEntry, RunEntryKind, RunStatus } from "~/ingest/run";
-import { isRunLive, NO_RUN_ENTRIES, runLine } from "~/ingest/run";
+import { isRunLive, runLine } from "~/ingest/run";
 import { useIngestRun } from "~/ingest/run-provider";
 import { useSelection } from "~/ingest/selection";
 import { Field } from "~/lib/ui/field";
-import { LoadingLine } from "~/lib/ui/loading-line";
+import { LoadingLine, Pulse } from "~/lib/ui/loading-line";
 import { useHydrated } from "~/lib/ui/use-hydrated";
 import { useTailFollow } from "~/lib/ui/use-tail-follow";
 
@@ -31,15 +31,6 @@ const ENTRY_TONE: Record<RunEntryKind, string> = {
   ask: "text-accent",
   summary: "text-foreground",
 };
-
-function Pulse({ label }: { label: string }) {
-  return (
-    <span
-      aria-label={label}
-      className="bg-accent size-1.5 shrink-0 animate-pulse rounded-full"
-    />
-  );
-}
 
 function EntryRow({ entry }: { entry: RunEntry }) {
   const { view } = useSelection();
@@ -137,24 +128,13 @@ export function RunFeed({
 }) {
   const hydrated = useHydrated();
   const feed = useIngestRun();
-  /**
-   * Which run the Cancel press belongs to, so the pressed state cannot leak
-   * onto the next run: a cancel is settled by the poll flipping the status,
-   * not by its own response.
-   */
+  // Keyed by run so the pressed state cannot leak onto the next run; the poll settles a cancel.
   const [cancelState, setCancelState] = useState<{
     runId: string;
     error: string | null;
   } | null>(null);
 
-  /**
-   * Gated on hydrated, not just on what the poll holds: the provider polls from
-   * the layout, outside this page's boundary, so it can already hold a run
-   * before this subtree hydrates — rendering it then would diverge from the
-   * empty server HTML.
-   */
-  const entries = hydrated ? feed.entries : NO_RUN_ENTRIES;
-  const run = hydrated ? feed.run : null;
+  const { entries, run } = feed;
   const live = run !== null && isRunLive(run.status);
   const { ref: scrollRef, onScroll } = useTailFollow(entries);
 

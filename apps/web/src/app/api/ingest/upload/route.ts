@@ -26,10 +26,8 @@ type WriteFailure = "exhausted" | "io";
 const WRITE_STATUS: Record<WriteFailure, number> = { exhausted: 409, io: 500 };
 
 /**
- * `wx` is the claim: the first writer of a name wins and a second dropped copy
- * gets its own file rather than overwriting a statement waiting to be ingested.
- * The validated extension is written back lowercase so the ledger's walk sees
- * one spelling of each name.
+ * `wx` is the claim: a second copy of a name gets its own file instead of overwriting
+ * one waiting to be ingested. The extension is written lowercase, one spelling per name.
  */
 const writeUnique = async (
   dir: string,

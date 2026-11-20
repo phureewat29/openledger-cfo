@@ -62,11 +62,7 @@ const PHRASES = [
 
 const FALLBACK = PHRASES[0];
 
-/**
- * Server render and first client paint agree on the fallback; the random pick
- * shows once hydration says the client owns the frame. A span, not a p: it
- * also stands in for pane header meta, which is inline context.
- */
+// The random pick shows only after hydration; a span because it also stands in for header meta.
 export function LoadingLine({ className }: { className?: string }) {
   const hydrated = useHydrated();
   const [phrase] = useState<string>(
@@ -84,5 +80,14 @@ export function LoadingLine({ className }: { className?: string }) {
     >
       {hydrated ? phrase : FALLBACK}
     </span>
+  );
+}
+
+export function Pulse({ label }: { label: string }) {
+  return (
+    <span
+      aria-label={label}
+      className="bg-accent size-1.5 shrink-0 animate-pulse rounded-full"
+    />
   );
 }

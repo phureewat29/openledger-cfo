@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       // the tool ready-made rather than importing upward.
       extraTools: [
         startIngestRunTool(async (paths, mode) => {
-          const started = await startRun({ pathOrIds: [...paths] }, mode);
+          const started = await startRun(paths, mode);
           if (started.ok) return { ok: true, runId: started.value.runId };
           return { ok: false, message: started.error.message };
         }),

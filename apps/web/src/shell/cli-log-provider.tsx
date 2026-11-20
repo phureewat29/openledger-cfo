@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 
 import type { CliEntry } from "~/shell/cli-log";
+import { useHydrated } from "~/lib/ui/use-hydrated";
 import { useRingPoll } from "~/lib/ui/use-ring-poll";
-import { mergeCliLog, NO_ENTRIES } from "~/shell/cli-log";
+import { CLI_LOG_WINDOW, NO_ENTRIES } from "~/shell/cli-log";
 import { useTRPC } from "~/trpc/react";
 
 /** Ingest is the one page that watches its own commands land. */
@@ -22,10 +23,7 @@ const IDLE: CliLogState = { entries: NO_ENTRIES, error: null };
 
 const CliLogContext = createContext<CliLogState>(IDLE);
 
-/**
- * The command ring is read once for the whole app: the status bar and the
- * ingest pane are two views of one poll.
- */
+// One poll for the whole app: the status bar and the ingest pane read the same ring.
 export function CliLogProvider({ children }: { children: React.ReactNode }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -40,16 +38,17 @@ export function CliLogProvider({ children }: { children: React.ReactNode }) {
           { gcTime: 0, staleTime: 0 },
         ),
       ),
-    merge: mergeCliLog,
+    window: CLI_LOG_WINDOW,
     empty: NO_ENTRIES,
     period,
   });
 
-  return (
-    <CliLogContext.Provider value={{ entries, error }}>
-      {children}
-    </CliLogContext.Provider>
-  );
+  return <CliLogContext value={{ entries, error }}>{children}</CliLogContext>;
 }
 
-export const useCliLog = (): CliLogState => useContext(CliLogContext);
+// A page can hydrate after the layout's poll lands; until then it sees the server's empty log.
+export const useCliLog = (): CliLogState => {
+  const log = useContext(CliLogContext);
+  const hydrated = useHydrated();
+  return hydrated ? log : IDLE;
+};

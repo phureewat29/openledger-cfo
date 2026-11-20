@@ -1,12 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  useIsMutating,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 
 import { Button } from "@openledger-cfo/ui/button";
@@ -25,17 +20,13 @@ import {
 import { ModeDialog } from "~/ingest/mode-dialog";
 import { isRunLive, runLine } from "~/ingest/run";
 import { useIngestRun } from "~/ingest/run-provider";
-import { useSelection } from "~/ingest/selection";
+import { useQueueRefresh, useSelection } from "~/ingest/selection";
 import { countNoun } from "~/lib/format";
 import { LoadingLine } from "~/lib/ui/loading-line";
 import { RemoveButton } from "~/lib/ui/remove-button";
-import { useHydrated } from "~/lib/ui/use-hydrated";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 
-/**
- * The directory only changes under a command, so the fast pace is for a queue
- * somebody is working through; a settled pipeline is watched, not polled.
- */
+// The fast pace is for a queue somebody is working through; a settled one is watched.
 const WORKING_MS = 3000;
 const IDLE_MS = 15000;
 
@@ -51,28 +42,29 @@ const ACTION_LABEL: Record<FileActionKind, (count: number) => string> = {
 };
 
 /** Both write the ledger or the disk; neither moves without a second look. */
-type ConfirmKind = "close" | "delete";
+type ConfirmKind = Exclude<FileActionKind, "ingest">;
 
 interface Confirming {
   readonly kind: ConfirmKind;
   readonly targets: readonly IngestFile[];
 }
 
-const CONFIRM_ASK: Record<ConfirmKind, (count: number) => string> = {
-  close: (count) =>
-    `Close ${countNoun(count, "file")}? Each is recorded in the ledger as ingested.`,
-  delete: (count) =>
-    `Delete ${countNoun(count, "file")}? Rows and questions the ledger recorded for them go too.`,
-};
-
-const CONFIRM_VERB: Record<ConfirmKind, string> = {
-  close: "Close",
-  delete: "Delete",
-};
-
-const CONFIRM_BUSY: Record<ConfirmKind, string> = {
-  close: "Closing…",
-  delete: "Deleting…",
+const CONFIRM: Record<
+  ConfirmKind,
+  { ask: (count: number) => string; verb: string; busy: string }
+> = {
+  done: {
+    ask: (count) =>
+      `Close ${countNoun(count, "file")}? Each is recorded in the ledger as ingested.`,
+    verb: "Close",
+    busy: "Closing…",
+  },
+  delete: {
+    ask: (count) =>
+      `Delete ${countNoun(count, "file")}? Rows and questions the ledger recorded for them go too.`,
+    verb: "Delete",
+    busy: "Deleting…",
+  },
 };
 
 /** Without a key the agent cannot run; closing and removing by hand still can. */
@@ -88,15 +80,9 @@ const countPart = (value: number, label: string) =>
 /** Error lines shown in full before the strip folds into a count. */
 const SHOWN_ERROR_LINES = 3;
 
-/**
- * What is still work, which is what this pane is for. Closed files are left
- * out on purpose: their count only grows, and it would crowd the header off
- * the states somebody can still act on.
- */
+// Closed files are left out: their count only grows and would crowd out what is still work.
 const countsOf = (summary: IngestCounts | null | undefined, rows: number) => {
-  if (summary === null || summary === undefined) {
-    return countNoun(rows, "file");
-  }
+  if (summary === null || summary === undefined) return countNoun(rows, "file");
   const counts = runLine(
     countPart(summary.new, "new"),
     countPart(summary.pending, "pending"),
@@ -137,8 +123,7 @@ export function FileList({
 }) {
   const trpc = useTRPC();
   const client = useTRPCClient();
-  const queryClient = useQueryClient();
-  const hydrated = useHydrated();
+  const refresh = useQueueRefresh();
   const { run, start } = useIngestRun();
   const { selected, selectAll, clear, view } = useSelection();
   const [pending, setPending] = useState<PendingRun | null>(null);
@@ -162,19 +147,12 @@ export function FileList({
 
   const rows = query.data?.rows ?? [];
   const openQuestions = openQuestionsByFile(questions.data?.rows ?? []);
-  const live = hydrated && run !== null && isRunLive(run.status);
-
-  const refresh = () => {
-    void queryClient.invalidateQueries(trpc.ledger.ingest.list.queryFilter());
-    void queryClient.invalidateQueries(
-      trpc.ledger.questions.list.queryFilter(),
-    );
-  };
+  const live = run !== null && isRunLive(run.status);
 
   /** What a confirmed press does to one file: null when it landed, else why not. */
   const act: Record<ConfirmKind, (row: IngestFile) => Promise<string | null>> =
     {
-      close: async (row) => {
+      done: async (row) => {
         if (row.file_id === null) return null;
         const closed = await client.ledger.ingest.done.mutate({
           fileId: row.file_id,
@@ -206,7 +184,7 @@ export function FileList({
     const scope = pending;
     setPending(null);
     if (scope === null) return;
-    const result = await start({ pathOrIds: scope }, mode);
+    const result = await start(scope, mode);
     setErrors(result.ok ? [] : [result.error]);
   };
 
@@ -215,7 +193,7 @@ export function FileList({
     (targets: readonly IngestFile[]) => void
   > = {
     ingest: (targets) => setPending(targets.map((row) => row.rel_path)),
-    done: (targets) => setConfirming({ kind: "close", targets }),
+    done: (targets) => setConfirming({ kind: "done", targets }),
     delete: (targets) => setConfirming({ kind: "delete", targets }),
   };
 
@@ -227,8 +205,7 @@ export function FileList({
   // The queue read's failure joins the strip; only the mutations' are dismissable.
   const shownErrors = query.isError ? [query.error.message, ...errors] : errors;
 
-  // The queue cannot move past these without a person; the pane says so where
-  // it cannot be scrolled away, not just in a chip per row.
+  // Said where it cannot be scrolled away, not just in a chip per row.
   const asking = rows.filter((row) => openCountOf(openQuestions, row) > 0);
   const openCount = sumBy(asking, (row) => openCountOf(openQuestions, row));
   const firstAsk = asking[0]?.file_id ?? null;
@@ -240,9 +217,7 @@ export function FileList({
   const showClear = selected.size > 0;
   const showActionBar = actions.length > 0 || showSelectAll || showClear;
 
-  // What a run leaves behind, said before it starts rather than found
-  // afterwards: the selection's locked files, which the ingest action drops
-  // before they ever reach a run.
+  // The selection's locked files, which the ingest action drops before a run starts.
   const lockedBehind = rows
     .filter((row) => isLocked(row) && selected.has(row.rel_path))
     .map((row) => row.rel_path);
@@ -364,7 +339,7 @@ export function FileList({
           <p className="min-w-0 flex-1 text-[11px]">
             {live
               ? "A run is working the queue — wait for it to finish."
-              : CONFIRM_ASK[confirming.kind](confirming.targets.length)}
+              : CONFIRM[confirming.kind].ask(confirming.targets.length)}
           </p>
           <Button
             size="sm"
@@ -375,8 +350,8 @@ export function FileList({
             onClick={() => confirm.mutate(confirming)}
           >
             {busy
-              ? CONFIRM_BUSY[confirming.kind]
-              : CONFIRM_VERB[confirming.kind]}
+              ? CONFIRM[confirming.kind].busy
+              : CONFIRM[confirming.kind].verb}
           </Button>
           <Button
             size="sm"
@@ -420,7 +395,6 @@ export function FileList({
             <RemoveButton
               label="Dismiss these failures"
               className="size-5 shrink-0"
-              disabled={false}
               onClick={() => setErrors([])}
             />
           )}

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
+import { attemptAsync, takeRight } from "es-toolkit";
 
-import type { Result } from "@openledger-cfo/openledger/result";
-import { err, messageOf, ok } from "@openledger-cfo/openledger/result";
+import { messageOf } from "@openledger-cfo/openledger/result";
 
 /** What a server ring answers: the entries past a seq, and its newest seq. */
 interface RingPage<E> {
@@ -17,11 +17,7 @@ interface CaughtUp<P> {
   readonly whole: P | undefined;
 }
 
-/**
- * A restarted server issues low seqs again, which leaves the cursor past the
- * end of a ring that no longer holds what it counted: that read starts over
- * from the whole ring.
- */
+// A restarted server reissues low seqs, so a cursor past the ring's end re-reads the whole ring.
 const catchUp = async <P extends RingPage<unknown>>(
   read: (after: number | undefined) => Promise<P>,
   after: number | undefined,
@@ -31,24 +27,36 @@ const catchUp = async <P extends RingPage<unknown>>(
   return { page, whole: await read(undefined) };
 };
 
-const settle = <T>(promise: Promise<T>): Promise<Result<T, string>> =>
-  promise.then(ok, (cause: unknown) => err(messageOf(cause)));
-
 /**
- * Follows a server ring by seq: every read asks for what changed since the
- * last, so an idle tick carries no entries and commits no state. A hidden tab
- * skips its ticks and reads again the moment it shows.
+ * A settled entry arrives again under its id and takes its earlier slot. The
+ * window is the server ring's, so a session never holds more than it remembers.
  */
-export function useRingPoll<E, P extends RingPage<E>>({
+export const mergeById = <T extends { id: string | number }>(
+  current: readonly T[],
+  delta: readonly T[],
+  window: number,
+): T[] => {
+  const byId = new Map(
+    [...current, ...delta].map((entry) => [entry.id, entry]),
+  );
+  return takeRight([...byId.values()], window);
+};
+
+// Follows a server ring by seq; a hidden tab skips its ticks and reads again when shown.
+export function useRingPoll<
+  E extends { id: string | number },
+  P extends RingPage<E>,
+>({
   read,
-  merge,
+  window,
   empty,
   period,
   onPage,
 }: {
   /** Rejects on failure; the rejection becomes the error line. */
   read: (after: number | undefined) => Promise<P>;
-  merge: (current: readonly E[], delta: readonly E[]) => readonly E[];
+  /** The server ring's capacity. */
+  window: number;
   empty: readonly E[];
   period: number;
   /** Sees every page read, for whatever it carries beside its entries. */
@@ -65,14 +73,16 @@ export function useRingPoll<E, P extends RingPage<E>>({
   const poll = useEffectEvent(async () => {
     if (reading.current || document.hidden) return;
     reading.current = true;
-    const outcome = await settle(catchUp(read, cursor.current));
+    const [cause, caught] = await attemptAsync(() =>
+      catchUp(read, cursor.current),
+    );
     reading.current = false;
-    if (!outcome.ok) {
-      setError(outcome.error);
+    if (caught === null) {
+      setError(messageOf(cause));
       return;
     }
 
-    const { page, whole } = outcome.value;
+    const { page, whole } = caught;
     setError(null);
     onPage?.(page);
     if (whole !== undefined) {
@@ -82,7 +92,7 @@ export function useRingPoll<E, P extends RingPage<E>>({
     }
     cursor.current = page.latest;
     if (page.entries.length === 0) return;
-    setEntries((current) => merge(current, page.entries));
+    setEntries((current) => mergeById(current, page.entries, window));
   });
 
   useEffect(() => {

@@ -1,13 +1,14 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
-import { isEqual, noop } from "es-toolkit";
+import { attemptAsync, isEqual, noop } from "es-toolkit";
 
 import type { Result } from "@openledger-cfo/openledger/result";
 import { err, messageOf, ok } from "@openledger-cfo/openledger/result";
 
-import type { RunEntry, RunMode, RunScope, RunSnapshot } from "~/ingest/run";
-import { isRunLive, mergeRunEntries, NO_RUN_ENTRIES } from "~/ingest/run";
+import type { RunEntry, RunMode, RunSnapshot } from "~/ingest/run";
+import { isRunLive, NO_RUN_ENTRIES, RUN_JOURNAL_CAPACITY } from "~/ingest/run";
+import { useHydrated } from "~/lib/ui/use-hydrated";
 import { useRingPoll } from "~/lib/ui/use-ring-poll";
 
 /** A live run is worth watching closely; a settled one is checked on, not chased. */
@@ -36,7 +37,10 @@ const readRun = async (after: number | undefined): Promise<RunPage> => {
 type Reply = Result<undefined, string>;
 
 interface RunCommands {
-  readonly start: (scope: RunScope, mode: RunMode) => Promise<Reply>;
+  readonly start: (
+    pathOrIds: readonly string[],
+    mode: RunMode,
+  ) => Promise<Reply>;
   readonly cancel: () => Promise<Reply>;
   /** The password travels in the body and nowhere else — never in this URL. */
   readonly unlock: (
@@ -50,28 +54,25 @@ const asJson = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-/**
- * Every command wakes the poll once the runner answers: at the idle pace a
- * press of Ingest would sit there for ten seconds looking like it missed.
- */
+// Every answered command wakes the poll; at the idle pace a press would look missed.
 const commandsFor = (wake: () => void): RunCommands => {
   const send = async (url: string, init: RequestInit): Promise<Reply> => {
-    try {
+    const [cause, answer] = await attemptAsync(async () => {
       const response = await fetch(url, init);
       const body = (await response.json()) as { error?: string };
-      // Refused or accepted, the run is not where the last poll left it.
-      wake();
-      if (response.ok) return ok(undefined);
-      return err(
-        body.error ?? `The runner answered ${String(response.status)}`,
-      );
-    } catch (cause) {
-      return err(messageOf(cause));
-    }
+      return { response, body };
+    });
+    if (answer === null) return err(messageOf(cause));
+    wake();
+    if (answer.response.ok) return ok(undefined);
+    return err(
+      answer.body.error ??
+        `The runner answered ${String(answer.response.status)}`,
+    );
   };
 
   return {
-    start: (scope, mode) => send(RUN_URL, asJson({ ...scope, mode })),
+    start: (pathOrIds, mode) => send(RUN_URL, asJson({ pathOrIds, mode })),
     cancel: () => send(RUN_URL, { method: "DELETE" }),
     unlock: (body) => send(PASSWORD_URL, asJson(body)),
   };
@@ -91,16 +92,12 @@ const IngestRunContext = createContext<IngestRun>({
   ...commandsFor(noop),
 });
 
-/**
- * The run is read once for the whole app, from the root layout: the rail's dot
- * and the feed are two views of one poll, and a run keeps reporting while the
- * operator is on another page.
- */
+// One poll for the whole app: the rail's dot and the feed read the same run.
 export function IngestRunProvider({ children }: { children: React.ReactNode }) {
   const [run, setRun] = useState<RunSnapshot | null>(null);
   const { entries, error, wake } = useRingPoll({
     read: readRun,
-    merge: mergeRunEntries,
+    window: RUN_JOURNAL_CAPACITY,
     empty: NO_RUN_ENTRIES,
     period: run !== null && isRunLive(run.status) ? LIVE_MS : IDLE_MS,
     // A fresh object every poll would re-render the whole app on a timer.
@@ -109,12 +106,17 @@ export function IngestRunProvider({ children }: { children: React.ReactNode }) {
   });
 
   return (
-    <IngestRunContext.Provider
-      value={{ entries, run, error, ...commandsFor(wake) }}
-    >
+    <IngestRunContext value={{ entries, run, error, ...commandsFor(wake) }}>
       {children}
-    </IngestRunContext.Provider>
+    </IngestRunContext>
   );
 }
 
-export const useIngestRun = (): IngestRun => useContext(IngestRunContext);
+// A page can hydrate after the layout's poll lands; until then it sees the server's empty run.
+export const useIngestRun = (): IngestRun => {
+  const feed = useContext(IngestRunContext);
+  const hydrated = useHydrated();
+  return hydrated
+    ? feed
+    : { ...feed, entries: NO_RUN_ENTRIES, run: null, error: null };
+};

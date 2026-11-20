@@ -1,14 +1,15 @@
 import { countBy, groupBy, orderBy, partition, sumBy } from "es-toolkit";
 
-import type { RouterOutputs } from "@openledger-cfo/api";
+import type {
+  IngestFileRow,
+  IngestFileSummary,
+  QuestionRow,
+  TransactionRow,
+} from "@openledger-cfo/openledger";
 
-type IngestFiles = RouterOutputs["ledger"]["ingest"]["list"];
-type IngestQuestions = RouterOutputs["ledger"]["questions"]["list"];
-export type IngestFile = IngestFiles["rows"][number];
-export type IngestCounts = NonNullable<IngestFiles["summary"]>;
-export type IngestQuestion = IngestQuestions["rows"][number];
-type IngestFileTransaction =
-  RouterOutputs["ledger"]["transactions"]["listByFile"][number];
+export type IngestFile = IngestFileRow;
+export type IngestCounts = IngestFileSummary;
+export type IngestQuestion = QuestionRow;
 
 /** Anything but a closed file is still work the agent can pick up. */
 export const WORKABLE = new Set<IngestFile["status"]>([
@@ -54,10 +55,8 @@ export const uploadExtensionOf = (name: string): string | undefined => {
 const DEVICE_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
 
 /**
- * An upload names a file in the ledger's data dir, so the browser's string is
- * reduced to one path segment: basename only, normalized, and stripped of
- * everything a shell or a file walk could read as structure. A device name is
- * moved aside on every OS, so the data dir stays readable from Windows.
+ * One path segment in the ledger's data dir, stripped of anything a shell or a walk
+ * reads as structure. A device name moves aside on every OS, so Windows can read the dir.
  */
 export const safeUploadName = (raw: string): string | undefined => {
   const base = raw.split(/[\\/]/).pop() ?? "";
@@ -86,10 +85,21 @@ const isIngestable = (row: IngestFile): boolean =>
   WORKABLE.has(row.status) && !isLocked(row);
 
 /**
- * A closed file belongs to the ledger, and taking one back is a correction
- * made in the books, not a row removed from a queue.
+ * How a row leaves the queue. A registered file is dropped first, or its rows
+ * and questions outlive their statement; taking back an ingested one is a ledger correction.
  */
-const isRemovable = (row: IngestFile): boolean => row.status !== "ingested";
+export const REMOVAL: Readonly<
+  Record<IngestFile["status"], "unlink" | "drop" | "refuse">
+> = {
+  new: "unlink",
+  unreadable: "unlink",
+  pending: "drop",
+  failed: "drop",
+  ingested: "refuse",
+};
+
+const isRemovable = (row: IngestFile): boolean =>
+  REMOVAL[row.status] !== "refuse";
 
 /** Posted, still open, and with nothing left for the operator to answer. */
 const isCloseable = (row: IngestFile, openQuestions: number): boolean =>
@@ -136,9 +146,7 @@ export interface FileImpact {
  * What a statement did to the books, account by account: every leg the file's
  * rows put somewhere, folded into debit and credit totals per account.
  */
-export const fileImpactOf = (
-  rows: readonly IngestFileTransaction[],
-): FileImpact[] => {
+export const fileImpactOf = (rows: readonly TransactionRow[]): FileImpact[] => {
   const legs = rows.flatMap((row) => [
     {
       account: row.debit_account_id,
@@ -189,11 +197,7 @@ interface FileAction {
   readonly targets: readonly IngestFile[];
 }
 
-/**
- * What a selection can be asked to do, in the order the bar reads them. Each
- * entry claims only the subset of the selection it applies to, so a mixed pick
- * offers every action that has something to work on and none that has nothing.
- */
+/** In the bar's order; each claims only the rows it applies to, so a mixed pick offers every action with work. */
 const SELECTION_ACTIONS: readonly {
   readonly kind: FileActionKind;
   readonly applies: (row: IngestFile, openQuestions: number) => boolean;

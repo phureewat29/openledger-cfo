@@ -3,26 +3,12 @@
 import { cn } from "@openledger-cfo/ui";
 
 import type { LedgerLoad } from "~/ledger/load";
-import type { CliEntry } from "~/shell/cli-log";
 import type { Chrome } from "~/shell/load";
 import { useConfigDialog } from "~/config/config-dialog-provider";
 import { useAiStatus, verdictOf } from "~/config/use-ai-status";
 import { formatStamp } from "~/lib/format";
-import { exitLine } from "~/shell/cli-log";
+import { commandText, exitLine, newestUseful } from "~/shell/cli-log";
 import { useCliLog } from "~/shell/cli-log-provider";
-
-/** Transport flags say nothing about the work; the title keeps the full argv. */
-const TRANSPORT_FLAGS = /\s--(?:json|no-color|no-redact)\b|\s--config\s+\S+/g;
-
-/** The pollers' own reads — this bar's pulse, not work. */
-const POLL_ARGV = ["questions list", "ingest list"];
-
-const isPoll = (entry: CliEntry) =>
-  POLL_ARGV.some((argv) => entry.line.includes(argv));
-
-/** The newest command that is somebody's work, else the newest of any kind. */
-const newestUseful = (entries: readonly CliEntry[]) =>
-  entries.findLast((entry) => !isPoll(entry)) ?? entries.at(-1);
 
 /** One clickable word when the gateway is off or down; silent while the ledger is down. */
 function AiWord({
@@ -127,9 +113,7 @@ export function StatusBar({
         className="text-muted-foreground min-w-0 flex-1 truncate"
         title={entry?.line}
       >
-        {entry === undefined
-          ? ""
-          : `$ ${entry.line.replace(TRANSPORT_FLAGS, "").trim()}`}
+        {entry === undefined ? "" : `$ ${commandText(entry)}`}
       </span>
 
       {exitChip()}

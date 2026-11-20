@@ -1,9 +1,9 @@
 import type { UIMessage } from "ai";
 import { TRPCError } from "@trpc/server";
-import { partition, uniqBy } from "es-toolkit";
+import { attemptAsync, partition, uniqBy } from "es-toolkit";
 
 import type { LangGraphEvent } from "@openledger-cfo/agent";
-import type { GatewayConfig } from "@openledger-cfo/api";
+import type { GatewayConfig, RouterOutputs } from "@openledger-cfo/api";
 import type { Result } from "@openledger-cfo/openledger";
 import { createAgent, nsDepth, unwrap } from "@openledger-cfo/agent";
 import { asRecord, asString, textOf } from "@openledger-cfo/agent/untyped";
@@ -15,7 +15,6 @@ import { parseJson } from "@openledger-cfo/openledger/result";
 import type { IngestFile } from "~/ingest/files";
 import type {
   RunMode,
-  RunScope,
   RunSnapshot,
   RunStatus,
   RunTarget,
@@ -47,12 +46,8 @@ interface Waiting extends RunWaiting, Lockable {}
 type SettledStatus = Exclude<RunStatus, "running" | "waiting-password">;
 
 /**
- * Where a run is in its life. Each status carries only what it can hold: only
- * a parked run names a file it waits on, and a settled run has no password.
- *
- * The password is the one the operator typed, kept for this run's other locked
- * files and nothing else: it reaches `oled` as one masked argv and never the
- * transcript, the journal or a snapshot.
+ * Only a parked run names the file it waits on; a settled run holds no password.
+ * The password reaches `oled` as one masked argv, never the transcript, the journal or a snapshot.
  */
 type Phase =
   | {
@@ -67,20 +62,14 @@ type Phase =
     }
   | { readonly status: SettledStatus; readonly finishedAt: number };
 
-/**
- * What the run changed, said back when it settles. Sets, not counters: a
- * supervised close and the model's idempotent retry are one closed file.
- */
+/** Sets, not counters: a supervised close and the model's idempotent retry are one closed file. */
 interface Tally {
   readonly closed: ReadonlySet<string>;
   readonly discarded: ReadonlySet<string>;
   readonly rows: number;
 }
 
-/**
- * Everything one run knows. Its phase, tally and transcript are values,
- * replaced whole; its maps and sets are changed in place.
- */
+/** Phase, tally and transcript are replaced whole; the maps and sets change in place. */
 interface Run {
   readonly runId: string;
   readonly scope: string;
@@ -91,11 +80,7 @@ interface Run {
   readonly abort: AbortController;
   /** File id → the name the operator dropped, so later lines can say it back. */
   readonly names: Map<string, string>;
-  /**
-   * Every name this run's files answer to: the paths it was handed, plus the
-   * ids its own prepares gave them. The agent does wander into files nobody
-   * asked for — being worked is not the test, being asked for is.
-   */
+  /** The paths this run was handed and the ids its prepares gave them: the agent wanders, so only these count. */
   readonly own: Set<string>;
   /** Consecutive closes the ledger turned down, per file. */
   readonly refusedCloses: Map<string, number>;
@@ -131,11 +116,7 @@ const inputOf = (event: LangGraphEvent): Record<string, unknown> => {
   return asRecord(parseJson(raw));
 };
 
-/**
- * The only two fields anything here reads: which statement a step is about.
- * No other field of a tool's input is looked at or kept — a password stays
- * out of the journal's reach by construction.
- */
+/** Which statement a step is about: the only input fields this file reads. */
 const targetOf = (input: Record<string, unknown>): string | undefined => {
   const target = asString(input.pathOrId) || asString(input.fileId);
   return target.length === 0 ? undefined : target;
@@ -164,11 +145,7 @@ const countOf = (
 ): string | undefined =>
   typeof value === "number" ? countNoun(value, one, many) : undefined;
 
-/**
- * The only result fields a line may quote: what was read and what was posted.
- * A tool's arguments are never serialized here, so there is no path by which
- * a password could reach a journal entry.
- */
+/** What was read and what was posted: the only result fields a line quotes. */
 const detailOf = (artifact: Record<string, unknown>): string | undefined => {
   const summary = asRecord(artifact.summary);
   const duplicates =
@@ -187,23 +164,40 @@ const fileIdOf = (artifact: Record<string, unknown>): string | undefined =>
   asFileId(asString(artifact.file_id)) ??
   asFileId(asString(asRecord(artifact.summary).file_id));
 
+/** The refusals a close or a commit hands back as data instead of throwing. */
+type IngestRefusal = Extract<
+  RouterOutputs["ledger"]["ingest"]["commit" | "done"],
+  { ok: false }
+>["reason"];
+
 interface Refusal {
   readonly label: string;
   readonly detail: string;
+  readonly after: (
+    run: Run,
+    artifact: Record<string, unknown>,
+    fileId: string | undefined,
+    name: string | undefined,
+  ) => Promise<void> | void;
 }
 
-/**
- * Two steps can be turned down and still answer with an artifact — a close
- * whose balance does not tie, a commit where only some rows posted. Neither
- * did what its finished tense claims, so neither is written in it.
- */
-const REFUSAL: Record<string, Refusal> = {
+/** A refused step still answers with an artifact, but never earned its finished tense. */
+const REFUSAL: Readonly<Record<string, Refusal>> = {
   mismatch: {
     label: "Close refused",
     detail: "the closing balance did not match the ledger",
+    after: (run, _artifact, fileId, name) =>
+      fileId === undefined ? undefined : superviseClose(run, fileId, name),
   },
-  partial: { label: "Rows refused", detail: "some rows did not post" },
-};
+  // A partial commit still posted the rows it names; the tally keeps them.
+  partial: {
+    label: "Rows refused",
+    detail: "some rows did not post",
+    after: (run, artifact, fileId) => {
+      tallyStep(run, "ingestCommit", artifact, fileId);
+    },
+  },
+} satisfies Record<IngestRefusal, Refusal>;
 
 const refusalOf = (artifact: Record<string, unknown>): Refusal | undefined =>
   typeof artifact.reason === "string" ? REFUSAL[artifact.reason] : undefined;
@@ -257,11 +251,7 @@ const tallySaid = (tally: Tally): string => {
   return said.length === 0 ? "nothing changed" : said;
 };
 
-/**
- * Some models will not take the prompt's escape — closing on file id alone —
- * when the balance cannot tie, looping until steps run out and leaving a
- * posted file stuck. Twice is enough to know this one will not take it.
- */
+/** A model that will not close on file id alone loops until its steps run out; twice proves it. */
 const REFUSED_CLOSE_LIMIT = 2;
 
 const RECONCILE_SKIPPED =
@@ -285,9 +275,8 @@ const message = (role: "user" | "assistant", text: string): UIMessage => ({
 });
 
 /**
- * A file id alone does not say whether a file is prepared — a locked prepare
- * registers it anyway, and closing deletes its text. This opens the artifact
- * rather than spawning a command, so it is affordable once per file.
+ * A locked prepare registers a file id too, and closing deletes the text. This
+ * reads the artifact instead of spawning a command, so it is affordable per file.
  */
 const hasDocument = async (fileId: string): Promise<boolean> => {
   try {
@@ -310,11 +299,7 @@ const targetOfRow = async (row: IngestFile): Promise<RunTarget> => {
   };
 };
 
-/**
- * The queue is a snapshot the operator worked from, so a name it no longer
- * holds is still work: a file registered a moment ago reads as new here and
- * the agent finds it where it lies.
- */
+/** A name the queue snapshot no longer holds is still work: the agent finds it where it lies. */
 const targetOfName = async (
   name: string,
   rows: IngestFile[],
@@ -340,16 +325,12 @@ const listQueue = (): Promise<IngestFile[] | undefined> =>
 
 /** Named files are worked whatever state they are in; a locked one parks the run. */
 const selectTargets = (
-  scope: RunScope,
+  pathOrIds: readonly string[],
   rows: IngestFile[],
 ): Promise<RunTarget[]> =>
-  Promise.all(scope.pathOrIds.map((name) => targetOfName(name, rows)));
+  Promise.all(pathOrIds.map((name) => targetOfName(name, rows)));
 
-/**
- * What a Normal run leaves behind, said in the feed rather than left for the
- * operator to notice: the file is posted and still open because its questions
- * are the operator's to answer.
- */
+/** A Normal run's posted-but-open files, said in the feed: their questions are the operator's. */
 const noteClarifications = async (): Promise<void> => {
   const [files, questions] = await Promise.all([
     listQueue(),
@@ -407,6 +388,9 @@ const settle = (run: Run, status: SettledStatus): void => {
   run.phase = { status, finishedAt: Date.now() };
 };
 
+/** A call, not the property: after an await, a narrowed property would still read false. */
+const wasCancelled = (run: Run): boolean => run.abort.signal.aborted;
+
 const park = (run: Run, waiting: Waiting): void => {
   run.phase = parkedOn(run.phase, waiting);
   appendEntry({
@@ -448,13 +432,9 @@ const failureOf = (
   return { label: "Run failed.", detail: messageOf(cause) };
 };
 
-/**
- * Every way a turn can end badly, said plainly — and with the tally, because
- * a stopped run is exactly when the operator needs to know what landed. The
- * files themselves are whatever `oled` last recorded.
- */
+/** Said with the tally: a stopped run is when the operator most needs to know what landed. */
 const settleFailure = (run: Run, cause: unknown): void => {
-  if (run.abort.signal.aborted) {
+  if (wasCancelled(run)) {
     settleCancelled(run);
     return;
   }
@@ -469,10 +449,8 @@ interface Unlocked {
 }
 
 /**
- * One prepare with the password the run holds, and the bookkeeping that makes
- * the file this run's own. Every failure comes back as a value: the route
- * behind `submitPassword` would turn a throw into a 500 and leave the run
- * `running` with no turn in flight to run it.
+ * Every failure comes back as a value: a throw would reach `submitPassword`'s
+ * route as a 500 and leave the run `running` with no turn in flight.
  */
 const tryUnlock = async (
   run: Run,
@@ -504,10 +482,7 @@ interface Sweep {
   readonly locked: Waiting[];
 }
 
-/**
- * A file may be named by rel_path in one turn and by its sf- id in the next;
- * the attempt ledger counts them as one file, not two.
- */
+/** A rel_path in one turn and its sf- id in the next are one file to the attempt count. */
 const attemptKeyOf = (run: Run, pathOrId: string): string =>
   run.names.get(pathOrId) ?? pathOrId;
 
@@ -518,11 +493,7 @@ const bump = (counts: Map<string, number>, key: string): number => {
   return count;
 };
 
-/**
- * One file at a time: a prepare can run long on the slow lane, and the
- * gap between two of them is the only place a cancel can be noticed — no turn
- * is in flight to carry one.
- */
+/** One file at a time: with no turn in flight, the gap between prepares is where a cancel lands. */
 const unlockEach = async (
   run: Run,
   files: readonly Lockable[],
@@ -530,7 +501,7 @@ const unlockEach = async (
   const unlocked: Unlocked[] = [];
   const locked: Waiting[] = [];
   for (const file of files) {
-    if (run.abort.signal.aborted) break;
+    if (wasCancelled(run)) break;
     run.phase = workingOn(run.phase, file.relPath);
     bump(run.unlockAttempts, attemptKeyOf(run, file.pathOrId));
     const out = await tryUnlock(run, file);
@@ -540,19 +511,10 @@ const unlockEach = async (
   return { unlocked, locked };
 };
 
-/**
- * Two tries per file for the whole run: every unlock hands the model a fresh
- * turn with a fresh budget, so a model that keeps re-preparing one file without
- * its password would otherwise be unlocked and advanced without end.
- */
+/** Per file per run: each unlock hands the model a fresh turn, so re-preparing could loop forever. */
 const UNLOCK_ATTEMPT_LIMIT = 2;
 
-/**
- * What the password already in hand can do about a turn that ended on locks.
- * No `own` gate on purpose: a locked file the model wandered into is still the
- * operator's to unlock — scope discipline is the objective's job, not the
- * password's.
- */
+/** No `own` gate: a locked file the model wandered into is still the operator's to unlock. */
 const autoUnlock = async (
   run: Run,
   files: readonly Waiting[],
@@ -606,12 +568,7 @@ const scanLocked = async (run: Run): Promise<LockedScan> => {
   return { prepared, locked };
 };
 
-/**
- * The rest of this run's locked files, opened with the password now in hand —
- * a bank issues a year of statements under one password, so the operator types
- * it once. What comes back is everything the model may now read, files an
- * earlier unlock already prepared included.
- */
+/** A bank issues a year of statements under one password, so the operator types it once. */
 const unlockRest = async (run: Run, first: Unlocked): Promise<Unlocked[]> => {
   const scan = await scanLocked(run);
   const swept = await unlockEach(
@@ -628,10 +585,8 @@ const unlockRest = async (run: Run, first: Unlocked): Promise<Unlocked[]> => {
 };
 
 /**
- * Every file the model may now read, named with the id its prepare returned:
- * without the id it re-prepares, and a second prepare of a locked file asks for
- * the password all over again. Deduped here because `oled` collapses identical
- * bytes to one id, so two rel_paths can arrive as one file.
+ * Named by prepared id, or the model re-prepares and a locked file asks for its
+ * password again. Deduped: `oled` collapses identical bytes into one id.
  */
 const continuationFor = (unlocked: readonly Unlocked[]): string => {
   const files = uniqBy([...unlocked], (file) => file.fileId);
@@ -641,17 +596,13 @@ const continuationFor = (unlocked: readonly Unlocked[]): string => {
   return `The operator's password unlocked ${countNoun(files.length, "file")}; every one of them is prepared already, so do not prepare any of them again:\n${named}\n\nRead each one, post its rows and close it, then finish the rest of the queue.`;
 };
 
-/**
- * How a turn that ended on locked files goes on: the password opens what it can
- * and the model is handed straight back the files it may now read, and whatever
- * is still locked is the operator's to type for.
- */
+/** The password opens what it can, the model gets the rest back, and the operator types for what stays locked. */
 const unlockOrPark = async (
   run: Run,
   locked: readonly Waiting[],
 ): Promise<void> => {
   const swept = await autoUnlock(run, locked);
-  if (run.abort.signal.aborted) {
+  if (wasCancelled(run)) {
     settleCancelled(run);
     return;
   }
@@ -666,11 +617,7 @@ const unlockOrPark = async (
   if (first !== undefined) park(run, first);
 };
 
-/**
- * Closes the file the agent will not, exactly at the limit and never past it:
- * once this has run the statement is closed, and further refusals are the model
- * arguing with a file it has already finished.
- */
+/** Exactly at the limit, never past it: later refusals argue with a file already closed. */
 const superviseClose = async (
   run: Run,
   fileId: string,
@@ -678,19 +625,20 @@ const superviseClose = async (
 ): Promise<void> => {
   if (bump(run.refusedCloses, fileId) !== REFUSED_CLOSE_LIMIT) return;
 
-  try {
-    const out = await caller.ledger.ingest.done({ fileId });
-    // A refusal here means the model's next fileId-only retry can still land.
-    if (out.ok) {
-      tallyStep(run, "ingestDone", {}, fileId);
-      note(runLine("Closed", name), RECONCILE_SKIPPED);
-    }
-  } catch (cause) {
+  const [cause, out] = await attemptAsync(() =>
+    caller.ledger.ingest.done({ fileId }),
+  );
+  if (cause !== null) {
     note(
       runLine("Close failed", name),
       cause instanceof Error ? firstLine(cause.message) : undefined,
     );
+    return;
   }
+  // A refusal here means the model's next fileId-only retry can still land.
+  if (out?.ok !== true) return;
+  tallyStep(run, "ingestDone", {}, fileId);
+  note(runLine("Closed", name), RECONCILE_SKIPPED);
 };
 
 interface OpenCall {
@@ -787,10 +735,6 @@ const runTurn = async (run: Run): Promise<void> => {
 
     const refusal = refusalOf(artifact);
     if (refusal !== undefined) {
-      // A partial commit still posted the rows it names; the tally keeps them.
-      if (artifact.reason === "partial") {
-        tallyStep(run, "ingestCommit", artifact, fileId);
-      }
       updateEntry(id, {
         kind: "note",
         running: false,
@@ -798,9 +742,7 @@ const runTurn = async (run: Run): Promise<void> => {
         detail: refusal.detail,
         fileId,
       });
-      if (artifact.reason === "mismatch" && fileId !== undefined) {
-        await superviseClose(run, fileId, call.name);
-      }
+      await refusal.after(run, artifact, fileId, call.name);
       return;
     }
 
@@ -898,16 +840,13 @@ const advance = (run: Run, text: string): void => {
   });
 };
 
-const labelOf = (scope: RunScope): string =>
-  `${String(scope.pathOrIds.length)} selected`;
-
-/** The queue as it stands, and the targets the scope names in it. */
+/** The queue as it stands, and the targets the run names in it. */
 const readQueue = async (
-  scope: RunScope,
+  pathOrIds: readonly string[],
 ): Promise<Result<{ rows: IngestFile[]; targets: RunTarget[] }, string>> => {
   const rows = await listQueue();
   if (rows === undefined) return err("The ingest queue could not be read.");
-  return selectTargets(scope, rows).then(
+  return selectTargets(pathOrIds, rows).then(
     (targets) => ok({ rows, targets }),
     (cause: unknown) =>
       err(
@@ -922,8 +861,9 @@ const MODE_NOTE: Record<RunMode, string> = {
   normal: "normal — ambiguous questions wait for you",
 };
 
+/** A run is always asked for by name; there is no whole-queue run. */
 export const startRun = async (
-  scope: RunScope,
+  pathOrIds: readonly string[],
   mode: RunMode,
 ): Promise<StartResult> => {
   // Read before the busy check: the check-and-claim below must stay awaitless.
@@ -946,7 +886,7 @@ export const startRun = async (
 
   const run: Run = {
     runId: crypto.randomUUID(),
-    scope: labelOf(scope),
+    scope: `${String(pathOrIds.length)} selected`,
     mode,
     gateway,
     startedAt: Date.now(),
@@ -963,7 +903,7 @@ export const startRun = async (
   // Claimed before the first await: two starts landing together must not both pass.
   slot.run = run;
 
-  const queue = await readQueue(scope);
+  const queue = await readQueue(pathOrIds);
   if (!queue.ok) {
     slot.run = previous;
     return err({ reason: "unavailable", message: queue.error });
@@ -984,8 +924,6 @@ export const startRun = async (
   return ok({ runId: run.runId });
 };
 
-const wasCancelled = (run: Run): boolean => run.abort.signal.aborted;
-
 const parked = (): { run: Run; waiting: Waiting } | null => {
   const run = slot.run;
   if (run === null) return null;
@@ -996,12 +934,7 @@ const parked = (): { run: Run; waiting: Waiting } | null => {
 
 const NOT_PARKED = "No run is waiting for a password.";
 
-/**
- * The runner unlocks the file itself, and then every other locked file this run
- * was handed, so one bank's year of statements costs one prompt. The password
- * reaches `oled` as one argv the connector masks, and never reaches the model,
- * the journal or a log.
- */
+/** The runner unlocks the file itself, then every other locked file this run was handed. */
 export const submitPassword = async (
   password: string,
 ): Promise<RunCommandResult> => {
@@ -1013,7 +946,6 @@ export const submitPassword = async (
 
   const unlocked = await tryUnlock(run, waiting);
   // No turn is in flight, so a cancel lands between prepares or nowhere.
-  // A call, not the property: narrowing would survive the await.
   if (wasCancelled(run)) {
     settleCancelled(run);
     return ok(undefined);
@@ -1032,11 +964,7 @@ export const submitPassword = async (
   return ok(undefined);
 };
 
-/**
- * Skips one file, not the run: earlier unlocks may have paid for prepares no
- * turn has read yet, and ending here would strand that work. The run goes on
- * with whatever is already readable and settles only when nothing is.
- */
+/** One file, not the run: earlier unlocks may have paid for prepares no turn has read yet. */
 export const skipWaiting = async (): Promise<RunCommandResult> => {
   const found = parked();
   if (found === null) return err({ message: NOT_PARKED });
@@ -1046,7 +974,7 @@ export const skipWaiting = async (): Promise<RunCommandResult> => {
   run.phase = resumedFrom(waiting, passwordOf(run.phase));
 
   const scan = await scanLocked(run);
-  if (run.abort.signal.aborted) {
+  if (wasCancelled(run)) {
     settleCancelled(run);
     return ok(undefined);
   }
@@ -1093,10 +1021,7 @@ const phaseView = (phase: Phase): PhaseView => {
   return { status: phase.status, finishedAt: phase.finishedAt };
 };
 
-/**
- * Field by field, so neither the transcript, the password nor the controller
- * can leak out.
- */
+/** Field by field, so the transcript, the password and the controller stay inside. */
 export const readRun = (): RunSnapshot | null => {
   const run = slot.run;
   if (run === null) return null;
