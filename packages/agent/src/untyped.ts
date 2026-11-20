@@ -1,11 +1,6 @@
 import { isString } from "es-toolkit";
 
-export { parseJson } from "@openledger-cfo/openledger/result";
-
-/**
- * Any object reads as a record, class instances included: LangChain hands its
- * messages over as instances in-process, which `isPlainObject` would turn away.
- */
+/** Class instances read as records too: `isPlainObject` would turn away LangChain's messages. */
 export const asRecord = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)

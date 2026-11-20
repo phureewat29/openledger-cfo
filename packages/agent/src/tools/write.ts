@@ -1,17 +1,13 @@
-import { tool } from "@langchain/core/tools";
+import { pick } from "es-toolkit";
 import { z } from "zod/v4";
 
-import {
-  ACCOUNT_ID_PATTERN,
-  FILE_ID_PATTERN,
-} from "@openledger-cfo/openledger/ids";
+import { accountIdSchema, fileIdSchema } from "@openledger-cfo/openledger";
 
-import { caller, guardedRun, toolResult } from "./caller";
+import { caller, guardedTool, toolResult } from "./caller";
 
-const accountId = z
-  .string()
-  .regex(ACCOUNT_ID_PATTERN)
-  .describe("Full account id, e.g. thb:liability:credit-card:ttb-absolute");
+const accountId = accountIdSchema.describe(
+  "Full account id, e.g. thb:liability:credit-card:ttb-absolute",
+);
 
 const txId = z
   .string()
@@ -20,27 +16,26 @@ const txId = z
 
 const isoDate = z.iso.date();
 
-export const createAccount = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const created = await caller.ledger.accounts.create({
-        id: input.id,
-        name: input.name,
-        type: input.type,
-        parent_id: input.parent,
-        subtype: input.subtype,
-        bank_name: input.bank,
-        account_number_masked: input.masked,
-        due_day: input.dueDay,
-        statement_day: input.statementDay,
-      });
-      return toolResult({
-        command: created.command,
-        id: created.id,
-        created: created.created,
-        created_parents: created.created_parents ?? [],
-      });
-    }),
+export const createAccount = guardedTool(
+  async (input) => {
+    const created = await caller.ledger.accounts.create({
+      id: input.id,
+      name: input.name,
+      type: input.type,
+      parent_id: input.parent,
+      subtype: input.subtype,
+      bank_name: input.bank,
+      account_number_masked: input.masked,
+      due_day: input.dueDay,
+      statement_day: input.statementDay,
+    });
+    return toolResult({
+      command: created.command,
+      id: created.id,
+      created: created.created,
+      created_parents: created.created_parents ?? [],
+    });
+  },
   {
     name: "createAccount",
     description:
@@ -56,16 +51,14 @@ export const createAccount = tool(
       dueDay: z.number().int().min(1).max(31).optional(),
       statementDay: z.number().int().min(1).max(31).optional(),
     }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const updateAccount = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const updated = await caller.ledger.accounts.update(input);
-      return toolResult({ command: updated.command, id: updated.id });
-    }),
+export const updateAccount = guardedTool(
+  async (input) => {
+    const updated = await caller.ledger.accounts.update(input);
+    return toolResult(pick(updated, ["command", "id"]));
+  },
   {
     name: "updateAccount",
     description:
@@ -79,40 +72,27 @@ export const updateAccount = tool(
       bank: z.string().max(200).optional(),
       masked: z.string().max(50).optional(),
     }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const mergeAccounts = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const merged = await caller.ledger.accounts.merge(input);
-      return toolResult({
-        command: merged.command,
-        from: merged.from,
-        to: merged.to,
-        moved: merged.moved,
-      });
-    }),
+export const mergeAccounts = guardedTool(
+  async (input) => {
+    const merged = await caller.ledger.accounts.merge(input);
+    return toolResult(pick(merged, ["command", "from", "to", "moved"]));
+  },
   {
     name: "mergeAccounts",
     description:
       "Merge one account into another on the same currency: every transaction moves and the from-account is deleted. Irreversible.",
     schema: z.object({ from: accountId, to: accountId }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const adjustBalance = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const adjusted = await caller.ledger.accounts.adjust(input);
-      return toolResult({
-        command: adjusted.command,
-        transaction_id: adjusted.transaction_id,
-        delta: adjusted.delta,
-      });
-    }),
+export const adjustBalance = guardedTool(
+  async (input) => {
+    const adjusted = await caller.ledger.accounts.adjust(input);
+    return toolResult(pick(adjusted, ["command", "transaction_id", "delta"]));
+  },
   {
     name: "adjustBalance",
     description:
@@ -123,46 +103,34 @@ export const adjustBalance = tool(
       reason: z.string().min(1).max(500),
       date: isoDate.optional(),
     }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const deleteAccount = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const deleted = await caller.ledger.accounts.delete(input);
-      return toolResult({
-        command: deleted.command,
-        id: deleted.id,
-        deleted: deleted.deleted,
-      });
-    }),
+export const deleteAccount = guardedTool(
+  async (input) => {
+    const deleted = await caller.ledger.accounts.delete(input);
+    return toolResult(pick(deleted, ["command", "id", "deleted"]));
+  },
   {
     name: "deleteAccount",
     description:
       "Delete an account. The ledger refuses one that still has transactions — merge it first.",
     schema: z.object({ id: accountId }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const addTransaction = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const added = await caller.ledger.transactions.add({
-        debit_account: input.debitAccount,
-        credit_account: input.creditAccount,
-        amount: input.amount,
-        date: input.date,
-        description: input.description,
-        merchant_name: input.merchantName,
-      });
-      return toolResult({
-        command: added.command,
-        transaction_id: added.transaction_id,
-        duplicate: added.duplicate,
-      });
-    }),
+export const addTransaction = guardedTool(
+  async (input) => {
+    const added = await caller.ledger.transactions.add({
+      debit_account: input.debitAccount,
+      credit_account: input.creditAccount,
+      amount: input.amount,
+      date: input.date,
+      description: input.description,
+      merchant_name: input.merchantName,
+    });
+    return toolResult(pick(added, ["command", "transaction_id", "duplicate"]));
+  },
   {
     name: "addTransaction",
     description:
@@ -175,20 +143,14 @@ export const addTransaction = tool(
       description: z.string().min(1).max(500).optional(),
       merchantName: z.string().min(1).max(200).optional(),
     }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const updateTransaction = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const updated = await caller.ledger.transactions.update(input);
-      return toolResult({
-        command: updated.command,
-        transaction_id: updated.transaction_id,
-        updated: updated.updated,
-      });
-    }),
+export const updateTransaction = guardedTool(
+  async (input) => {
+    const updated = await caller.ledger.transactions.update(input);
+    return toolResult(pick(updated, ["command", "transaction_id", "updated"]));
+  },
   {
     name: "updateTransaction",
     description:
@@ -198,84 +160,72 @@ export const updateTransaction = tool(
       date: isoDate.optional(),
       description: z.string().min(1).max(500).optional(),
     }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const deleteTransaction = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const deleted = await caller.ledger.transactions.delete(input);
-      return toolResult({
-        command: deleted.command,
-        transaction_id: deleted.transaction_id,
-        deleted: deleted.deleted,
-        unvoided: deleted.unvoided ?? 0,
-      });
-    }),
+export const deleteTransaction = guardedTool(
+  async (input) => {
+    const deleted = await caller.ledger.transactions.delete(input);
+    return toolResult({
+      command: deleted.command,
+      transaction_id: deleted.transaction_id,
+      deleted: deleted.deleted,
+      unvoided: deleted.unvoided ?? 0,
+    });
+  },
   {
     name: "deleteTransaction",
     description: "Delete one transaction, both legs together. Irreversible.",
     schema: z.object({ id: txId }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const recategorizeTransactions = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const moved = await caller.ledger.transactions.recategorize(input);
-      return toolResult({
-        command: moved.command,
-        affected: moved.affected,
-        skipped_currency_mismatch: moved.skipped_currency_mismatch ?? 0,
-      });
-    }),
+export const recategorizeTransactions = guardedTool(
+  async (input) => {
+    const moved = await caller.ledger.transactions.recategorize(input);
+    return toolResult({
+      command: moved.command,
+      affected: moved.affected,
+      skipped_currency_mismatch: moved.skipped_currency_mismatch ?? 0,
+    });
+  },
   {
     name: "recategorizeTransactions",
     description:
       "Re-point EVERY transaction on one account onto another — the whole history, not a date range. For one misplaced statement, move rows one by one instead.",
     schema: z.object({ from: accountId, to: accountId }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const mergeTransactions = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const merged = await caller.ledger.transactions.merge(input);
-      return toolResult({
-        command: merged.command,
-        from: merged.from,
-        to: merged.to,
-        voided: merged.voided,
-      });
-    }),
+export const mergeTransactions = guardedTool(
+  async (input) => {
+    const merged = await caller.ledger.transactions.merge(input);
+    return toolResult(pick(merged, ["command", "from", "to", "voided"]));
+  },
   {
     name: "mergeTransactions",
     description:
       "Merge a duplicate mirror transaction into its surviving twin; the from-row is voided, not deleted.",
     schema: z.object({ from: txId, to: txId }),
-    responseFormat: "content_and_artifact",
   },
 );
 
-export const dropFile = tool(
-  async (input) =>
-    guardedRun(async () => {
-      const dropped = await caller.ledger.files.drop(input);
-      return toolResult({
-        command: dropped.command,
-        file_id: dropped.file_id,
-        removed_transactions: dropped.removed_transactions,
-        removed_questions: dropped.removed_questions,
-      });
-    }),
+export const dropFile = guardedTool(
+  async (input) => {
+    const dropped = await caller.ledger.files.drop(input);
+    return toolResult(
+      pick(dropped, [
+        "command",
+        "file_id",
+        "removed_transactions",
+        "removed_questions",
+      ]),
+    );
+  },
   {
     name: "dropFile",
     description:
       "Deregister a statement file by its sf- id: its rows and questions leave the ledger, the file stays on disk for re-ingest. Only for imports that are themselves unusable.",
-    schema: z.object({ fileId: z.string().regex(FILE_ID_PATTERN) }),
-    responseFormat: "content_and_artifact",
+    schema: z.object({ fileId: fileIdSchema }),
   },
 );

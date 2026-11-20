@@ -3,8 +3,9 @@ import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { attemptAsync, isPlainObject, mapValues } from "es-toolkit";
 
 import { SECRET_MASK } from "@openledger-cfo/openledger";
+import { parseJson } from "@openledger-cfo/openledger/result";
 
-import { asRecord, asString, parseJson, textOf } from "./untyped";
+import { asRecord, asString, textOf } from "./untyped";
 
 /** A LangGraph v2 stream event. Kept structural so we never import graph internals. */
 export interface LangGraphEvent {
@@ -15,10 +16,7 @@ export interface LangGraphEvent {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * LangChain objects arrive as class instances in-process but as
- * `{ lc, type, id, kwargs }` once serialized. Read through both.
- */
+/** Reads a LangChain object both as a class instance and as its `{ lc, type, id, kwargs }` form. */
 export const unwrap = (value: unknown): Record<string, unknown> => {
   const record = asRecord(value);
   return record.kwargs === undefined ? record : asRecord(record.kwargs);
@@ -88,10 +86,7 @@ const maskFields = (value: unknown, secrets: readonly string[]): unknown => {
   );
 };
 
-/**
- * Only an object's fields can be masked one by one. Anything else is opaque,
- * and so is the unparsed text under `_raw`: a secret may sit anywhere in it.
- */
+/** Non-objects and unparsed `_raw` text are masked whole: a secret may sit anywhere in them. */
 const maskSecrets = (input: unknown, secrets: readonly string[]): unknown =>
   isPlainObject(input)
     ? maskFields(input, secrets)
@@ -100,26 +95,14 @@ const maskSecrets = (input: unknown, secrets: readonly string[]): unknown =>
 type SecretInputs = Readonly<Record<string, readonly string[]>>;
 
 export interface BridgeOptions {
-  /** Include subagent token output in the visible transcript. Default false. */
-  includeSubagents?: boolean;
   /** Tool names to keep out of the transcript, results included. */
-  hiddenTools?: readonly string[];
+  hiddenTools: readonly string[];
   /** Tool input fields, by tool name, whose values must never be echoed back. */
-  secretInputs?: SecretInputs;
-  /**
-   * Given the answer just streamed, what the user might ask next. Called once
-   * the last token is out, and it holds the stream open while it runs, so it
-   * owns its own deadline. Returning nothing is the normal way to decline.
-   */
+  secretInputs: SecretInputs;
+  /** Holds the stream open after the last token, so it owns its own deadline. */
   followUps?: (answer: string) => Promise<readonly string[]>;
 }
 
-const NONE: readonly string[] = [];
-
-/**
- * One `toUIChunks` run: the options it was given, read-only, beside the
- * bookkeeping its handlers write as events arrive.
- */
 interface StreamState {
   readonly hiddenTools: readonly string[];
   readonly secretInputs: SecretInputs;
@@ -134,10 +117,10 @@ interface StreamState {
   answer: string;
 }
 
-const initialState = (
-  hiddenTools: readonly string[],
-  secretInputs: SecretInputs,
-): StreamState => ({
+const initialState = ({
+  hiddenTools,
+  secretInputs,
+}: BridgeOptions): StreamState => ({
   hiddenTools,
   secretInputs,
   stepOpen: false,
@@ -346,11 +329,8 @@ const isHandled = (name: string): name is keyof typeof HANDLERS =>
   Object.hasOwn(HANDLERS, name);
 
 /**
- * Rides out on the answer's own message as a data part, which is what keeps the
- * chips attached to the turn that earned them once the transcript scrolls on.
- * A run that said nothing has nothing to follow up, and a thrown or empty
- * result is silence rather than an error: the answer is already delivered and
- * garnish must not take it down.
+ * A data part on the answer's own message, so the chips stay with their turn.
+ * A thrown or empty result is silence: the answer is already delivered.
  */
 async function* followUpData(
   state: StreamState,
@@ -363,41 +343,29 @@ async function* followUpData(
   yield { type: "data-suggestions", data: [...suggestions] };
 }
 
-/**
- * Converts LangGraph v2 events into AI SDK UI message chunks.
- *
- * Emits `start`/`finish` itself, so the output is byte-compatible with what
- * the SDK's own `toUIMessageStream` produces from a `streamText` run.
- */
+/** Emits `start`/`finish` itself, matching what the SDK's `toUIMessageStream` produces. */
 async function* toUIChunks(
   events: AsyncIterable<LangGraphEvent>,
-  options: BridgeOptions = {},
+  options: BridgeOptions,
 ): AsyncGenerator<UIMessageChunk> {
-  const {
-    includeSubagents = false,
-    hiddenTools = NONE,
-    secretInputs = {},
-    followUps,
-  } = options;
-
-  const state = initialState(hiddenTools, secretInputs);
+  const state = initialState(options);
 
   yield { type: "start" };
 
   for await (const event of events) {
-    if (!includeSubagents && nsDepth(event) > 0) continue;
+    if (nsDepth(event) > 0) continue;
     if (isHandled(event.event)) yield* HANDLERS[event.event](event, state);
   }
 
   yield* closeStep(state);
-  yield* followUpData(state, followUps);
+  yield* followUpData(state, options.followUps);
   yield { type: "finish" };
 }
 
 /** Wraps the bridge in the Response shape a route hands back to `useChat`. */
 export function toUIMessageStreamResponse(
   events: AsyncIterable<LangGraphEvent>,
-  options: BridgeOptions = {},
+  options: BridgeOptions,
 ): Response {
   return createUIMessageStreamResponse({
     stream: createUIMessageStream({

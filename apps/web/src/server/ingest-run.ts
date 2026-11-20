@@ -4,11 +4,12 @@ import { partition, uniqBy } from "es-toolkit";
 
 import type { GatewayConfig, LangGraphEvent } from "@openledger-cfo/agent";
 import type { Result } from "@openledger-cfo/openledger";
-import { createAgent, nsDepth, textOf, unwrap } from "@openledger-cfo/agent";
-import { asRecord, asString, parseJson } from "@openledger-cfo/agent/untyped";
+import { createAgent, nsDepth, unwrap } from "@openledger-cfo/agent";
+import { asRecord, asString, textOf } from "@openledger-cfo/agent/untyped";
 import { appRouter, createTRPCContext, readGateway } from "@openledger-cfo/api";
 import { perProcess } from "@openledger-cfo/db";
 import { err, messageOf, ok } from "@openledger-cfo/openledger";
+import { parseJson } from "@openledger-cfo/openledger/result";
 
 import type { IngestFile } from "~/domain/ingest-files";
 import type {

@@ -1,3 +1,8 @@
+import type { StructuredToolInterface } from "@langchain/core/tools";
+import type { output, ZodObject } from "zod/v4";
+import { tool } from "@langchain/core/tools";
+import { attemptAsync } from "es-toolkit";
+
 import { appRouter, createTRPCContext } from "@openledger-cfo/api";
 import { quoteShellArg } from "@openledger-cfo/openledger";
 
@@ -20,27 +25,33 @@ export interface ToolFailure {
   message: string;
 }
 
-/**
- * A thrown error would end the whole run; returned as data, the model can
- * retry the step or move to the next file, which its own rules require.
- */
-export const guardedRun = async (
-  run: () => Promise<[string, unknown]>,
-): Promise<[string, unknown]> => {
-  try {
-    return await run();
-  } catch (cause) {
-    return toolResult({
-      status: "error",
-      message: cause instanceof Error ? cause.message : "the command failed",
-    });
-  }
-};
+interface ToolFields<S> {
+  name: string;
+  description: string;
+  schema: S;
+}
 
-/**
- * Writes travel with the command the connector ran; reads do not, so a read's
- * displayed command is rebuilt here from the flags it passed.
- */
+/** A thrown error would end the whole run; as data, the model can retry or move on. */
+export const guardedTool = <S extends ZodObject>(
+  run: (input: output<S>) => Promise<[string, unknown]>,
+  fields: ToolFields<S>,
+): StructuredToolInterface =>
+  tool(
+    async (input: output<S>) => {
+      const [cause, result] = await attemptAsync(() => run(input));
+      return (
+        result ??
+        toolResult<ToolFailure>({
+          status: "error",
+          message:
+            cause instanceof Error ? cause.message : "the command failed",
+        })
+      );
+    },
+    { ...fields, responseFormat: "content_and_artifact" },
+  );
+
+/** Reads rebuild their command for display; writes carry the one the connector ran. */
 export const oledCommand = (...args: (string | undefined)[]): string =>
   ["oled", ...args.filter((arg) => arg !== undefined).map(quoteShellArg)].join(
     " ",

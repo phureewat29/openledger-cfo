@@ -1,11 +1,6 @@
 /**
- * Live check: one small turn per agent kind against the real ledger.
- *
- * Reproduces what `createAgent().stream()` does, with a tap on the raw events
- * so the run can assert that the skill actually loaded — a skill that fails to
- * load is silent, and the agent answers plausibly without it.
- *
- * Run with: pnpm -F @openledger-cfo/agent probe
+ * Live check, one turn per agent kind, tapping events to prove the skill loaded
+ * (a missing skill fails silently). Run: `pnpm -F @openledger-cfo/agent probe`
  */
 import type { UIMessage, UIMessageChunk } from "ai";
 
@@ -15,7 +10,7 @@ import type { GatewayConfig } from "../src/model";
 import type { AgentKind } from "../src/registry";
 import type { LangGraphEvent } from "../src/stream";
 import { createAgent } from "../src/index";
-import { AGENTS } from "../src/registry";
+import { AGENTS, HIDDEN_TOOLS } from "../src/registry";
 import { toUIMessageStreamResponse } from "../src/stream";
 
 const BUDGET_MS = 120_000;
@@ -61,7 +56,6 @@ const runAgent = async (
   gateway: GatewayConfig,
 ): Promise<Run> => {
   const agent = createAgent(kind, { gateway });
-  const spec = AGENTS[kind];
   let skills: { name?: string }[] = [];
 
   const tapped = async function* (): AsyncGenerator<LangGraphEvent> {
@@ -81,8 +75,8 @@ const runAgent = async (
 
   const chunks = await readSse(
     toUIMessageStreamResponse(tapped(), {
-      hiddenTools: spec.hiddenTools,
-      secretInputs: spec.secretInputs,
+      hiddenTools: HIDDEN_TOOLS,
+      secretInputs: AGENTS[kind].secretInputs,
     }),
   );
 
@@ -153,8 +147,7 @@ assert(
 assert(
   "built-in tools hidden",
   !cfo.chunks.some(
-    (chunk) =>
-      "toolName" in chunk && AGENTS.cfo.hiddenTools.includes(chunk.toolName),
+    (chunk) => "toolName" in chunk && HIDDEN_TOOLS.includes(chunk.toolName),
   ),
 );
 

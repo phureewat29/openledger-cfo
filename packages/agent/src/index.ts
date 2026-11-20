@@ -10,10 +10,11 @@ import type { LangGraphEvent } from "./stream";
 import type { QuestionScope } from "./tools/ingest";
 import { backendFor, SKILLS_PATH } from "./memory";
 import { chatModel } from "./model";
-import { AGENTS } from "./registry";
+import { AGENTS, HIDDEN_TOOLS } from "./registry";
 import { toUIMessageStreamResponse } from "./stream";
 import { suggestFollowUps } from "./suggest";
 import { scopedQuestionTools } from "./tools/ingest";
+import { textOf } from "./untyped";
 
 // The gateway key and a CLI-spawning connector both live behind this import.
 if ("window" in globalThis) {
@@ -21,34 +22,17 @@ if ("window" in globalThis) {
 }
 
 export interface AgentOptions {
-  /** The saved AI gateway this run speaks through; the caller resolves it. */
   gateway: GatewayConfig;
   /** Appended to the kind's system prompt: what the app already put on screen. */
   system?: string;
-  /** Raises the kind's ceiling for a caller whose one turn spans several files. */
+  /** Overrides the kind's superstep ceiling. */
   recursionLimit?: number;
-  /**
-   * Tool names this run must not hold. A caller that wants work left undone
-   * takes the tool away rather than asking for restraint in the prompt: the
-   * model cannot call what it was never given.
-   */
+  /** Withheld from this run: the model cannot call a tool it was never given. */
   excludeTools?: readonly string[];
-  /**
-   * The files this run is working. Given, the question tools see only the
-   * questions those files raised; the ledger's open queue holds other runs'
-   * work, and answering that is nobody's idea of finishing this one.
-   */
+  /** Limits the question tools to the questions these files raised. */
   questionFileIds?: QuestionScope;
-  /**
-   * Tools the caller owns that this package cannot: the app's runner lives
-   * behind its own module graph, so the app hands the tool in rather than
-   * being imported from here.
-   */
   extraTools?: readonly StructuredToolInterface[];
-  /**
-   * Offer the caller what to ask next once the answer is done. `stream` only:
-   * the suggestions ride out as a data part of the message they follow.
-   */
+  /** `stream` only: suggestions ride out as a data part after the answer. */
   followUps?: boolean;
 }
 
@@ -65,10 +49,7 @@ export interface Agent {
 type ChatMessage = AIMessage | HumanMessage;
 
 const plainTextOf = (message: UIMessage): string =>
-  message.parts
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("")
-    .trim();
+  textOf(message.parts).trim();
 
 const toChatMessages = (messages: UIMessage[]): ChatMessage[] =>
   messages.flatMap((message) => {
@@ -83,13 +64,8 @@ const toChatMessages = (messages: UIMessage[]): ChatMessage[] =>
   });
 
 /**
- * langchain words a call its schema refuses with every argument and the
- * error's stack, whose absolute paths name the OS account; the gateway reads
- * that text. The schema's issues are all the model needs to correct the call.
- * Any other tool error passes through untouched. deepagents keeps custom
- * middleware off its general-purpose subagent, whose refusals rely on the
- * redactor's home-directory entry instead — and so go out whole when
- * redaction is off.
+ * Schema refusals reach the gateway as their issues alone; langchain's text carries
+ * every argument and a stack naming the OS account. deepagents keeps this off `task`.
  */
 const refusedCalls = toolErrorMiddleware({
   onError: (error) =>
@@ -117,7 +93,7 @@ export const createAgent = (kind: AgentKind, opts: AgentOptions): Agent => {
       ...(opts.extraTools ?? []),
     ],
     systemPrompt: spec.buildSystemPrompt(opts.system),
-    backend: backendFor(spec),
+    backend: backendFor(kind),
     skills: [SKILLS_PATH],
     middleware: [refusedCalls],
   });
@@ -145,7 +121,7 @@ export const createAgent = (kind: AgentKind, opts: AgentOptions): Agent => {
         .filter((text) => text.length > 0);
 
       return toUIMessageStreamResponse(events(messages, signal), {
-        hiddenTools: spec.hiddenTools,
+        hiddenTools: HIDDEN_TOOLS,
         secretInputs: spec.secretInputs,
         followUps: opts.followUps
           ? (answer) =>
@@ -166,10 +142,4 @@ export type { GatewayConfig } from "./model";
 export type { AgentKind } from "./registry";
 export { nsDepth, unwrap } from "./stream";
 export type { LangGraphEvent } from "./stream";
-export { textOf } from "./untyped";
-export { startIngestRunTool } from "./tools/runner";
-export type {
-  RunnerMode,
-  StartIngestRun,
-  StartRunOutcome,
-} from "./tools/runner";
+export { startIngestRunTool } from "./tools/ingest";

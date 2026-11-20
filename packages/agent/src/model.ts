@@ -32,16 +32,8 @@ type RedactorProvider = () => Promise<Redactor>;
 type VocabSource = () => Promise<VocabEntry[]>;
 
 /**
- * Read fresh for each model call: a model call follows tool execution, so an
- * account the agent just created is already hidden on the turn that reports it.
- * Calls that overlap within a turn share the one read.
- *
- * A source whose read fails contributes what its last good read did rather than
- * ending the turn, so one busy ledger read cannot un-hide names an earlier turn
- * sent as placeholders. The residual is deliberate: a source that has never read
- * cleanly in this process has nothing to fall back on, and the names it would
- * have hidden go out redacted by pattern only. An answerable turn is worth more
- * than a perfectly hidden one.
+ * Reads every source per model call, one shared read per overlap. A failed source
+ * reuses its last good read, so a busy ledger cannot un-hide an earlier placeholder.
  */
 export const createRedactorSource = (
   sources: readonly VocabSource[],
@@ -65,11 +57,7 @@ export const createRedactorSource = (
   };
 };
 
-/**
- * A Windows path reaches the model with either drive-letter case, either
- * separator, or its backslashes doubled by JSON, and each spelling needs its
- * own vocabulary entry.
- */
+/** A Windows home arrives in either drive case, either separator, or JSON-doubled backslashes. */
 export const homeSpellings = (
   home: string,
   platform: NodeJS.Platform,
@@ -85,10 +73,7 @@ export const homeSpellings = (
   );
 };
 
-/**
- * Absolute paths reach the model in tool errors and stack traces, and each one
- * under the home directory names the OS account.
- */
+/** Paths in tool errors and stack traces name the OS account through the home directory. */
 const homeDirectory = (): Promise<VocabEntry[]> =>
   Promise.resolve(
     homeSpellings(homedir(), process.platform).map((value) => ({
@@ -102,10 +87,7 @@ const userName = async (): Promise<VocabEntry[]> => {
   return [{ category: "U", value: status.user_name }];
 };
 
-/**
- * The label and the masked number are the user's; `bank_name` is a public
- * institution and stays in the clear, so the model can still reason about it.
- */
+/** `bank_name` is a public institution and stays in the clear. */
 const accountLabels = async (): Promise<VocabEntry[]> => {
   const page = await caller.ledger.accounts.list();
   return page.rows.flatMap((row) => [
@@ -147,11 +129,8 @@ const currentRedactor = createRedactorSource([
 const TOKEN_INDICES = { prompt: 0, completion: 0 };
 
 /**
- * Every call goes to `/chat/completions`, the one route the gateway contract
- * and its Test button speak. `ChatOpenAI` sends some model ids to `/responses`
- * on its own — any containing `gpt-5.6` or `codex`, among others
- * (utils/misc.js:89) — and `useResponsesApi: false` cannot stop it, because
- * the flag is OR-ed with that check (chat_models/index.js:642).
+ * Holds every call on `/chat/completions`, the gateway contract. `ChatOpenAI` routes some ids
+ * to `/responses` (utils/misc.js:89) whatever `useResponsesApi` says (chat_models/index.js:642).
  */
 export class CompletionsChatOpenAI extends ChatOpenAI {
   protected override _useResponsesApi(): boolean {
@@ -164,10 +143,8 @@ export class CompletionsChatOpenAI extends ChatOpenAI {
   }
 
   /**
-   * `withConfig` hard-codes `new ChatOpenAI(this.fields)` (chat_models/index.js:673),
-   * and `bindTools` (chat_models/base.js:353) and `withStructuredOutput` route
-   * through it — deepagents reaches the model by `bindTools`, so without this
-   * every real call would run on a plain model: routed by id, and unredacted.
+   * The base hard-codes `new ChatOpenAI(this.fields)` (chat_models/index.js:673) and `bindTools`
+   * (chat_models/base.js:353) routes through it, so deepagents would get a plain model.
    */
   override withConfig(
     config: Partial<ChatOpenAICallOptions>,
@@ -179,19 +156,15 @@ export class CompletionsChatOpenAI extends ChatOpenAI {
 }
 
 /**
- * Redaction sits at the one boundary all gateway traffic crosses. Three escapes
- * in `@langchain/openai@1.8.4` would route around it: `withConfig`, which the
- * base class shuts, and the two stream entry points overridden below. The
- * versions are pinned because the escapes are unversioned internals.
+ * Redaction at the one boundary all gateway traffic crosses. `withConfig` and the two stream
+ * entry points would route around it; they are unversioned internals, hence the exact pins.
  */
 export class RedactingChatOpenAI extends CompletionsChatOpenAI {
   private readonly redactorOf: RedactorProvider;
 
   constructor(fields: ChatOpenAIFields, redactorOf: RedactorProvider) {
-    // Neither `true` nor `false` will do (chat_models/base.js:263-265): `true`
-    // makes `_generate` stream internally on raw-token callbacks, while a
-    // literal `false` sets `disableStreaming`, which turns every `.stream()`
-    // into one buffered `invoke` (core chat_models.js:133). Absent is both off.
+    // `true` streams `_generate` on raw tokens; a literal `false` sets `disableStreaming`, making
+    // `.stream()` one buffered `invoke` (chat_models/base.js:263-265). Absent is both off.
     super({ ...fields, streaming: undefined });
     this.redactorOf = redactorOf;
   }
@@ -234,10 +207,8 @@ export class RedactingChatOpenAI extends CompletionsChatOpenAI {
       );
     };
 
-    // Stream events are built from `handleLLMNewToken`, which the provider fires
-    // from inside its own generator with the chunk it just yielded
-    // (chat_models/completions.js:232). Withholding the run manager from `super`
-    // leaves this the only emitter, so no placeholder reaches a listener.
+    // The provider fires `handleLLMNewToken` with its raw chunk (chat_models/completions.js:232);
+    // withholding the run manager makes this the only emitter, so no placeholder leaks.
     for await (const chunk of super._streamResponseChunks(
       redacted,
       options,
@@ -255,10 +226,8 @@ export class RedactingChatOpenAI extends CompletionsChatOpenAI {
   }
 
   /**
-   * ChatOpenAI's facade hands this straight to its completions client
-   * (chat_models/index.js:659), which never reaches the override above. Bridging
-   * through our own chunks is what core's default does. Nothing in this app takes
-   * that path today; the override keeps it from opening one silently.
+   * The facade hands this straight to its completions client (chat_models/index.js:659),
+   * past the override above; bridging through our own chunks is what core's default does.
    */
   override async *_streamChatModelEvents(
     messages: BaseMessage[],

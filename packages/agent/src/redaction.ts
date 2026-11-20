@@ -25,18 +25,12 @@ import {
   uniqBy,
 } from "es-toolkit";
 
-import { asRecord, parseJson, textOf } from "./untyped";
+import { parseJson } from "@openledger-cfo/openledger/result";
 
-/**
- * Pseudonymizes the user's personal data on its way to an external model and
- * restores it on the way back. Institutions — banks, brokers, merchants — are
- * public facts and stay in the clear; what leaves is the account labels, masked
- * numbers, names, filenames, long digit runs and emails that identify a person.
- *
- * Every transform is total and deterministic: one value always yields one
- * placeholder, so a conversation stays coherent across turns and two processes
- * redact the same prompt byte for byte.
- */
+import { asRecord, textOf } from "./untyped";
+
+// Pseudonymizes personal data only; banks, brokers and merchants stay in the clear.
+// Every transform is deterministic: one value always yields one placeholder.
 
 /**
  * A account name, K masked account number, U user name or home directory,
@@ -93,11 +87,8 @@ const MIN_RUN_DIGITS = 10;
 
 const EMAIL_SOURCE = "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}";
 const MASKED_SOURCE = "\\*{2,}\\d{2,}";
-/**
- * Account numbers are written with single spaces or dashes inside them. The
- * lookbehind keeps a run from starting mid-number — without it `85,000.50 1234567890`
- * would join the `50` of the price to the account that follows it.
- */
+// Account numbers carry single spaces or dashes. The lookbehind keeps a run from
+// starting mid-number, so `85,000.50 1234567890` does not join the `50` to it.
 const DIGIT_RUN_SOURCE = "(?<![.,\\d])\\d+(?:[ -]\\d+)*";
 
 const digitsIn = (value: string): number => value.replace(/\D/gu, "").length;
@@ -143,10 +134,8 @@ interface Vocabulary {
 }
 
 /**
- * Short values match too much prose to be worth hiding, and the first category
- * given to a value wins so a term listed twice cannot get two placeholders.
- * Two values sharing an 8-char digest prefix both widen to 16, which keeps a
- * value's placeholder a function of the vocabulary rather than of arrival order.
+ * A value's first category wins. Values sharing an 8-char digest prefix both widen
+ * to 16, so a placeholder depends on the vocabulary, never on arrival order.
  */
 const prepare = (entries: readonly VocabEntry[]): Vocabulary[] => {
   const candidates = uniqBy(
@@ -176,10 +165,7 @@ const walkJson = (value: unknown, map: (text: string) => string): unknown => {
   return mapValues(value, (item) => walkJson(item, map));
 };
 
-/**
- * The prose a content block carries, if any. Images and thinking blocks have
- * none, and pass through every transform untouched.
- */
+/** Images and thinking blocks carry no prose and pass through untouched. */
 const proseOf = (block: unknown): string | undefined => {
   const record = asRecord(block);
   return record.type === "text" && typeof record.text === "string"
@@ -243,10 +229,7 @@ const commonFields = (message: BaseMessage, content: MessageContent) => ({
 
 type MessageConstructor = new (fields: BaseMessageFields) => BaseMessage;
 
-/**
- * The fallback for a message type this module does not know: rebuild it through
- * its own constructor so an exotic type still leaves with its prose redacted.
- */
+/** An unknown message type is rebuilt through its own constructor, prose transformed. */
 const transformOther = (message: BaseMessage, pass: TextPass): BaseMessage => {
   const Constructor = message.constructor as MessageConstructor;
   return new Constructor({
@@ -277,7 +260,10 @@ const transformAI = (message: AIMessage, pass: TextPass): AIMessage =>
     usage_metadata: message.usage_metadata,
   });
 
-const redactAI = (message: BaseMessage, pass: TextPass): BaseMessage =>
+const transformAIMessage = (
+  message: BaseMessage,
+  pass: TextPass,
+): BaseMessage =>
   AIMessage.isInstance(message)
     ? transformAI(message, pass)
     : transformOther(message, pass);
@@ -300,14 +286,13 @@ const REDACTORS: Record<
 > = {
   system: rebuildProse(SystemMessage),
   human: rebuildProse(HumanMessage),
-  ai: redactAI,
+  ai: transformAIMessage,
   tool: redactTool,
 };
 
 /**
- * Buffers a stream just enough to never cut a placeholder in half: text after
- * the last `⟦` is held back while it still reads as a placeholder in the making.
- * An earlier `⟦` cannot start one, since the placeholder alphabet excludes it.
+ * Holds back text after the last `⟦` while it still reads as a placeholder in the
+ * making; an earlier `⟦` cannot start one, since the placeholder alphabet excludes it.
  */
 export const createStitcher = (restore: (text: string) => string): Stitcher => {
   let buffer = "";
@@ -338,11 +323,7 @@ export const createRedactor = (entries: readonly VocabEntry[]): Redactor => {
   const originals = new Map(vocabulary.map((item) => [item.token, item.value]));
   const tokens = new Map(vocabulary.map((item) => [item.value, item.token]));
 
-  /**
-   * A placeholder for a value the vocabulary never saw. Should its digest
-   * prefix already belong to another value, this one takes the wider form —
-   * the vocabulary's own collisions are settled up front, in {@link prepare}.
-   */
+  /** A pattern hit whose short digest prefix is taken by another value takes the wide form. */
   const claim = (category: Category, value: string): string => {
     const hex = digestOf(value);
     const short = tokenOf(category, hex.slice(0, SHORT_HEX));
@@ -357,10 +338,8 @@ export const createRedactor = (entries: readonly VocabEntry[]): Redactor => {
   };
 
   /**
-   * One pass, one regex. A placeholder is listed first so a second redaction
-   * leaves it alone — and so hex that reads as a digit run cannot be re-hidden.
-   * Vocabulary comes next, longest first, which is what makes a specific account
-   * name win over the bank prefix it starts with.
+   * Placeholders first, so a second pass leaves them (and their hex) alone; then
+   * vocabulary longest first, so an account name beats the bank prefix it starts with.
    */
   const master = new RegExp(
     [
@@ -387,10 +366,7 @@ export const createRedactor = (entries: readonly VocabEntry[]): Redactor => {
   const restoreText = (text: string): string =>
     text.replace(TOKEN_RE, (token) => originals.get(token) ?? token);
 
-  /**
-   * The fragment sits inside a JSON string literal, so an original carrying a
-   * quote or a backslash has to arrive already escaped for it.
-   */
+  /** The fragment sits inside a JSON string literal, so originals arrive escaped for it. */
   const restoreJsonFragment = (fragment: string): string =>
     fragment.replace(TOKEN_RE, (token) => {
       const original = originals.get(token);
@@ -425,17 +401,12 @@ export const createRedactor = (entries: readonly VocabEntry[]): Redactor => {
     return handler(message, REDACT);
   };
 
-  const restoreMessage = (message: BaseMessage): BaseMessage =>
-    AIMessage.isInstance(message)
-      ? transformAI(message, RESTORE)
-      : transformOther(message, RESTORE);
-
   const restoreResult = (result: ChatResult): ChatResult => ({
     ...result,
     generations: result.generations.map((generation) => ({
       ...generation,
       text: restoreText(generation.text),
-      message: restoreMessage(generation.message),
+      message: transformAIMessage(generation.message, RESTORE),
     })),
   });
 
@@ -461,12 +432,8 @@ export const createRedactor = (entries: readonly VocabEntry[]): Redactor => {
     });
 
     /**
-     * The delta converter copies each raw tool-call fragment into
-     * `additional_kwargs.tool_calls` as well (converters/completions.js:261).
-     * Those are dropped rather than mirrored: a second pass through the
-     * per-index stitchers would corrupt their state, and leaving them be would
-     * aggregate into a message whose `tool_calls` read true while its kwargs
-     * still held placeholders. `tool_call_chunks` is the copy that survives.
+     * The converter mirrors raw fragments into `additional_kwargs.tool_calls`
+     * (converters/completions.js:261); dropped, since a second stitcher pass corrupts state.
      */
     const restoreKwargs = (kwargs: Kwargs): Kwargs =>
       omit(
@@ -506,9 +473,8 @@ export const createRedactor = (entries: readonly VocabEntry[]): Redactor => {
       flush() {
         const rest = prose.flush();
         const thought = reasoning.flush();
-        // A remainder is a stream that stopped mid-placeholder: it goes out
-        // verbatim, and argument fragments go back as fragments so the
-        // aggregated tool call keeps whatever JSON it managed to receive.
+        // A stream stopped mid-placeholder goes out verbatim; argument fragments
+        // go back as fragments so the aggregated call keeps the JSON it received.
         const args = [...fragments.entries()]
           .map(([index, stitcher]) => ({ index, args: stitcher.flush() }))
           .filter((part) => part.args !== "");

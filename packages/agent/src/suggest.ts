@@ -1,15 +1,12 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { uniqBy } from "es-toolkit";
+import { attemptAsync, uniqBy } from "es-toolkit";
 import { z } from "zod/v4";
 
 import type { GatewayConfig } from "./model";
 import { chatModel } from "./model";
 import { sanitizeLabel } from "./sanitize";
 
-/**
- * Deliberately unbounded. A model that hands back five suggestions should cost
- * us the two we do not want, not all five to a schema error.
- */
+/** Unbounded: extra suggestions are dropped here rather than failing the schema. */
 const FollowUps = z.object({
   suggestions: z
     .array(z.string())
@@ -18,18 +15,9 @@ const FollowUps = z.object({
 
 /** The answer is already on screen; nothing here is worth holding it open for. */
 const TIMEOUT_MS = 6_000;
-/**
- * Three are shown, four are asked for. The length gate below drops a candidate
- * outright, and this domain's nouns are long enough that a suggestion can keep
- * to six words and still overrun it; the fourth is the spare that keeps such a
- * drop from costing the strip a row.
- */
+/** Four are asked for, so one dropped by the length gate still leaves a full row. */
 const MAX_COUNT = 3;
-/**
- * What the pane fits whole at its narrowest — a 320px column, which is every
- * viewport at or below 1280. Clicking sends the full string, so a chip the
- * column has to cut is a message the reader never saw; drop it instead.
- */
+/** Fits whole in the pane's narrowest (320px) column; a chip cut short sends text never seen. */
 const MAX_LABEL = 38;
 /** A long report's close carries the thread, so its tail is context enough. */
 const ANSWER_TAIL = 4_000;
@@ -92,11 +80,7 @@ const clean = (
   return uniqBy(fitting, caseless).slice(0, MAX_COUNT);
 };
 
-/**
- * Total: a refusal, malformed output, a dead gateway, a stopped run and a slow
- * one all come back the same way, as no suggestions. The caller streams these
- * behind a finished answer, so there is no failure here worth reporting.
- */
+/** Total: every failure, a stopped or slow run included, comes back as no suggestions. */
 export const suggestFollowUps = async (
   input: SuggestInput,
 ): Promise<readonly string[]> => {
@@ -108,11 +92,10 @@ export const suggestFollowUps = async (
     ? AbortSignal.any([input.signal, deadline])
     : deadline;
 
-  try {
-    const result: unknown = await chatModel(input.gateway)
-      // Function calling by name: left alone, the client picks a json_schema
-      // response format for any id that is not a gpt-3 or gpt-4, and gateways
-      // route that unevenly. Anything that can run this agent can call a tool.
+  const [error, result] = await attemptAsync(() =>
+    chatModel(input.gateway)
+      // By name: otherwise the client picks a json_schema response format for
+      // most ids, and gateways route that unevenly.
       .withStructuredOutput(FollowUps, {
         name: "follow_ups",
         method: "functionCalling",
@@ -123,21 +106,14 @@ export const suggestFollowUps = async (
           new HumanMessage(promptFor(input)),
         ],
         { signal },
-      );
-
-    // A refusal parses to nothing at all rather than throwing, so read the
-    // shape back rather than trusting what the call signature promised.
-    const parsed = FollowUps.safeParse(result);
-    if (!parsed.success) return NONE;
-
-    return clean(parsed.data.suggestions, input.asked);
-  } catch (error) {
-    // A user who stopped the run explains itself. Everything else — a refused
-    // call, or a gateway grown slow enough to spend the deadline every time —
-    // ends the chips for good with nothing on screen ever saying so.
-    if (!input.signal?.aborted) {
-      console.error("follow-up suggestions failed", error);
-    }
-    return NONE;
+      ),
+  );
+  // A stopped run explains itself; any other failure would end the chips unseen.
+  if (error !== null && !input.signal?.aborted) {
+    console.error("follow-up suggestions failed", error);
   }
+
+  // A refusal parses to nothing rather than throwing, so the shape is read back.
+  const parsed = FollowUps.safeParse(result);
+  return parsed.success ? clean(parsed.data.suggestions, input.asked) : NONE;
 };

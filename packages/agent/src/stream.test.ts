@@ -240,14 +240,10 @@ describe("toUIMessageStreamResponse", () => {
     expect(wire).not.toContain("call-ls");
   });
 
-  it("includes subagent tokens only when asked", async () => {
-    const quiet = await bridge();
-    const loud = await bridge({ ...OPTIONS, includeSubagents: true });
+  it("keeps subagent tokens out", async () => {
+    const { wire } = await bridge();
 
-    expect(quiet.wire).not.toContain("subagent aside");
-    expect(loud.message?.parts[2]).toMatchObject({
-      text: "One file is locked.subagent aside",
-    });
+    expect(wire).not.toContain("subagent aside");
   });
 
   it("follows the answer with suggestions as a data part", async () => {

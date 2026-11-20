@@ -1,10 +1,5 @@
-/**
- * Merchant names and descriptions come from bank-statement-style data. They are
- * untrusted text that reaches an LLM prompt, so they are cleaned once here
- * rather than at each tool: C0/DEL controls and Unicode bidi/zero-width runs can
- * reorder or hide what a reader sees, and a pipe would break the delimiter of a
- * prompt block.
- */
+// Statement text reaches prompts: controls and bidi/zero-width runs can reorder or
+// hide what a reader sees, and a pipe would break a prompt block's delimiter.
 
 const DEL = 0x7f;
 const SPACE = 0x20;

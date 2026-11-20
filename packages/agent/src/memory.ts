@@ -8,6 +8,8 @@ import {
   WORKSPACE_MARKER,
 } from "@openledger-cfo/openledger";
 
+import type { AgentKind } from "./registry";
+
 /** Skill sources live with the code; the agent reads copies, never the sources. */
 const SKILL_SOURCES = "packages/agent/src/skills";
 
@@ -18,10 +20,7 @@ const SKILLS_MOUNT = "skills";
 /** POSIX path, relative to the backend root, that the skills middleware scans. */
 export const SKILLS_PATH = `/${SKILLS_MOUNT}/`;
 
-/**
- * Every app in the monorepo reaches the same agent workspace, so its path is
- * derived from the workspace root rather than from each process's cwd.
- */
+/** Every app reaches the same agent workspace, so it hangs off the workspace root, not the cwd. */
 const workspaceRoot = (): string => {
   const root = findWorkspaceRoot(process.cwd());
   if (!root) {
@@ -32,41 +31,25 @@ const workspaceRoot = (): string => {
   return root;
 };
 
-interface SkillsMount {
-  readonly rootDir: string;
-  readonly skillsDir: string;
-}
-
 /**
- * Skills reach the model through the backend, not the real filesystem, so the
- * source directory is copied into the agent's root. The skill's directory name
- * must equal the `name` in its frontmatter. Once per destination and process:
- * later agents share the copy rather than rewrite it under a run reading it.
+ * Skills reach the model through the backend, so they are copied into its root,
+ * once per destination: later agents share the copy rather than rewrite it mid-read.
  */
 const mountSkills = memoize(
-  ({ rootDir, skillsDir }: SkillsMount): void => {
-    cpSync(
-      join(workspaceRoot(), SKILL_SOURCES, skillsDir),
-      join(rootDir, SKILLS_MOUNT, skillsDir),
-      { recursive: true },
-    );
+  ({ source, destination }: { source: string; destination: string }): void => {
+    cpSync(source, destination, { recursive: true });
   },
-  { getCacheKey: ({ rootDir, skillsDir }) => join(rootDir, skillsDir) },
+  { getCacheKey: ({ destination }) => destination },
 );
 
-interface WorkspaceSpec {
-  memoryNamespace: string;
-  skillsDir: string;
-}
-
-/**
- * `virtualMode` is load-bearing: without it the agent's absolute paths resolve
- * against the real filesystem, skills silently fail to load, and file writes
- * escape the workspace.
- */
-export const backendFor = (spec: WorkspaceSpec): FilesystemBackend => {
-  const rootDir = join(workspaceRoot(), AGENT_DIR, spec.memoryNamespace);
+/** Without `virtualMode`, paths hit the real disk: skills fail to load and writes escape. */
+export const backendFor = (kind: AgentKind): FilesystemBackend => {
+  const root = workspaceRoot();
+  const rootDir = join(root, AGENT_DIR, kind);
   mkdirSync(rootDir, { recursive: true });
-  mountSkills({ rootDir, skillsDir: spec.skillsDir });
+  mountSkills({
+    source: join(root, SKILL_SOURCES, kind),
+    destination: join(rootDir, SKILLS_MOUNT, kind),
+  });
   return new FilesystemBackend({ rootDir, virtualMode: true });
 };
