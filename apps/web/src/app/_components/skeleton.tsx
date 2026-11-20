@@ -1,12 +1,6 @@
 import { cn } from "@openledger-cfo/ui";
 
-/**
- * A line of text that has not arrived, holding its exact line box and nothing
- * more. The no-break space is the whole trick: the span takes the line box of
- * the type it stands in for, so a skeleton built from the real row's classes
- * holds the real row's height to the pixel. Size it with the same text-size
- * class the value will render at.
- */
+// A no-break space holds the line box of the type it stands in for; give it the value's text size.
 export function GhostLine({ className }: { className?: string }) {
   return (
     <span
@@ -18,11 +12,7 @@ export function GhostLine({ className }: { className?: string }) {
   );
 }
 
-/**
- * The one loading effect left: a soft band of accent passing over an
- * otherwise invisible block. Only the accounts composition strip wears it;
- * every pane says its loading line instead.
- */
+// A soft band of accent passing over an otherwise invisible block.
 export function ShimmerBox({ className }: { className?: string }) {
   return (
     <span

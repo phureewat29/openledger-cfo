@@ -19,11 +19,7 @@ export const metadata: Metadata = { title: "Ingest · OpenLedger CFO" };
 export const dynamic = "force-dynamic";
 
 export default async function IngestPage() {
-  /**
-   * The head read the status bar already pays for (request-cached, so this
-   * costs no extra spawn) doubles as the health probe: a broken ledger is one
-   * setup screen, not four pane-local errors.
-   */
+  // The request-cached head read doubles as the probe: a broken ledger is one setup screen.
   const probe = await asLedgerLoad(ledgerHead());
   if (!probe.ok) {
     return (
@@ -31,11 +27,7 @@ export default async function IngestPage() {
     );
   }
 
-  /**
-   * Awaited, so the panes render their rows in this pass and hydrate onto them.
-   * Each read is the one the pane would otherwise issue on mount; the inputs
-   * match the panes' own so all three ride the same two cache entries.
-   */
+  // Inputs match the panes' own reads, so all three hydrate onto these two cache entries.
   await Promise.all([
     prefetch(trpc.ledger.ingest.list.queryOptions(undefined)),
     prefetch(trpc.ledger.questions.list.queryOptions({})),

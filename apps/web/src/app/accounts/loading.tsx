@@ -1,6 +1,3 @@
-import { Breadcrumbs } from "~/app/_components/breadcrumbs";
-import { PaneFrame } from "~/app/_components/pane-frame";
-import { GhostLine, ShimmerBox } from "~/app/_components/skeleton";
 import {
   ACCOUNTS_GRID,
   GROUP_COL,
@@ -9,14 +6,12 @@ import {
   STRIP_ROW,
   TOTALS_CELL,
   TOTALS_ROW,
-} from "~/app/accounts/grid";
+} from "~/accounts/grid";
+import { Breadcrumbs } from "~/app/_components/breadcrumbs";
+import { PaneFrame } from "~/app/_components/pane-frame";
+import { GhostLine, ShimmerBox } from "~/app/_components/skeleton";
 
-/**
- * Soft on purpose: the grid constants and pane frames hold the layout, every
- * pane says its loading line, and no body pretends to know how many accounts
- * the ledger holds. The totals row keeps its three cells because the row
- * always has three, and the composition strip alone wears the sweep.
- */
+// The totals row always has three cells; no body guesses how many accounts the ledger holds.
 const TOTALS = ["Assets", "Liabilities", "Net"];
 
 export default function AccountsLoading() {

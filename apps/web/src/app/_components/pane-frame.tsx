@@ -3,11 +3,7 @@ import { Pane } from "@openledger-cfo/ui/pane";
 import { GhostLine } from "~/app/_components/skeleton";
 import { LoadingLine } from "~/lib/ui/loading-line";
 
-/**
- * The pane's outline while the route's server read is still open. One Pane
- * underneath, so the frame and the loaded pane can never drift apart; the
- * loading line speaks once, from the body.
- */
+// A loading pane built on the same Pane, so it can never drift from the loaded one.
 export function PaneFrame({
   title,
   className,

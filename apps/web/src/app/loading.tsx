@@ -13,13 +13,7 @@ import {
   VITALS_GRID,
 } from "~/dashboard/grid";
 
-/**
- * Soft on purpose: the grid constants and pane frames hold the layout, every
- * pane says its loading line, and no body pretends to know the data. The
- * vitals band keeps its six cells because the band always has six — their
- * labels are product copy, not a guess — and below the wide tier the cells'
- * ghost lines are what give the band its height.
- */
+// The vitals band always has these six cells; below the wide tier their ghost lines give it height.
 const VITALS = [
   "Net worth",
   "Month net",

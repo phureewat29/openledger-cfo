@@ -1,4 +1,4 @@
-import type { TRPCQueryOptions } from "@trpc/tanstack-react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { cache } from "react";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
@@ -25,18 +25,7 @@ export function HydrateClient(props: { children: React.ReactNode }) {
     </HydrationBoundary>
   );
 }
-/**
- * Awaiting the returned promise is what decides whether the pane renders its
- * data in the server pass or a pending shell the stream fills in later.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function prefetch<T extends ReturnType<TRPCQueryOptions<any>>>(
-  queryOptions: T,
-): Promise<void> {
-  const queryClient = getQueryClient();
-  if (queryOptions.queryKey[1]?.type === "infinite") {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-    return queryClient.prefetchInfiniteQuery(queryOptions as any);
-  }
-  return queryClient.prefetchQuery(queryOptions);
-}
+
+/** Awaited, the pane renders its data in the server pass; not awaited, the stream fills it in later. */
+export const prefetch: QueryClient["prefetchQuery"] = (options) =>
+  getQueryClient().prefetchQuery(options);

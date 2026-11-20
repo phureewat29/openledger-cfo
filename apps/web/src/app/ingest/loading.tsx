@@ -4,13 +4,7 @@ import { INGEST_GRID, INGEST_NARROW, INGEST_WIDE } from "~/app/ingest/grid";
 import { UPLOAD_HINT } from "~/ingest/files";
 import { LoadingLine } from "~/lib/ui/loading-line";
 
-/**
- * Soft on purpose: the ingest grid holds every pane's height, so the frames
- * alone are the placeholder. The dropzone strip and the oled first line stay
- * because they are fixed chrome — file-list.tsx and cli-log.tsx paint the
- * same ones before any data arrives — and Run's body padding mirrors
- * run-feed.tsx so its first line does not shift on swap.
- */
+// The dropzone strip and the oled first line are the panes' own fixed chrome, and Run's padding mirrors the feed's.
 export default function IngestLoading() {
   return (
     <div className="flex min-h-full flex-col @4xl/main:h-full">

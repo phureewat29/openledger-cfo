@@ -10,15 +10,7 @@ import { Breadcrumbs } from "~/app/_components/breadcrumbs";
 import { PaneFrame } from "~/app/_components/pane-frame";
 import { GhostLine } from "~/app/_components/skeleton";
 
-/**
- * The head band keeps its fixed chrome — a title line and four stat cells,
- * every account has them — held open by ghost lines. The account's type
- * chooses which charts sit in the middle row, so those frames leave their
- * titles blank; every pane says its loading line from the body, which is
- * also what the postings table shows while its first page is in flight —
- * the swap from route skeleton to page is a continuation, not a change of
- * scene.
- */
+// Every account has the head band's title line and four stat cells; its type picks the charts, so those frames stay untitled.
 export default function AccountLoading() {
   return (
     <div className="flex min-h-full flex-col @4xl/main:h-full">

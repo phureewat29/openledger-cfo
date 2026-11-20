@@ -46,10 +46,8 @@ export default async function EverythingPage() {
     <div className="flex min-h-full flex-col @4xl/main:h-full">
       <Breadcrumbs crumbs={[{ label: "Everything" }]} />
       <h1 className="sr-only">Everything</h1>
-      {/* Fractional rows only resolve against a definite height, which is what
-          `flex-1` hands them; left content-sized, one tall pane would scale
-          every other row with it. The floors still overflow — and scroll —
-          when the window is too short for them. */}
+      {/* Fractional rows resolve only against the definite height `flex-1`
+          hands them; content-sized, one tall pane would scale every row. */}
       <div className={EVERYTHING_GRID}>
         <Vitals dashboard={dashboard} className="col-span-12" />
         <FlowPane baseline={dashboard.baseline} className={FLOW_COL} />
