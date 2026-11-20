@@ -4,7 +4,7 @@ import type { AppRouter } from "./root";
 
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
 
-export { type AppRouter, appRouter } from "./root";
+export { type AppRouter, appRouter, caller } from "./root";
 export { createTRPCContext } from "./trpc";
 
 export type { ProbeReason } from "./config/probe";

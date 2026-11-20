@@ -28,7 +28,7 @@ import {
 import { createRedactor } from "./redaction";
 
 // The app's redactor reads names through the ledger, which a test must not spawn.
-vi.mock("./tools/caller", () => {
+vi.mock("@openledger-cfo/api", () => {
   const offline = () => Promise.reject(new Error("no ledger in tests"));
   return {
     caller: {

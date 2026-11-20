@@ -1,9 +1,10 @@
 import { pick } from "es-toolkit";
 import { z } from "zod/v4";
 
+import { caller } from "@openledger-cfo/api";
 import { accountIdSchema, fileIdSchema } from "@openledger-cfo/openledger";
 
-import { caller, guardedTool, toolResult } from "./caller";
+import { guardedTool, toolResult } from "./guarded";
 
 const accountId = accountIdSchema.describe(
   "Full account id, e.g. thb:liability:credit-card:ttb-absolute",

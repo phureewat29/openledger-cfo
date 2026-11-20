@@ -12,10 +12,10 @@ import { ChatOpenAI } from "@langchain/openai";
 import { attemptAsync, uniq } from "es-toolkit";
 
 import type { GatewayConfig } from "@openledger-cfo/api";
+import { caller } from "@openledger-cfo/api";
 
 import type { Redactor, VocabEntry } from "./redaction";
 import { createRedactor } from "./redaction";
-import { caller } from "./tools/caller";
 
 type RedactorProvider = () => Promise<Redactor>;
 

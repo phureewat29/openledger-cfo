@@ -14,11 +14,8 @@ export const ledger: OpenLedger = perProcess("oledConnector", () =>
   createOpenLedger({ onCommand: recordCliCommand }),
 );
 
-export const createTRPCContext = (opts: { headers: Headers }) => ({
-  db,
-  ledger,
-  headers: opts.headers,
-});
+/** Process-wide singletons only, so a call outlives any request that started it. */
+export const createTRPCContext = () => ({ db, ledger });
 
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,

@@ -1,10 +1,11 @@
 import { cache } from "react";
 
+import { caller } from "@openledger-cfo/api";
+
 import type { LedgerLoad } from "~/server/head";
 import { overdueCount } from "~/domain/action";
 import { asOfFor, isoToday, isStale } from "~/domain/period";
 import { asLedgerLoad, ledgerHead } from "~/server/head";
-import { caller } from "~/trpc/server";
 
 export interface Chrome {
   readonly asOf: string;

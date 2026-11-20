@@ -3,16 +3,7 @@ import type { output, ZodObject } from "zod/v4";
 import { tool } from "@langchain/core/tools";
 import { attemptAsync } from "es-toolkit";
 
-import { appRouter, createTRPCContext } from "@openledger-cfo/api";
 import { quoteShellArg } from "@openledger-cfo/openledger";
-
-/**
- * One caller per process, over the api package's own connector: every tool call
- * queues on the same serial lanes as the app's commands rather than racing them
- * at the ledger file, and lands in the same live command log.
- */
-export const caller: ReturnType<typeof appRouter.createCaller> =
-  appRouter.createCaller(createTRPCContext({ headers: new Headers() }));
 
 /** `content_and_artifact` wants [what the model reads, what the UI renders]. */
 export const toolResult = <T>(value: T): [string, T] => [

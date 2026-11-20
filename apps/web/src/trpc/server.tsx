@@ -1,6 +1,5 @@
 import type { TRPCQueryOptions } from "@trpc/tanstack-react-query";
 import { cache } from "react";
-import { headers } from "next/headers";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 
@@ -9,29 +8,14 @@ import { appRouter, createTRPCContext } from "@openledger-cfo/api";
 
 import { createQueryClient } from "./query-client";
 
-/** Cached per request, so every server-side call shares one context. */
-const createContext = cache(async () => {
-  const heads = new Headers(await headers());
-  heads.set("x-trpc-source", "rsc");
-
-  return createTRPCContext({
-    headers: heads,
-  });
-});
-
+/** One per request, so no render dehydrates another's data. */
 const getQueryClient = cache(createQueryClient);
 
 export const trpc = createTRPCOptionsProxy<AppRouter>({
   router: appRouter,
-  ctx: createContext,
+  ctx: createTRPCContext,
   queryClient: getQueryClient,
 });
-
-/**
- * Direct server-side calls for code that needs the data itself rather than
- * query options — the RSC page computing insights, and the chat route's tools.
- */
-export const caller = appRouter.createCaller(createContext);
 
 export function HydrateClient(props: { children: React.ReactNode }) {
   const queryClient = getQueryClient();

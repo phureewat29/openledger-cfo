@@ -6,7 +6,7 @@ import {
   insightsRouter,
   remindersRouter,
 } from "./router/plans";
-import { createTRPCRouter } from "./trpc";
+import { createTRPCContext, createTRPCRouter } from "./trpc";
 
 export const appRouter = createTRPCRouter({
   ledger: ledgerRouter,
@@ -18,3 +18,7 @@ export const appRouter = createTRPCRouter({
 });
 
 export type AppRouter = typeof appRouter;
+
+/** Server-side calls share the one connector, so they queue on its serial ledger lanes and land in its command log. */
+export const caller: ReturnType<typeof appRouter.createCaller> =
+  appRouter.createCaller(createTRPCContext);

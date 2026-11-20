@@ -1,8 +1,10 @@
 import { compact } from "es-toolkit";
 import { z } from "zod/v4";
 
+import { caller } from "@openledger-cfo/api";
+
 import { sanitizeLabel, sanitizeOptional } from "../sanitize";
-import { caller, guardedTool, oledCommand, toolResult } from "./caller";
+import { guardedTool, oledCommand, toolResult } from "./guarded";
 
 const MAX_ROWS = 200;
 const DEFAULT_ROWS = 50;

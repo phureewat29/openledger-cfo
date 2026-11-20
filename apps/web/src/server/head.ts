@@ -2,10 +2,8 @@ import { cache } from "react";
 
 import type { RouterOutputs } from "@openledger-cfo/api";
 import type { OledErrorKind, Result } from "@openledger-cfo/openledger";
-import { oledCauseOf } from "@openledger-cfo/api";
+import { caller, oledCauseOf } from "@openledger-cfo/api";
 import { err, messageOf, ok } from "@openledger-cfo/openledger";
-
-import { caller } from "~/trpc/server";
 
 /** A missing CLI, an outdated one, an empty ledger and an unreachable one each need their own words. */
 export type LedgerFailureReason =

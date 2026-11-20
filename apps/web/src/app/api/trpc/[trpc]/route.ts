@@ -3,21 +3,15 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
 import { appRouter, createTRPCContext } from "@openledger-cfo/api";
 
-const handler = async (req: NextRequest) => {
-  const response = await fetchRequestHandler({
+const handler = (req: NextRequest) =>
+  fetchRequestHandler({
     endpoint: "/api/trpc",
     router: appRouter,
     req,
-    createContext: () =>
-      createTRPCContext({
-        headers: req.headers,
-      }),
+    createContext: createTRPCContext,
     onError({ error, path }) {
       console.error(`tRPC error on '${path}'`, error);
     },
   });
-
-  return response;
-};
 
 export { handler as GET, handler as POST };

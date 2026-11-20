@@ -7,7 +7,7 @@ import type { GatewayConfig } from "@openledger-cfo/api";
 import type { Result } from "@openledger-cfo/openledger";
 import { createAgent, nsDepth, unwrap } from "@openledger-cfo/agent";
 import { asRecord, asString, textOf } from "@openledger-cfo/agent/untyped";
-import { appRouter, createTRPCContext, readGateway } from "@openledger-cfo/api";
+import { caller, readGateway } from "@openledger-cfo/api";
 import { perProcess } from "@openledger-cfo/db";
 import { err, messageOf, ok } from "@openledger-cfo/openledger";
 import { parseJson } from "@openledger-cfo/openledger/result";
@@ -34,15 +34,6 @@ import {
   runLine,
 } from "~/domain/ingest-run";
 import { appendEntry, updateEntry } from "~/server/ingest-journal";
-
-/**
- * The run outlives the request, so it cannot borrow the request-scoped caller
- * (it reads `headers()` and throws once detached) — this one shares the
- * connector, so commands still land in the same lanes and log.
- */
-const caller = appRouter.createCaller(
-  createTRPCContext({ headers: new Headers() }),
-);
 
 export type StartFailure = "disabled" | "busy" | "unavailable";
 

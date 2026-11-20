@@ -1,6 +1,8 @@
 import { cache } from "react";
 import { groupBy, sortBy, sumBy } from "es-toolkit";
 
+import { caller } from "@openledger-cfo/api";
+
 import type { AccountRow } from "~/domain/accounts";
 import type { FlowGraph } from "~/domain/flows/types";
 import type { PositionTrade } from "~/domain/portfolio";
@@ -41,7 +43,6 @@ import {
   monthlyBalance,
   weeklyBalance,
 } from "~/domain/series/account";
-import { caller } from "~/trpc/server";
 
 export interface MonthFlow {
   readonly month: string;

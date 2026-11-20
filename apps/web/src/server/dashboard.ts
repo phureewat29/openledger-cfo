@@ -2,6 +2,7 @@ import { cache } from "react";
 import { groupBy, mapValues, orderBy, union } from "es-toolkit";
 
 import type { RouterOutputs } from "@openledger-cfo/api";
+import { caller } from "@openledger-cfo/api";
 
 import type { AccountRow } from "~/domain/accounts";
 import type { Baseline } from "~/domain/flows/types";
@@ -42,7 +43,6 @@ import { weeklyBalance } from "~/domain/series/account";
 import { netWorthSeries, TRAJECTORY_MONTHS } from "~/domain/series/net-worth";
 import { ledgerUpcoming } from "~/domain/upcoming";
 import { asLedgerLoad, ledgerHead } from "~/server/head";
-import { caller } from "~/trpc/server";
 
 /** Wide enough to be "everything"; `report` echoes back the range it used. */
 const LEDGER_EPOCH = "2000-01-01";
