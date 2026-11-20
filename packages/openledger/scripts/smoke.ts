@@ -988,6 +988,18 @@ const main = async (): Promise<Check[]> => {
       : undefined,
     500,
   );
+  const unchanged = expectOk(
+    "accounts.adjust to the current balance",
+    await oled.accounts.adjust("thb:asset:bank:probe-a", {
+      to: 500,
+      reason: "probe no-op",
+    }),
+  );
+  expectEqual(
+    "a no-op adjust posts no transaction",
+    [unchanged?.transaction_id, unchanged?.delta],
+    [null, 0],
+  );
   expectErrorKind(
     "blank adjust reason refused before spawn",
     await oled.accounts.adjust("thb:asset:bank:probe-a", {

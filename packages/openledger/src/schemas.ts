@@ -566,7 +566,7 @@ export type AccountMergeResult = z.infer<typeof accountMergeResultSchema>;
 
 /** The adjustment is a posted row against `<ccy>:equity:adjustments`. */
 export const accountAdjustResultSchema = z.looseObject({
-  transaction_id: z.string(),
+  transaction_id: z.string().nullable(),
   delta: z.number(),
 });
 export type AccountAdjustResult = z.infer<typeof accountAdjustResultSchema>;
