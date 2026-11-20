@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { cn } from "@openledger-cfo/ui";
-
 export interface ChartSize {
   readonly w: number;
   readonly h: number;
@@ -11,21 +9,13 @@ export interface ChartSize {
 
 type Listener = (size: ChartSize) => void;
 
-/**
- * Sub-pixel width changes are differences no chart can draw, so sizes round to
- * this step: a drag across the window then re-runs a layout a few times rather
- * than once per frame.
- */
+// Sizes round to this step, so a window drag re-runs a layout a few times, not per frame.
 const QUANTUM = 8;
 
 export const quantize = (value: number) =>
   Math.round(value / QUANTUM) * QUANTUM;
 
-/**
- * One observer for every chart on the page, flushed once per frame.
- * Per-instance observers each wake the layout engine on the same frame for the
- * same window resize.
- */
+// One observer for every chart on the page, flushed once per frame.
 const createSizeHub = () => {
   const listeners = new WeakMap<Element, Set<Listener>>();
   /** Sizes seen since the last frame; one flush serves every chart on the page. */
@@ -77,12 +67,8 @@ const sizes = createSizeHub();
 const same = (current: ChartSize | null, next: ChartSize) =>
   current !== null && current.w === next.w && current.h === next.h;
 
-/**
- * Null until the element has been measured, which is the same answer the
- * server gives: a chart drawn in pixel space may only gate what it adds on
- * top of the markup both renders agree on. A chart that works out its own
- * boxes from this one passes an exact `round` and quantizes what it derives.
- */
+// Null until measured, as on the server. A chart that derives its own boxes
+// passes an exact `round` and quantizes what it derives.
 export const useChartSize = (round: (value: number) => number = quantize) => {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<ChartSize | null>(null);
@@ -99,27 +85,19 @@ export const useChartSize = (round: (value: number) => number = quantize) => {
   return { ref, size };
 };
 
-/**
- * Everything that carries type renders on the server; only the plot waits for
- * a measurement, so an axis and a readout are never missing from the first
- * paint of a chart whose geometry is in pixels.
- */
+// Type renders on the server; only the plot waits for a measurement.
 export function ChartFrame({
   chart,
   readout,
   yAxis,
   xAxis,
-  legend,
   plot,
-  plotClassName,
 }: {
   chart: string;
   readout?: React.ReactNode;
   yAxis?: React.ReactNode;
   xAxis?: React.ReactNode;
-  legend?: React.ReactNode;
   plot: (size: ChartSize) => React.ReactNode;
-  plotClassName?: string;
 }) {
   const { ref, size } = useChartSize();
 
@@ -128,15 +106,11 @@ export function ChartFrame({
       {readout}
       <div className="flex min-h-0 flex-1">
         {yAxis}
-        <div
-          ref={ref}
-          className={cn("relative min-h-0 min-w-0 flex-1", plotClassName)}
-        >
+        <div ref={ref} className="relative min-h-0 min-w-0 flex-1">
           {size === null ? null : plot(size)}
         </div>
       </div>
       {xAxis}
-      {legend}
     </div>
   );
 }

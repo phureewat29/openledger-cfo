@@ -6,13 +6,8 @@ import { Maximize2 } from "lucide-react";
 import { Button } from "@openledger-cfo/ui/button";
 import { Pane } from "@openledger-cfo/ui/pane";
 
-/**
- * Every pane on these pages sits inside an `@container`, which makes its
- * ancestor the containing block for anything fixed — a hand-rolled overlay
- * lands inside the column it came from. A native modal renders in the top
- * layer, which is outside all of it, and brings the focus trap, the focus
- * restore, inerting the page behind and Escape with it.
- */
+// Panes sit inside `@container`s, which trap fixed overlays; a native modal
+// escapes to the top layer and brings focus trap and Escape with it.
 export function ChartPane({
   title,
   meta,
@@ -51,9 +46,8 @@ export function ChartPane({
         className={className}
         bodyClassName={bodyClassName}
         actions={
-          // Inset: the pane's overflow-hidden clips a ring drawn outside a
-          // button this close to the header's top edge. An icon's min-content
-          // is the glyph, so without shrink-0 the meta squeezes the button.
+          // Inset ring: the pane's overflow-hidden clips one drawn outside.
+          // shrink-0, or the meta squeezes the icon down to its glyph.
           expandable ? (
             <Button
               variant="ghost"

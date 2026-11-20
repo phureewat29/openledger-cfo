@@ -1,10 +1,6 @@
 import type { CSSProperties } from "react";
 
-/**
- * One ink, stepped. The palette holds a single data colour, so a band is told
- * apart by its tone — fixed by the series' place in a ranking taken over the
- * whole window, never by its size in the column under the cursor.
- */
+// One ink, stepped by the series' rank over the whole window, never by its size in a column.
 const TONE = [
   "bg-foreground",
   "bg-foreground/80",
@@ -22,12 +18,7 @@ export const toneOf = (rank: number, accented = false): string => {
 /** Where a band sits while a legend chip is holding another one up. */
 const RECEDED = "0.25";
 
-/**
- * The lift has to cross from a client legend to bands the server drew, and no
- * ancestor selector can compare one element's attribute against another's.
- * Custom properties inherit, so the wrapper can say "everything recedes except
- * this rank" in two declarations.
- */
+// Inherited custom properties let a client legend lift one rank of server-drawn bands.
 export const bandDim = (lit: number | null): CSSProperties =>
   lit === null
     ? {}

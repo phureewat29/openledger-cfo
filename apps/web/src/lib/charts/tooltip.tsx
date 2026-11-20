@@ -14,11 +14,7 @@ export interface TipRow {
   readonly note?: string;
 }
 
-/**
- * Placed against the plot's own box rather than the viewport, so a tooltip near
- * an edge turns back into the chart instead of off it. Anchoring by the far
- * side flips it without anyone having to measure how wide it turned out.
- */
+// Anchored by the far side of the plot's box, so a tip near an edge flips without measuring.
 export const tipPlacement = (
   x: number,
   y: number,
@@ -36,11 +32,7 @@ export const tipPlacement = (
   };
 };
 
-/**
- * Appears at once and leaves at once: a fade is a delay between asking for a
- * figure and reading it. Every figure here is also in the readout or the row
- * beside it, which is what lets the tip itself stay out of the a11y tree.
- */
+// No fade; every figure is also in a readout or row, so the tip stays out of the a11y tree.
 export function ChartTip({
   header,
   rows,

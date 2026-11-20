@@ -25,11 +25,7 @@ export interface HoverBand {
 
 const NO_BANDS: readonly HoverBand[] = [];
 
-/**
- * The bars stay server markup; this only lays a row of hit cells over them,
- * mirroring their flex layout so a column never has to be found in pixels.
- * Nothing here is measured, so a resize cannot move the two out of step.
- */
+// Hit cells over server-drawn bars, mirroring their flex layout so nothing is measured.
 export function ColumnHover({
   columns,
   bands = NO_BANDS,

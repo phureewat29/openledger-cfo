@@ -27,11 +27,7 @@ export function StackedBars({
   currency: string;
   /** The one band allowed the accent: money kept, never the biggest. */
   accentKey?: string;
-  /**
-   * Caps the columns with this band's share of the total rather than the total
-   * itself — for a series whose total is the same every month, where the split
-   * is the only thing that moves.
-   */
+  /** Caps columns with this band's share instead, for a series whose total never moves. */
   capShareKey?: string;
   expanded?: boolean;
   empty?: string;
@@ -115,7 +111,7 @@ export function StackedBars({
                 >
                   {series
                     .map((band, rank) => ({ band, rank }))
-                    .reverse()
+                    .toReversed()
                     .filter(({ band }) => (band.values[index] ?? 0) > 0)
                     .map(({ band, rank }) => (
                       <div
@@ -133,10 +129,8 @@ export function StackedBars({
                     ))}
                 </div>
                 {total > 0 ? (
-                  // Hidden where a column is narrower than its own compact
-                  // figure — overhanging caps collide with their neighbours.
-                  // Gated on the plot's own box, so the expanded dialog keeps
-                  // its caps however narrow the page behind it is.
+                  // Hidden where a column is narrower than its figure; gated on the
+                  // plot's own box, so the expanded dialog keeps its caps.
                   <span
                     className="text-muted-foreground absolute inset-x-0 hidden text-center text-[10px] tabular-nums @[480px]/bars:block"
                     style={{ bottom: `calc(${share}% + 2px)` }}
