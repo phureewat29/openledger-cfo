@@ -1,4 +1,4 @@
-import { attemptAsync } from "es-toolkit";
+import { attemptAsync, trimEnd } from "es-toolkit";
 import { z } from "zod/v4";
 
 import { messageOf } from "@openledger-cfo/openledger";
@@ -20,9 +20,9 @@ const ErrorBody = z.looseObject({
     .transform((error) => (typeof error === "string" ? error : error.message)),
 });
 
-/** Concat, not `new URL(path, base)`, which drops a base's last segment such as `/v1`. */
-const trimTrailingSlashes = (baseUrl: string): string =>
-  baseUrl.replace(/\/+$/, "");
+// Concat, not `new URL(path, base)`, which drops a base's last segment such as `/v1`.
+const endpoint = (baseUrl: string, path: string): string =>
+  `${trimEnd(baseUrl, "/")}${path}`;
 
 const timedOut = (cause: unknown): boolean =>
   cause instanceof Error && cause.name === "TimeoutError";
@@ -61,11 +61,7 @@ const answered = (url: string, status: number): string =>
 const bearer = (apiKey?: string): Record<string, string> =>
   apiKey ? { authorization: `Bearer ${apiKey}` } : {};
 
-/**
- * The verdicts every probe shares: a 429 proves the route and the credential,
- * since throttled is not broken, and 401/403 is the key. Any other failed
- * status is the caller's to read; a throw or a timeout is unreachable.
- */
+/** A 429 proves route and credential (throttled is not broken); other failed statuses are the caller's to read. */
 const probe = async (
   url: string,
   init: RequestInit,
@@ -83,17 +79,13 @@ const probe = async (
   return rejected(response);
 };
 
-/**
- * The Test button's probe: one completion capped at a single token — the only
- * check that proves URL, key, and model together, because it is the request
- * this config exists to serve.
- */
+/** The Test button's probe: a one-token completion, the only check that proves URL, key and model together. */
 export const probeChat = (candidate: {
   baseUrl: string;
   apiKey?: string;
   model: string;
 }): Promise<ProbeOutcome> => {
-  const url = `${trimTrailingSlashes(candidate.baseUrl)}/chat/completions`;
+  const url = endpoint(candidate.baseUrl, "/chat/completions");
   const init: RequestInit = {
     method: "POST",
     headers: {
@@ -125,7 +117,7 @@ export const probeModels = (candidate: {
   baseUrl: string;
   apiKey?: string;
 }): Promise<ProbeOutcome> => {
-  const url = `${trimTrailingSlashes(candidate.baseUrl)}/models`;
+  const url = endpoint(candidate.baseUrl, "/models");
   return probe(
     url,
     { headers: bearer(candidate.apiKey) },

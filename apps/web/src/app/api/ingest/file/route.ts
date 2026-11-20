@@ -3,7 +3,8 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { z } from "zod/v4";
 
 import type { OledErrorKind } from "@openledger-cfo/openledger";
-import { FILE_ID_PATTERN, ledger } from "@openledger-cfo/api";
+import { ledger } from "@openledger-cfo/api";
+import { FILE_ID_PATTERN } from "@openledger-cfo/openledger/ids";
 
 import type { IngestFile } from "~/domain/ingest-files";
 import { fail } from "~/app/api/ingest/reply";

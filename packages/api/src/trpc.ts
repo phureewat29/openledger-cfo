@@ -9,13 +9,7 @@ import { createOpenLedger } from "@openledger-cfo/openledger";
 
 import { recordCliCommand } from "./cli-log";
 
-/**
- * The lanes that serialize `oled` spawns live at the connector module's scope,
- * and Next can evaluate that module more than once. One connector per process
- * keeps every spawn on one set of lanes; two sets mean two `oled` processes
- * contending for the ledger's SQLite lock: needless ~5s busy waits and exit-8
- * retries.
- */
+// One connector per process: a second copy of its exec lanes would contend for the ledger lock.
 export const ledger: OpenLedger = perProcess("oledConnector", () =>
   createOpenLedger({ onCommand: recordCliCommand }),
 );

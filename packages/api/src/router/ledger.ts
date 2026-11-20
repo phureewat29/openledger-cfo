@@ -2,13 +2,11 @@ import { z } from "zod/v4";
 
 import {
   accountCreateInputSchema,
+  accountIdSchema,
+  fileIdSchema,
   ingestRowInputSchema,
   transactionAddInputSchema,
 } from "@openledger-cfo/openledger";
-import {
-  ACCOUNT_ID_PATTERN,
-  FILE_ID_PATTERN,
-} from "@openledger-cfo/openledger/ids";
 
 import { listCliLog } from "../cli-log";
 import { unwrapOrTrpc } from "../result";
@@ -29,10 +27,8 @@ const pagedFilters = transactionFilters.extend({
   offset: z.number().int().min(0).optional(),
 });
 
-const fileId = z.string().regex(FILE_ID_PATTERN);
-const accountId = z.string().regex(ACCOUNT_ID_PATTERN);
 const txId = z.string().min(1).max(100);
-const accountPair = z.object({ from: accountId, to: accountId });
+const accountPair = z.object({ from: accountIdSchema, to: accountIdSchema });
 
 export const ledgerRouter = createTRPCRouter({
   status: publicProcedure.query(async ({ ctx }) =>
@@ -54,13 +50,11 @@ export const ledgerRouter = createTRPCRouter({
       .query(async ({ ctx, input }) =>
         unwrapOrTrpc(await ctx.ledger.transactions.listAll(input ?? {})),
       ),
-    /** The rows one statement posted. The CLI has no file filter, so this scans. */
     listByFile: publicProcedure
-      .input(z.object({ fileId }))
-      .query(async ({ ctx, input }) => {
-        const rows = unwrapOrTrpc(await ctx.ledger.transactions.listAll({}));
-        return rows.filter((row) => row.source_file_id === input.fileId);
-      }),
+      .input(z.object({ fileId: fileIdSchema }))
+      .query(async ({ ctx, input }) =>
+        unwrapOrTrpc(await ctx.ledger.transactions.listByFile(input.fileId)),
+      ),
     add: publicProcedure
       .input(transactionAddInputSchema)
       .mutation(async ({ ctx, input }) =>
@@ -112,7 +106,7 @@ export const ledgerRouter = createTRPCRouter({
     update: publicProcedure
       .input(
         z.object({
-          id: accountId,
+          id: accountIdSchema,
           name: z.string().min(1).max(200).optional(),
           dueDay: z.number().int().min(1).max(31).optional(),
           statementDay: z.number().int().min(1).max(31).optional(),
@@ -141,7 +135,7 @@ export const ledgerRouter = createTRPCRouter({
     adjust: publicProcedure
       .input(
         z.object({
-          id: accountId,
+          id: accountIdSchema,
           to: z.number().finite(),
           reason: z.string().min(1).max(500),
           date: isoDate.optional(),
@@ -152,7 +146,7 @@ export const ledgerRouter = createTRPCRouter({
         return unwrapOrTrpc(await ctx.ledger.accounts.adjust(id, opts));
       }),
     delete: publicProcedure
-      .input(z.object({ id: accountId }))
+      .input(z.object({ id: accountIdSchema }))
       .mutation(async ({ ctx, input }) =>
         unwrapOrTrpc(await ctx.ledger.accounts.delete(input.id)),
       ),
@@ -204,7 +198,7 @@ export const ledgerRouter = createTRPCRouter({
       unwrapOrTrpc(await ctx.ledger.ingest.list()),
     ),
     document: publicProcedure
-      .input(z.object({ fileId }))
+      .input(z.object({ fileId: fileIdSchema }))
       .query(async ({ ctx, input }) =>
         unwrapOrTrpc(await ctx.ledger.ingest.document(input.fileId)),
       ),
@@ -233,7 +227,7 @@ export const ledgerRouter = createTRPCRouter({
       .input(
         z.object({
           rows: z.array(ingestRowInputSchema).min(1).max(500),
-          fileId: fileId.optional(),
+          fileId: fileIdSchema.optional(),
         }),
       )
       .mutation(async ({ ctx, input }) => {
@@ -253,7 +247,7 @@ export const ledgerRouter = createTRPCRouter({
     done: publicProcedure
       .input(
         z.object({
-          fileId,
+          fileId: fileIdSchema,
           account: z.string().optional(),
           closingBalance: z.number().optional(),
         }),
@@ -273,15 +267,16 @@ export const ledgerRouter = createTRPCRouter({
         return { ok: true as const, ...unwrapOrTrpc(out) };
       }),
     fail: publicProcedure
-      .input(z.object({ fileId, note: z.string().min(1).max(500) }))
+      .input(
+        z.object({ fileId: fileIdSchema, note: z.string().min(1).max(500) }),
+      )
       .mutation(async ({ ctx, input }) =>
         unwrapOrTrpc(await ctx.ledger.ingest.fail(input.fileId, input.note)),
       ),
   }),
   files: createTRPCRouter({
-    /** Deregisters the file and everything the ledger hung off it. */
     drop: publicProcedure
-      .input(z.object({ fileId }))
+      .input(z.object({ fileId: fileIdSchema }))
       .mutation(async ({ ctx, input }) =>
         unwrapOrTrpc(await ctx.ledger.files.drop(input.fileId)),
       ),

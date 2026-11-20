@@ -37,11 +37,7 @@ const isOledError = (value: unknown): value is OledError =>
   value !== null &&
   Object.hasOwn(ERROR_CODE, (value as { kind?: string }).kind ?? "");
 
-/**
- * The connector error back off a thrown transport error, for callers that
- * need a finer split than the code — a missing binary and a crashed CLI both
- * ride INTERNAL_SERVER_ERROR. The code table stays the one authority.
- */
+/** The connector error behind a transport error, for callers that need a finer split than the code. */
 export const oledCauseOf = (error: unknown): OledError | undefined =>
   error instanceof TRPCError && isOledError(error.cause)
     ? error.cause

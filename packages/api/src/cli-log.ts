@@ -19,17 +19,9 @@ interface CliLog {
   seq: number;
 }
 
-/**
- * One ring per process: the graph that records commands differs from the one
- * the reader polls, so two rings would leave it empty.
- */
 const log = perProcess<CliLog>("oledCliRing", () => ({ entries: [], seq: 0 }));
 
-/**
- * Both phases carry the whole invocation, so one shape serves either: a start
- * has no exit code and no duration, which is exactly what a running entry
- * holds, and subtracting an absent duration leaves its own timestamp.
- */
+// A start has no duration, so its own timestamp is when it started.
 const toEntry = (event: OledCommandEvent, seq: number): CliLogEntry => ({
   id: event.id,
   seq,
@@ -39,11 +31,8 @@ const toEntry = (event: OledCommandEvent, seq: number): CliLogEntry => ({
   durationMs: event.durationMs ?? null,
 });
 
-/**
- * An exit rewrites an entry a reader has already been handed, so it takes a
- * fresh seq to come back past that reader's cursor. A start already evicted
- * from the ring must not drop its end: the exit lands as a new entry instead.
- */
+// An exit takes a fresh seq so it passes a reader's cursor again; one whose
+// start has left the ring lands as a new entry.
 export const recordCliCommand = (event: OledCommandEvent): void => {
   const seq = ++log.seq;
   const running =
@@ -51,19 +40,18 @@ export const recordCliCommand = (event: OledCommandEvent): void => {
       ? log.entries.find((entry) => entry.id === event.id)
       : undefined;
 
-  log.entries =
-    running === undefined
-      ? [...log.entries, toEntry(event, seq)].slice(-CAPACITY)
-      : log.entries.map((entry) =>
-          entry === running
-            ? {
-                ...running,
-                seq,
-                exitCode: event.exitCode ?? null,
-                durationMs: event.durationMs ?? null,
-              }
-            : entry,
-        );
+  if (running === undefined) {
+    log.entries = [...log.entries, toEntry(event, seq)].slice(-CAPACITY);
+    return;
+  }
+
+  const ended: CliLogEntry = {
+    ...running,
+    seq,
+    exitCode: event.exitCode ?? null,
+    durationMs: event.durationMs ?? null,
+  };
+  log.entries = log.entries.map((entry) => (entry === running ? ended : entry));
 };
 
 export const listCliLog = (after?: number) => ({

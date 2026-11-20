@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { ACCOUNT_ID_PATTERN } from "@openledger-cfo/api";
+import { ACCOUNT_ID_PATTERN } from "@openledger-cfo/openledger/ids";
 import { Pane } from "@openledger-cfo/ui/pane";
 
 import { SetupCard } from "~/app/_components/setup-card";

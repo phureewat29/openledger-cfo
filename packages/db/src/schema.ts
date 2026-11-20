@@ -1,5 +1,4 @@
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { z } from "zod/v4";
 
 /**
  * The one encoder for money at rest. The columns are TEXT, not NUMERIC:
@@ -58,11 +57,8 @@ export const reminder = sqliteTable("reminder", {
   createdAt: createdAt(),
 });
 
-/**
- * The AI gateway, a machine setting: demo loads and resets leave it alone.
- * One row, present exactly when the gateway is configured — a half-filled
- * gateway is not a state.
- */
+// One row, present only when the AI gateway is configured; a machine setting that demo
+// loads and resets leave alone.
 export const configuration = sqliteTable("configuration", {
   id: text().primaryKey(),
   aiBaseUrl: text().notNull(),
@@ -70,29 +66,4 @@ export const configuration = sqliteTable("configuration", {
   aiModel: text().notNull(),
   aiRedact: integer({ mode: "boolean" }).default(true).notNull(),
   updatedAt: updatedAt(),
-});
-
-export const CreateGoalSchema = z.object({
-  name: z.string().min(1).max(120),
-  targetAmount: z.number().positive(),
-  targetDate: z.iso.date().optional(),
-  accountPrefix: z.string().min(1).max(120),
-});
-
-export const UpsertBudgetSchema = z.object({
-  category: z.string().min(1).max(120),
-  monthlyLimit: z.number().positive().multipleOf(0.01),
-});
-
-export const SetInsightStateSchema = z.object({
-  insightId: z.string().min(1).max(160),
-  status: z.enum(["acknowledged", "dismissed"]),
-  note: z.string().max(2000).optional(),
-});
-
-export const CreateReminderSchema = z.object({
-  title: z.string().min(1).max(160),
-  dueDate: z.iso.date(),
-  monthly: z.boolean().optional(),
-  note: z.string().max(2000).optional(),
 });
