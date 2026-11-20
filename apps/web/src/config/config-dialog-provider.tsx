@@ -183,10 +183,10 @@ export function ConfigDialogProvider({
   };
 
   return (
-    <ConfigDialogContext.Provider value={control}>
+    <ConfigDialogContext value={control}>
       {children}
       <ConfigDialog open={showing} onClose={close} />
-    </ConfigDialogContext.Provider>
+    </ConfigDialogContext>
   );
 }
 

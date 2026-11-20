@@ -31,11 +31,8 @@ export function Conversation({
   /** A scroll of ours is pending; the event it raises is not the reader's. */
   const scripted = useRef(false);
 
-  /**
-   * Instant, never animated: an animation would race content that grows
-   * every frame. The flag keeps the scroll handler below from mistaking this
-   * for the reader scrolling away — more tokens land before the event fires.
-   */
+  // Instant: an animation races growing content. The flag stops the handler
+  // reading this scroll, whose event lands after more tokens, as the reader's.
   const scrollTo = useCallback((view: HTMLDivElement, top: number) => {
     const target = clamp(top, 0, view.scrollHeight - view.clientHeight);
     if (Math.abs(target - view.scrollTop) < 1) return;

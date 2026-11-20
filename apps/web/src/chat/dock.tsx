@@ -17,7 +17,7 @@ export function ChatDock({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const value = useMemo(() => ({ open, setOpen }), [open]);
 
-  return <DockContext.Provider value={value}>{children}</DockContext.Provider>;
+  return <DockContext value={value}>{children}</DockContext>;
 }
 
 export function useChatDock(): Dock {

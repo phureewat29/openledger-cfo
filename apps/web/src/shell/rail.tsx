@@ -13,6 +13,8 @@ import {
   Wallet,
 } from "lucide-react";
 
+import { cn } from "@openledger-cfo/ui";
+
 import type { RailBadges } from "~/shell/load";
 import { useChatDock } from "~/chat/dock";
 import { isRunLive } from "~/ingest/run";
@@ -72,7 +74,7 @@ function RailTip({
   children: React.ReactNode;
 }) {
   return (
-    <span className={`group relative flex ${className ?? ""}`}>
+    <span className={cn("group relative flex", className)}>
       {children}
       <span
         role="tooltip"
@@ -161,7 +163,10 @@ export function Rail({
                       ? `Ingest running — ${badge} to review`
                       : undefined
                   }
-                  className={`bg-accent text-accent-foreground absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-[10px] leading-4 tabular-nums ${ingestBadge ? "animate-pulse" : ""}`}
+                  className={cn(
+                    "bg-accent text-accent-foreground absolute -top-0.5 -right-0.5 min-w-4 rounded-full px-1 text-[10px] leading-4 tabular-nums",
+                    ingestBadge && "animate-pulse",
+                  )}
                 >
                   {badge > 99 ? "99+" : badge}
                 </span>

@@ -1,7 +1,5 @@
 "use client";
 
-import { cn } from "@openledger-cfo/ui";
-
 const DOT_DELAYS = ["0ms", "150ms", "300ms"];
 
 /** The same size the answer renders at: one column, one body size. */
@@ -28,38 +26,8 @@ export function UserMessage({
   );
 }
 
-export function AssistantMessage({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return <div className={cn(BODY, className)}>{children}</div>;
-}
-
-/** One quiet block for everything the model did before it answered. */
-export function ToolGroup({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="border-border ml-2 flex flex-col gap-0.5 border-l pl-2">
-      {children}
-    </span>
-  );
-}
-
-export function ToolNotice({ children }: { children: React.ReactNode }) {
-  return <span className="text-muted-foreground text-[10px]">{children}</span>;
-}
-
-export function CommandNotice({ command }: { command: string }) {
-  return (
-    <span
-      className="text-muted-foreground truncate text-[10px]"
-      title={command}
-    >
-      $ {command}
-    </span>
-  );
+export function AssistantMessage({ children }: { children: React.ReactNode }) {
+  return <div className={BODY}>{children}</div>;
 }
 
 export function Thinking() {

@@ -18,12 +18,11 @@ import { OlLogo } from "~/lib/ui/logo";
 import { ChatMessage } from "./chat-message";
 import { Conversation } from "./conversation";
 import { useChatDock } from "./dock";
-import { Greeting } from "./greeting";
 import { Thinking } from "./message";
 import { PromptInput } from "./prompt-input";
 import { QueuedPrompts, usePromptQueue } from "./prompt-queue";
 
-const PLACEHOLDER = "Talk to your money";
+const GREETING = "POR LEAW POR LEAW, RUAY MAI WAI LAEW!";
 
 interface ChipView {
   readonly dot: string;
@@ -40,12 +39,43 @@ const FAILURE_STATE: Record<ProbeReason, string> = {
   rejected: "AI gateway refused the request",
 };
 
+type Down = { reason: ProbeReason; message: string } | undefined;
+
+const VERDICT_CHIP: Record<
+  GatewayVerdict,
+  (model: string, down: Down) => Pick<ChipView, "dot" | "state" | "title">
+> = {
+  pending: (model) => ({
+    dot: "bg-muted-foreground animate-pulse",
+    state: "checking the AI gateway",
+    title: model,
+  }),
+  unknown: (model) => ({
+    dot: "bg-muted-foreground",
+    state: "AI gateway status unknown",
+    title: `${model} — the status check failed`,
+  }),
+  up: (model) => ({
+    dot: "bg-accent",
+    state: "AI gateway connected",
+    title: model,
+  }),
+  down: (model, down) => ({
+    dot: "bg-destructive",
+    state:
+      down === undefined
+        ? "AI gateway not configured"
+        : FAILURE_STATE[down.reason],
+    title: down === undefined ? model : `${model} — ${down.message}`,
+  }),
+};
+
 const chipView = (input: {
   ledgerOk: boolean;
   configured: boolean;
   model: string;
   verdict: GatewayVerdict;
-  down?: { reason: ProbeReason; message: string } | undefined;
+  down?: Down;
 }): ChipView => {
   const { ledgerOk, configured, model, verdict, down } = input;
   // The main area owns the nag while the ledger is broken; stay quiet here.
@@ -66,43 +96,7 @@ const chipView = (input: {
       state: "AI gateway not configured",
     };
   }
-  if (verdict === "pending") {
-    return {
-      dot: "bg-muted-foreground animate-pulse",
-      text: model,
-      caps: false,
-      state: "checking the AI gateway",
-      title: model,
-    };
-  }
-  if (verdict === "unknown") {
-    return {
-      dot: "bg-muted-foreground",
-      text: model,
-      caps: false,
-      state: "AI gateway status unknown",
-      title: `${model} — the status check failed`,
-    };
-  }
-  if (verdict === "up") {
-    return {
-      dot: "bg-accent",
-      text: model,
-      caps: false,
-      state: "AI gateway connected",
-      title: model,
-    };
-  }
-  return {
-    dot: "bg-destructive",
-    text: model,
-    caps: false,
-    state:
-      down === undefined
-        ? "AI gateway not configured"
-        : FAILURE_STATE[down.reason],
-    title: down === undefined ? model : `${model} — ${down.message}`,
-  };
+  return { text: model, caps: false, ...VERDICT_CHIP[verdict](model, down) };
 };
 
 /** The header chip: which model answers, and whether it actually does. */
@@ -218,7 +212,7 @@ export function ChatPane({
       return (
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-3">
           <p className="text-muted-foreground text-center text-[13px] leading-8">
-            <Greeting />
+            {GREETING}
           </p>
         </div>
       );
@@ -320,7 +314,6 @@ export function ChatPane({
               }}
               busy={busy}
               onStop={stop}
-              placeholder={PLACEHOLDER}
             />
           </div>
         ) : null}

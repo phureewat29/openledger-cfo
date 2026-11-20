@@ -10,16 +10,14 @@ export function PromptInput({
   value,
   onValueChange,
   onSubmit,
-  busy = false,
+  busy,
   onStop,
-  placeholder = "Talk to your money",
 }: {
   value: string;
   onValueChange: (value: string) => void;
   onSubmit: () => void;
-  busy?: boolean;
-  onStop?: () => void;
-  placeholder?: string;
+  busy: boolean;
+  onStop: () => void;
 }) {
   const field = useRef<HTMLTextAreaElement>(null);
   const ready = value.trim().length > 0;
@@ -50,7 +48,7 @@ export function PromptInput({
         ref={field}
         rows={1}
         value={value}
-        placeholder={placeholder}
+        placeholder="Talk to your money"
         onChange={(event) => {
           onValueChange(event.target.value);
           resize();

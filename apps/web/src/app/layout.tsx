@@ -9,7 +9,7 @@ import { pickSuggestions } from "~/chat/suggestions";
 import { ConfigDialogProvider } from "~/config/config-dialog-provider";
 import { IngestRunProvider } from "~/ingest/run-provider";
 import { CliLogProvider } from "~/shell/cli-log-provider";
-import { loadChrome, loadRailBadges, NO_BADGES } from "~/shell/load";
+import { loadChrome, loadRailBadges } from "~/shell/load";
 import { Rail } from "~/shell/rail";
 import { StatusBar } from "~/shell/status-bar";
 import { TRPCReactProvider } from "~/trpc/react";
@@ -40,15 +40,11 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
               <ChatDock>
                 <ConfigDialogProvider>
                   <div className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_1.5rem]">
-                    {/* The chat column is sized so the data column clears the wide
-                  tier (896px) at a 1280 viewport: 26vw left it five pixels
-                  short, which dropped a whole laptop width onto the stacked
-                  layout. Below 1280 the clamp floor governs and nothing moves,
-                  and the cap only binds past 1920, where the measure can take
-                  the extra width without the data column noticing. */}
+                    {/* Sized so the data column clears the 896px wide tier at a
+                    1280 viewport; 26vw left it five pixels short. */}
                     <div className="grid min-h-0 grid-cols-[3.5rem_minmax(0,1fr)] lg:grid-cols-[3.5rem_minmax(0,1fr)_clamp(320px,25vw,480px)]">
                       <Rail
-                        badges={badges.ok ? badges.value : NO_BADGES}
+                        badges={badges}
                         ledgerBad={!chrome.ok || chrome.value.stale}
                       />
                       <main

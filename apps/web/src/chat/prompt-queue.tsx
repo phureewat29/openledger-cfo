@@ -12,11 +12,7 @@ interface Prompt {
   readonly path: string;
 }
 
-/**
- * All the queue asks of the chat, and narrower than `sendMessage`'s own
- * signature on purpose: which message type the pane keeps its transcript in is
- * none of the queue's business, and naming it here would tie the two together.
- */
+// Narrower than `sendMessage` on purpose: the transcript's type is not the queue's business.
 type Send = (
   message: { text: string },
   options: { body: { context: { path: string } } },
@@ -51,10 +47,8 @@ const advance = (state: Queue): Queue => ({
 });
 
 /**
- * A second `sendMessage` during a live run neither queues nor aborts: the chat
- * swaps in a fresh active response while the first stream keeps writing into a
- * message list the second one now owns. So one prompt is out at a time and the
- * rest wait here, each still withdrawable, until the run settles.
+ * A second `sendMessage` during a live run corrupts the transcript rather than
+ * queueing, so one prompt is out at a time and the rest wait here.
  */
 export function usePromptQueue(send: Send) {
   const [queue, setQueue] = useState(EMPTY);
@@ -101,7 +95,6 @@ export function QueuedPrompts({
           <span className="min-w-0 flex-1 truncate">{prompt.text}</span>
           <RemoveButton
             label={`Remove queued message: ${prompt.text}`}
-            disabled={false}
             onClick={() => onRemove(prompt.id)}
             className="size-5 shrink-0"
           />
