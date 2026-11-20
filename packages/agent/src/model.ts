@@ -11,21 +11,11 @@ import { convertChunksToEvents } from "@langchain/core/language_models/compat";
 import { ChatOpenAI } from "@langchain/openai";
 import { attemptAsync, uniq } from "es-toolkit";
 
+import type { GatewayConfig } from "@openledger-cfo/api";
+
 import type { Redactor, VocabEntry } from "./redaction";
 import { createRedactor } from "./redaction";
 import { caller } from "./tools/caller";
-
-/**
- * The runtime's own port; the caller injects it. The api store declares the
- * same shape structurally — core stays out of the persistence context, which
- * only the `tools/caller` adapter reaches.
- */
-export interface GatewayConfig {
-  readonly baseUrl: string;
-  readonly apiKey: string;
-  readonly model: string;
-  readonly redact: boolean;
-}
 
 type RedactorProvider = () => Promise<Redactor>;
 

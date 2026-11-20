@@ -4,7 +4,8 @@ import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import { createDeepAgent } from "deepagents";
 import { toolErrorMiddleware, ToolInvocationError } from "langchain";
 
-import type { GatewayConfig } from "./model";
+import type { GatewayConfig } from "@openledger-cfo/api";
+
 import type { AgentKind } from "./registry";
 import type { LangGraphEvent } from "./stream";
 import type { QuestionScope } from "./tools/ingest";
@@ -138,7 +139,6 @@ export const createAgent = (kind: AgentKind, opts: AgentOptions): Agent => {
   };
 };
 
-export type { GatewayConfig } from "./model";
 export type { AgentKind } from "./registry";
 export { nsDepth, unwrap } from "./stream";
 export type { LangGraphEvent } from "./stream";

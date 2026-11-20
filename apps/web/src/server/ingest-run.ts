@@ -2,7 +2,8 @@ import type { UIMessage } from "ai";
 import { TRPCError } from "@trpc/server";
 import { partition, uniqBy } from "es-toolkit";
 
-import type { GatewayConfig, LangGraphEvent } from "@openledger-cfo/agent";
+import type { LangGraphEvent } from "@openledger-cfo/agent";
+import type { GatewayConfig } from "@openledger-cfo/api";
 import type { Result } from "@openledger-cfo/openledger";
 import { createAgent, nsDepth, unwrap } from "@openledger-cfo/agent";
 import { asRecord, asString, textOf } from "@openledger-cfo/agent/untyped";

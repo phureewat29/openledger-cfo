@@ -4,9 +4,9 @@
  */
 import type { UIMessage, UIMessageChunk } from "ai";
 
+import type { GatewayConfig } from "@openledger-cfo/api";
 import { readGateway } from "@openledger-cfo/api";
 
-import type { GatewayConfig } from "../src/model";
 import type { AgentKind } from "../src/registry";
 import type { LangGraphEvent } from "../src/stream";
 import { createAgent } from "../src/index";

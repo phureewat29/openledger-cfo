@@ -8,6 +8,7 @@ export { type AppRouter, appRouter } from "./root";
 export { createTRPCContext } from "./trpc";
 
 export type { ProbeReason } from "./config/probe";
+export type { GatewayConfig } from "./config/store";
 export { readGateway } from "./config/store";
 export { oledCauseOf } from "./result";
 export { ledger } from "./trpc";

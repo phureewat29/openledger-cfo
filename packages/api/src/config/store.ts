@@ -20,8 +20,7 @@ export const SaveGatewaySchema = z.object({
 
 const CONFIG_ROW_ID = "app";
 
-/** The agent package declares this shape too; they stay structurally equal. */
-interface GatewayConfig {
+export interface GatewayConfig {
   readonly baseUrl: string;
   readonly apiKey: string;
   readonly model: string;

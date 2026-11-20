@@ -2,7 +2,8 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { attemptAsync, uniqBy } from "es-toolkit";
 import { z } from "zod/v4";
 
-import type { GatewayConfig } from "./model";
+import type { GatewayConfig } from "@openledger-cfo/api";
+
 import { chatModel } from "./model";
 import { sanitizeLabel } from "./sanitize";
 
