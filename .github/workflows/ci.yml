@@ -37,7 +37,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - run: npm install --global @aquartier/openledger@0.26.0
+      - run: npm install --global @aquartier/openledger@0.27.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint

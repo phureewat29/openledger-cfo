@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@aquartier/openledger':
-      specifier: ^0.26.0
-      version: 0.26.0
+      specifier: ^0.27.0
+      version: 0.27.0
     '@eslint/js':
       specifier: ^9.39.5
       version: 9.39.5
@@ -437,7 +437,7 @@ importers:
     dependencies:
       '@aquartier/openledger':
         specifier: 'catalog:'
-        version: 0.26.0
+        version: 0.27.0
       es-toolkit:
         specifier: 'catalog:'
         version: 1.53.2
@@ -623,8 +623,8 @@ packages:
     resolution: {integrity: sha512-U4+70Pc5ZS9osnCBCE5Jha/ciHM+Yp+CNMNC/7HvYbNRk1Ldd+f7qO65W5qfhu/TCv+/ozljlXXe9Nj8419DMA==}
     engines: {node: '>=10'}
 
-  '@aquartier/openledger@0.26.0':
-    resolution: {integrity: sha512-YJAfJB8lwMgZuOEGcUVFUz4106zsAtwX+pjdEXcF1Bsag+ApfDlxBeFkUTLaRGQ/u7M3o+iOQ380n+dL185Umw==}
+  '@aquartier/openledger@0.27.0':
+    resolution: {integrity: sha512-DvNwIaN811R86RHR9Ej0FvljDOqjd03D3psM4WQPsAEhObL64WJTCljmHqQMJ08AuVXp3RYR7YMBR0/7YtAgAw==}
     engines: {node: '>=22.12.0'}
     hasBin: true
 
@@ -4261,7 +4261,7 @@ snapshots:
 
   '@alloc/quick-lru@5.3.0': {}
 
-  '@aquartier/openledger@0.26.0':
+  '@aquartier/openledger@0.27.0':
     dependencies:
       chalk: 6.0.1
       commander: 15.1.0

@@ -4,7 +4,7 @@ packages:
   - tooling/*
 
 catalog:
-  "@aquartier/openledger": ^0.26.0
+  "@aquartier/openledger": ^0.27.0
   "@eslint/js": ^9.39.5
   "@tailwindcss/postcss": ^4.3.5
   "@tanstack/react-query": ^5.107.1
@@ -51,4 +51,4 @@ publicHoistPattern:
   - prettier-plugin-tailwindcss
 
 minimumReleaseAgeExclude:
-  - "@aquartier/openledger@0.26.0"
+  - "@aquartier/openledger@0.27.0"

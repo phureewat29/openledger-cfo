@@ -35,7 +35,7 @@ You need three things. Check each one:
 ```bash
 node --version     # ^22.21 or >=24 (Node 23 is not supported)
 pnpm --version     # >= 11.28 — `corepack enable` picks up the pinned one, or npm i -g pnpm@11.28.9
-oled --version     # >= 0.26.0 — npm install -g @aquartier/openledger
+oled --version     # >= 0.27.0 — npm install -g @aquartier/openledger
 ```
 
 Then:
@@ -126,7 +126,7 @@ tooling/          shared toolchain
 
 ## Troubleshooting
 
-- **`oled` was not found or too old**: `npm install -g @aquartier/openledger` (0.26.0 or newer), then `oled --version`.
+- **`oled` was not found or too old**: `npm install -g @aquartier/openledger` (0.27.0 or newer), then `oled --version`.
 - **Tables missing or empty**: `pnpm db:push` recreates the schema in `cfo.db`, and `pnpm bootstrap` reseeds it.
 - **Node 23**: not in the support range. Use 22.21+ or 24+ (`.nvmrc` pins 22.21).
 - **Windows on ARM**: OpenLedger's database driver has no arm64 build, so install x64 Node.
