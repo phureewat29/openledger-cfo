@@ -69,3 +69,12 @@ export const parseCliErrorLine = (stderr: string): CliErrorLine | undefined =>
     .filter((line) => line.startsWith("{"))
     .map((line) => cliErrorLineSchema.safeParse(parseJson(line)).data)
     .find((parsed) => parsed !== undefined)?.error;
+
+export const FILE_ID_HINT =
+  "Pass the sf-<uuid> `ingest prepare` returned, not a path.";
+
+// An empty positional would leave the CLI reading the next flag as the id.
+export const emptyInput = (label: string, what: string): OledError => ({
+  kind: "invalid",
+  message: `${label}: ${what} cannot be empty`,
+});

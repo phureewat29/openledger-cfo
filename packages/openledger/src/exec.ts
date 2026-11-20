@@ -1,14 +1,17 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { win32 } from "node:path";
+import type { z } from "zod/v4";
 import { EXIT } from "@aquartier/openledger/contract";
-import { attempt, delay, isPlainObject } from "es-toolkit";
+import { attempt, delay, isPlainObject, noop } from "es-toolkit";
 
 import type { OledError } from "./errors";
+import type { ListPage } from "./ndjson";
 import type { Result } from "./result";
+import { maskArgv, OLED_BIN, OUTPUT_FLAGS, toFinalArgv } from "./argv";
 import { EXIT_KIND, parseCliErrorLine } from "./errors";
-import { err, messageOf, ok } from "./result";
-import { createSerialQueue } from "./serial";
+import { parseNdjsonRows, parseSingle } from "./ndjson";
+import { andThen, err, messageOf, ok } from "./result";
 
 // Spawning a CLI is impossible in a browser bundle; fail at import rather than at first call.
 if ("window" in globalThis) {
@@ -17,25 +20,24 @@ if ("window" in globalThis) {
   );
 }
 
-const OLED_BIN = "oled";
-
 // Statement batches and full-ledger reads comfortably exceed the 1MB default.
 const MAX_BUFFER = 64 * 1024 * 1024;
 
-export type OledLane = "fast" | "slow";
+type OledLane = "fast" | "slow";
 
-/**
- * Module scope on purpose: every connector reaches the same ledger file, so all
- * the connectors one instance of this module builds share the lanes that
- * serialize it, and one id sequence keeps a listener shared between them from
- * pairing one command's start with another's end. A bundler that evaluates the
- * module twice makes a second set of lanes, so a caller that needs one queue
- * per process holds one connector per process.
- *
- * Two lanes, not one: a long `ingest prepare` would otherwise block every read
- * behind it. Overlaps can still contend for the ledger lock (exit 8, retried
- * below).
- */
+/** Runs tasks one at a time; a failed task releases the queue like a finished one. */
+const createSerialQueue = () => {
+  let tail: Promise<unknown> = Promise.resolve();
+
+  return <T>(task: () => Promise<T>): Promise<T> => {
+    const run = tail.then(task, task);
+    tail = run.then(noop, noop);
+    return run;
+  };
+};
+
+// Serialized because the ledger is SQLite with one writer, and in two lanes so a long `ingest
+// prepare` never blocks reads. Module scope: every connector shares the lanes and the event ids.
 const createLanes = () => {
   const lanes = { fast: createSerialQueue(), slow: createSerialQueue() };
   let lastId = 0;
@@ -44,17 +46,6 @@ const createLanes = () => {
 };
 
 const inLane = createLanes();
-
-/** Flags whose following argument must never reach a log, a UI, or an error. */
-const SECRET_FLAGS = new Set(["--password"]);
-
-/** What stands in for a secret in a log, a UI, or an error. */
-export const SECRET_MASK = "•••";
-
-const maskArgv = (argv: string[]): string[] =>
-  argv.map((arg, index) =>
-    SECRET_FLAGS.has(argv[index - 1] ?? "") ? SECRET_MASK : arg,
-  );
 
 export interface OledCommandEvent {
   phase: "start" | "end";
@@ -68,50 +59,6 @@ export interface OledCommandEvent {
 }
 
 export type OledCommandListener = (event: OledCommandEvent) => void;
-
-const toFinalArgv = (args: string[], configPath: string): string[] => [
-  ...args,
-  "--json",
-  "--no-color",
-  "--config",
-  configPath,
-];
-
-/**
- * Walks a flag table over an input, in table order: `undefined` and `false`
- * are absent, `true` is a bare switch, and an object travels as JSON.
- */
-export const toFlagArgs = <TInput extends object>(
-  flags: Partial<Record<keyof TInput & string, string>>,
-  input: TInput,
-): string[] =>
-  (Object.entries(flags) as [keyof TInput & string, string][]).flatMap(
-    ([key, flag]) => {
-      const value = input[key];
-      if (value === undefined || value === false) return [];
-      if (value === true) return [flag];
-      return [
-        flag,
-        isPlainObject(value) ? JSON.stringify(value) : String(value),
-      ];
-    },
-  );
-
-// Everything outside this set would change meaning when the command is pasted back into a shell.
-const SHELL_SAFE = /^[\w@%+=:,./-]+$/;
-
-export const quoteShellArg = (arg: string): string =>
-  SHELL_SAFE.test(arg) ? arg : `'${arg.replaceAll("'", `'\\''`)}'`;
-
-/**
- * The command as a shell could run it, secrets masked. Quoting runs first:
- * masking replaces a whole rendered argument, and no secret flag needs quotes.
- */
-export const formatOledCommand = (args: string[], configPath: string): string =>
-  [
-    OLED_BIN,
-    ...maskArgv(toFinalArgv(args, configPath).map(quoteShellArg)),
-  ].join(" ");
 
 /** How a spawn starts the CLI: by its bare name, or as Node running a script. */
 export interface OledLauncher {
@@ -157,13 +104,8 @@ const NOT_NODE = [
   ["electron", "Electron"],
 ] as const;
 
-/**
- * npm and pnpm install `oled` on Windows as `oled.cmd`. execFile cannot start a
- * `.cmd` without a shell (CVE-2024-27980), and a shell re-parses every
- * argument, passwords included. So Windows runs the script the shim names under
- * this Node, refuses outright when this process is not Node, and leaves
- * anything else to execFile under the bare name.
- */
+// Windows installs `oled.cmd`; execFile needs a shell for it, which re-parses passwords
+// (CVE-2024-27980). So run the shim's script under this Node, and refuse when this is not Node.
 export const resolveOledLauncher = (
   host: LauncherHost,
 ): Result<OledLauncher, OledError> => {
@@ -198,11 +140,7 @@ export const resolveOledLauncher = (
 const readText = (file: string): string | undefined =>
   attempt(() => readFileSync(file, "utf8"))[1] ?? undefined;
 
-/**
- * Resolved per command, as execvp and libuv resolve a bare name: an
- * `npm install -g` while the app runs reaches the next command, as the setup
- * card promises.
- */
+// Resolved per command, like execvp: an `npm install -g` mid-run reaches the next command.
 const launcherOf = (): Result<OledLauncher, OledError> =>
   resolveOledLauncher({
     platform: process.platform,
@@ -257,14 +195,8 @@ const spawnOled = (
 
 const BUSY_RETRY_DELAYS_MS = [25, 75, 150];
 
-/**
- * E_BUSY: another process held the ledger past the CLI's own ~5s wait. Per
- * oled's contract the same command is then safe to re-run, writes
- * included, unless the error carries `details.resume_from_index` (an `ingest
- * commit` that had already posted rows, which a re-run would post twice
- * wherever a row has no stable id) or stdout already holds output. Both signals
- * come from the CLI: a write that landed and printed nothing would run twice.
- */
+// E_BUSY is safe to re-run, writes included, unless `details.resume_from_index` says a commit
+// already posted rows or stdout already holds output: either means the write landed.
 const isRetryableBusy = ({
   exitCode,
   stdout,
@@ -404,16 +336,20 @@ const runObserved = (
     return outcome.result;
   });
 
-interface RunOledOptions {
+/** The ledger a connector runs against, and who hears about each command. */
+export interface RunContext {
   configPath: string;
+  onCommand?: OledCommandListener;
+}
+
+export interface RunOledOptions extends RunContext {
   stdin?: string;
   /** Return stdout instead of an error when the command exits 7 (partial). */
   allowPartial?: boolean;
   lane?: OledLane;
-  onCommand?: OledCommandListener;
 }
 
-export const runOled = (
+const runOled = (
   args: string[],
   opts: RunOledOptions,
 ): Promise<Result<string, OledError>> =>
@@ -424,6 +360,23 @@ export const runOled = (
     onCommand: opts.onCommand,
   });
 
+export const runSingle = async <T>(
+  args: string[],
+  schema: z.ZodType<T>,
+  opts: RunOledOptions,
+): Promise<Result<T, OledError>> =>
+  andThen(await runOled(args, opts), (stdout) => parseSingle(schema, stdout));
+
+export const runList = async <TRow, TSummary>(
+  args: string[],
+  rowSchema: z.ZodType<TRow>,
+  summarySchema: z.ZodType<TSummary>,
+  opts: RunOledOptions,
+): Promise<Result<ListPage<TRow, TSummary>, OledError>> =>
+  andThen(await runOled(args, opts), (stdout) =>
+    parseNdjsonRows(rowSchema, stdout, summarySchema),
+  );
+
 /**
  * `oled config` takes its config file as a positional argument and rejects
  * `--config`, so it cannot go through runOled.
@@ -432,7 +385,7 @@ export const runOledConfig = (
   args: string[],
   opts: { stdin?: string; onCommand?: OledCommandListener } = {},
 ): Promise<Result<string, OledError>> =>
-  runObserved([...args, "--json", "--no-color"], {
+  runObserved([...args, ...OUTPUT_FLAGS], {
     stdin: opts.stdin,
     allowPartial: false,
     lane: "fast",

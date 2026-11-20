@@ -1,10 +1,12 @@
 import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { range } from "es-toolkit";
 
 import type { OledCommandEvent, OledError, Result } from "../src/index";
-import { createOpenLedger, EXIT_KIND, FILE_ID_PATTERN } from "../src/index";
-import { textPdf } from "./pdf-fixture";
+import { EXIT_KIND } from "../src/errors";
+import { FILE_ID_PATTERN } from "../src/ids";
+import { createOpenLedger } from "../src/index";
 
 // Under `pnpm smoke` the dependency's bin link shadows a global `oled`; tsx run directly reaches the global one.
 
@@ -229,6 +231,68 @@ const STATEMENT_TAIL = [
 ];
 
 const CARD_CLOSING_BALANCE = 300;
+
+// A statement the ingest pipeline can read, built here so the run needs no binary fixture.
+// Latin-1 throughout: the xref table addresses bytes, so a multi-byte character shifts every offset.
+const WIDTH = 612;
+const HEIGHT = 792;
+
+const buildPdf = (objects: string[]): Buffer => {
+  const header = "%PDF-1.4\n";
+  const bodies = objects.map(
+    (body, index) => `${index + 1} 0 obj${body}endobj\n`,
+  );
+
+  const offsets: number[] = [];
+  let cursor = Buffer.byteLength(header, "latin1");
+  for (const body of bodies) {
+    offsets.push(cursor);
+    cursor += Buffer.byteLength(body, "latin1");
+  }
+
+  const size = objects.length + 1;
+  const xref =
+    `xref\n0 ${String(size)}\n0000000000 65535 f \n` +
+    offsets
+      .map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
+      .join("");
+  const trailer = `trailer<</Size ${String(size)}/Root 1 0 R>>\nstartxref\n${String(cursor)}\n%%EOF\n`;
+
+  return Buffer.from(header + bodies.join("") + xref + trailer, "latin1");
+};
+
+const streamObject = (content: string): string =>
+  `<</Length ${String(Buffer.byteLength(content, "latin1"))}>>stream\n${content}\nendstream`;
+
+// 20 lines clears the character bar that decides a page carries a real text layer.
+const pageContent = (page: number): string => {
+  const lines = range(20).map(
+    (line) =>
+      `(page${String(page)} line ${String(line).padStart(2, "0")} 1234.56 THB DEBIT ACME) Tj T*\n`,
+  );
+  return `BT /F1 11 Tf 36 756 Td 14 TL\n${lines.join("")}ET\n`;
+};
+
+/** Object 1 is the catalog, 2 the page tree, then a page/content pair each, then the font. */
+const textPdf = (pageCount: number): Buffer => {
+  const firstPage = 3;
+  const fontNumber = firstPage + pageCount * 2;
+  const pages = range(pageCount);
+  const kids = pages
+    .map((index) => `${String(firstPage + index * 2)} 0 R`)
+    .join(" ");
+
+  return buildPdf([
+    "<</Type/Catalog/Pages 2 0 R>>",
+    `<</Type/Pages/Kids[${kids}]/Count ${String(pageCount)}>>`,
+    ...pages.flatMap((index) => [
+      `<</Type/Page/Parent 2 0 R/MediaBox[0 0 ${String(WIDTH)} ${String(HEIGHT)}]` +
+        `/Resources<</Font<</F1 ${String(fontNumber)} 0 R>>>>/Contents ${String(firstPage + index * 2 + 1)} 0 R>>`,
+      streamObject(pageContent(index + 1)),
+    ]),
+    "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
+  ]);
+};
 
 const printTable = (checks: Check[]): void => {
   const nameWidth = Math.max(...checks.map((check) => check.name.length));

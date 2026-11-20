@@ -1,29 +1,52 @@
+import {
+  CreateAccountBatchSummary as accountCreateSummarySchema,
+  Account as accountRowSchema,
+  AccountTreeNode as accountTreeNodeSchema,
+  AccountType as accountTypeSchema,
+  ListAccountsSummary as countSummarySchema,
+  IngestFile as ingestFileRowSchema,
+  IngestListSummary as ingestFileSummarySchema,
+  CommitSummary as ingestSummarySchema,
+  CappedSummary as pageSummarySchema,
+  AnsweredQuestion as questionAnswerRowSchema,
+  DeferredQuestion as questionDeferRowSchema,
+  ReportResult as reportSchema,
+  StatusReport,
+  TextLayer,
+  TreeAccountsSummary as treeSummarySchema,
+} from "@aquartier/openledger/contract";
 import { z } from "zod/v4";
 
-const ACCOUNT_TYPES = [
-  "asset",
-  "liability",
-  "income",
-  "expense",
-  "equity",
-] as const;
+import { ACCOUNT_ID_PATTERN, currencyPrefix, FILE_ID_PATTERN } from "./ids";
 
-const accountTypeSchema = z.enum(ACCOUNT_TYPES);
+export {
+  accountCreateSummarySchema,
+  accountRowSchema,
+  accountTreeNodeSchema,
+  countSummarySchema,
+  ingestFileRowSchema,
+  ingestFileSummarySchema,
+  ingestSummarySchema,
+  pageSummarySchema,
+  questionAnswerRowSchema,
+  questionDeferRowSchema,
+  reportSchema,
+  treeSummarySchema,
+};
+export type { AccountTreeNode } from "@aquartier/openledger/contract";
+
 export type AccountType = z.infer<typeof accountTypeSchema>;
-
-/** What the ledger records against a file it has registered. */
-const FILE_STATUSES = ["pending", "ingested", "failed"] as const;
-
-/** `ingest list` walks the data dir, so it sees two states the ledger cannot. */
-const INGEST_FILE_STATUSES = [...FILE_STATUSES, "new", "unreadable"] as const;
-
-const fileStatusSchema = z.enum(FILE_STATUSES);
-
-const ingestFileStatusSchema = z.enum(INGEST_FILE_STATUSES);
-
-/** `<3-letter currency>:<type>[:<segment>...]`, e.g. thb:asset:bank:kbank. */
-export const ACCOUNT_ID_PATTERN =
-  /^[a-z]{3}:(asset|liability|income|expense|equity)(:[a-z0-9][a-z0-9._-]*)*$/;
+export type PageSummary = z.infer<typeof pageSummarySchema>;
+export type CountSummary = z.infer<typeof countSummarySchema>;
+export type TreeSummary = z.infer<typeof treeSummarySchema>;
+export type AccountRow = z.infer<typeof accountRowSchema>;
+export type QuestionAnswerRow = z.infer<typeof questionAnswerRowSchema>;
+export type QuestionDeferRow = z.infer<typeof questionDeferRowSchema>;
+export type Report = z.infer<typeof reportSchema>;
+export type AccountCreateSummary = z.infer<typeof accountCreateSummarySchema>;
+export type IngestSummary = z.infer<typeof ingestSummarySchema>;
+export type IngestFileRow = z.infer<typeof ingestFileRowSchema>;
+export type IngestFileSummary = z.infer<typeof ingestFileSummarySchema>;
 
 export const accountIdSchema = z
   .string()
@@ -32,9 +55,9 @@ export const accountIdSchema = z
     "Malformed account id (expected thb:expense:food)",
   );
 
-/** `sf-<uuid>`: what `ingest prepare` returns and every later ingest step takes. */
-export const FILE_ID_PATTERN =
-  /^sf-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const fileIdSchema = z
+  .string()
+  .regex(FILE_ID_PATTERN, "Malformed file id (expected sf-<uuid>)");
 
 export const isoDateSchema = z
   .string()
@@ -43,36 +66,7 @@ export const isoDateSchema = z
 /** Direction comes from the account pair, never from a sign. */
 const amountSchema = z.number().positive().finite();
 
-/** Money is grouped by currency code, e.g. {"THB": 99679.5, "USD": 1000}. */
-const moneyByCurrencySchema = z.record(z.string(), z.number());
-
-const currencyPrefix = (accountId: string): string => accountId.slice(0, 3);
-
 const summaryLiteral = z.literal("summary");
-
-export const pageSummarySchema = z.object({
-  type: summaryLiteral,
-  total: z.number(),
-  returned: z.number(),
-  has_more: z.boolean(),
-  limit: z.number(),
-  offset: z.number(),
-});
-export type PageSummary = z.infer<typeof pageSummarySchema>;
-
-/** `accounts list` reports no paging fields — it always returns every account. */
-export const countSummarySchema = z.object({
-  type: summaryLiteral,
-  total: z.number(),
-  returned: z.number(),
-});
-export type CountSummary = z.infer<typeof countSummarySchema>;
-
-export const treeSummarySchema = z.object({
-  type: summaryLiteral,
-  roots: z.number(),
-});
-export type TreeSummary = z.infer<typeof treeSummarySchema>;
 
 export const transactionRowSchema = z.object({
   id: z.string(),
@@ -95,48 +89,6 @@ export const transactionRowSchema = z.object({
 });
 export type TransactionRow = z.infer<typeof transactionRowSchema>;
 
-export const accountRowSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  type: accountTypeSchema,
-  parent_id: z.string().nullable(),
-  subtype: z.string().nullable(),
-  bank_name: z.string().nullable(),
-  account_number_masked: z.string().nullable(),
-  due_day: z.number().nullable(),
-  statement_day: z.number().nullable(),
-  // Serialized JSON, not an object: the CLI hands back the raw column.
-  metadata_json: z.string().nullable(),
-  created_at: z.string(),
-  currency: z.string(),
-  balance: z.number(),
-  debits_posted: z.number(),
-  credits_posted: z.number(),
-});
-export type AccountRow = z.infer<typeof accountRowSchema>;
-
-export interface AccountTreeNode {
-  id: string;
-  name: string;
-  type: AccountType;
-  currency: string;
-  balance: number;
-  rollup: Record<string, number>;
-  children: AccountTreeNode[];
-}
-
-export const accountTreeNodeSchema: z.ZodType<AccountTreeNode> = z.object({
-  id: z.string(),
-  name: z.string(),
-  type: accountTypeSchema,
-  currency: z.string(),
-  balance: z.number(),
-  rollup: moneyByCurrencySchema,
-  get children() {
-    return z.array(accountTreeNodeSchema);
-  },
-});
-
 export const merchantRowSchema = z.object({
   id: z.string(),
   canonical_name: z.string(),
@@ -158,71 +110,13 @@ export const questionRowSchema = z.object({
 });
 export type QuestionRow = z.infer<typeof questionRowSchema>;
 
-/** Answering closes one question per row, then a summary row ends the list. */
-export const questionAnswerRowSchema = z.object({
-  id: z.string(),
-  kind: z.string().nullable(),
-  answer: z.string(),
-  rule_key: z.string().nullable(),
-});
-export type QuestionAnswerRow = z.infer<typeof questionAnswerRowSchema>;
-
-export const questionDeferRowSchema = z.object({
-  id: z.string(),
-  days: z.number(),
-});
-export type QuestionDeferRow = z.infer<typeof questionDeferRowSchema>;
-
-export const statusSchema = z.object({
-  type: z.literal("status"),
-  // Optional so a pre-contract CLI reaches the gate's error, not parse_failed.
+// Optional so a pre-contract CLI reaches the gate's error, not parse_failed.
+export const statusSchema = StatusReport.extend({
   contract_version: z.number().optional(),
   version: z.string().optional(),
   config_problem: z.string().nullable().optional(),
-  configured: z.boolean(),
-  config_path: z.string(),
-  data_dir: z.string(),
-  locale: z.string(),
-  currency: z.string(),
-  user_name: z.string(),
-  db: z.object({
-    path: z.string(),
-    reachable: z.boolean(),
-    error: z.string().nullable(),
-  }),
-  counts: z
-    .object({
-      accounts: z.number(),
-      transactions: z.number(),
-      merchants: z.number(),
-      notes: z.number(),
-    })
-    .nullable(),
-  files: z.object({
-    new: z.number(),
-    ingested: z.number(),
-    pending: z.number(),
-    failed: z.number(),
-  }),
-  questions: z.object({ open: z.number(), deferred: z.number() }).nullable(),
-  net_worth: z
-    .object({
-      assets: moneyByCurrencySchema,
-      liabilities: moneyByCurrencySchema,
-      net_worth: moneyByCurrencySchema,
-    })
-    .nullable(),
 });
 export type Status = z.infer<typeof statusSchema>;
-
-export const reportSchema = z.object({
-  from: z.string(),
-  to: z.string(),
-  income: moneyByCurrencySchema,
-  expenses: moneyByCurrencySchema,
-  net: moneyByCurrencySchema,
-});
-export type Report = z.infer<typeof reportSchema>;
 
 export const accountCreateInputSchema = z.object({
   id: accountIdSchema,
@@ -294,10 +188,7 @@ export const ingestRowInputSchema = z.union([
 ]);
 export type IngestRowInput = z.infer<typeof ingestRowInputSchema>;
 
-/**
- * Per-row write results carry command-specific extras (created_parents, sides,
- * legs, failure reasons), so these stay loose rather than dropping fields.
- */
+// Loose: per-row results carry command-specific extras (sides, legs, failure reasons).
 export const accountCreateResultSchema = z.looseObject({
   type: z.literal("result"),
   index: z.number(),
@@ -310,14 +201,6 @@ export const accountCreateResultSchema = z.looseObject({
   message: z.string().optional(),
 });
 export type AccountCreateResult = z.infer<typeof accountCreateResultSchema>;
-
-export const accountCreateSummarySchema = z.object({
-  type: summaryLiteral,
-  created: z.number(),
-  duplicates: z.number(),
-  failed: z.number(),
-});
-export type AccountCreateSummary = z.infer<typeof accountCreateSummarySchema>;
 
 export const ingestResultSchema = z.looseObject({
   type: z.literal("result"),
@@ -338,57 +221,15 @@ export const ingestResultSchema = z.looseObject({
 });
 export type IngestResult = z.infer<typeof ingestResultSchema>;
 
-/** The trailing fields arrive only with `--file`, cumulative for that file. */
-export const ingestSummarySchema = z.object({
-  type: summaryLiteral,
-  batch_id: z.string(),
-  posted: z.number(),
-  duplicates: z.number(),
-  failed: z.number(),
-  raised_questions: z.number(),
-  file_id: z.string().optional(),
-  file_status: fileStatusSchema.optional(),
-  file_transaction_count: z.number().optional(),
-  file_open_question_count: z.number().optional(),
-  hint: z.string().optional(),
-});
-export type IngestSummary = z.infer<typeof ingestSummarySchema>;
-
-export const ingestFileRowSchema = z.object({
-  type: z.literal("file"),
-  path: z.string(),
-  rel_path: z.string(),
-  /** null when the bytes could not be read. */
-  hash: z.string().nullable(),
-  /** null until a prepare registers the file. */
-  file_id: z.string().nullable(),
-  status: ingestFileStatusSchema,
-  encrypted: z.boolean(),
-  note: z.string().nullable(),
-});
-export type IngestFileRow = z.infer<typeof ingestFileRowSchema>;
-
-export const ingestFileSummarySchema = z.object({
-  type: summaryLiteral,
-  new: z.number(),
-  pending: z.number(),
-  ingested: z.number(),
-  failed: z.number(),
-  unreadable: z.number(),
-  total: z.number(),
-});
-export type IngestFileSummary = z.infer<typeof ingestFileSummarySchema>;
-
 const preparePageSchema = z.looseObject({
   page: z.number(),
   chars: z.number(),
 });
 
-/** One `document` path to read, whichever reader filled it. */
 export const prepareResultSchema = z.looseObject({
   file_id: z.string(),
   source: z.enum(["text-layer", "ocr"]),
-  text_layer: z.enum(["complete", "partial", "none"]),
+  text_layer: TextLayer,
   page_count: z.number(),
   document: z.string(),
   pages: z.array(preparePageSchema),
@@ -564,7 +405,7 @@ export const accountMergeResultSchema = z.looseObject({
 });
 export type AccountMergeResult = z.infer<typeof accountMergeResultSchema>;
 
-/** The adjustment is a posted row against `<ccy>:equity:adjustments`. */
+/** Posted against `<ccy>:equity:adjustments`; null when the balance already matched. */
 export const accountAdjustResultSchema = z.looseObject({
   transaction_id: z.string().nullable(),
   delta: z.number(),

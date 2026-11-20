@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import {
   ACCOUNT_ID_PATTERN,
   FILE_ID_PATTERN,
-} from "@openledger-cfo/openledger";
+} from "@openledger-cfo/openledger/ids";
 
 import { caller, guardedRun, toolResult } from "./caller";
 

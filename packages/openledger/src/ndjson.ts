@@ -34,10 +34,10 @@ export interface ListPage<TRow, TSummary> {
  * Lists emit bare row objects followed by one `{"type":"summary"}` row.
  * Commands that emit a single object and no summary yield one row and no summary.
  */
-export const parseNdjsonRows = <TRow, TSummary = unknown>(
+export const parseNdjsonRows = <TRow, TSummary>(
   rowSchema: z.ZodType<TRow>,
   stdout: string,
-  summarySchema?: z.ZodType<TSummary>,
+  summarySchema: z.ZodType<TSummary>,
 ): Result<ListPage<TRow, TSummary>, OledError> => {
   const rows: TRow[] = [];
   let summary: TSummary | undefined;
@@ -49,7 +49,6 @@ export const parseNdjsonRows = <TRow, TSummary = unknown>(
     }
 
     if (isSummary(value)) {
-      if (!summarySchema) continue;
       const parsed = parseAs(
         summarySchema,
         value,

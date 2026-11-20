@@ -5,11 +5,11 @@ import { z } from "zod/v4";
 
 import type { IngestFileRow } from "@openledger-cfo/openledger";
 import { oledCauseOf } from "@openledger-cfo/api";
+import { ingestRowInputSchema } from "@openledger-cfo/openledger";
 import {
   ACCOUNT_ID_PATTERN,
   FILE_ID_PATTERN,
-  ingestRowInputSchema,
-} from "@openledger-cfo/openledger";
+} from "@openledger-cfo/openledger/ids";
 
 import type { ToolFailure } from "./caller";
 import { caller, guardedRun, oledCommand, toolResult } from "./caller";

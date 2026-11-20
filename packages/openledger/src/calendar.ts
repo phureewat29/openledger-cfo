@@ -1,9 +1,4 @@
-/**
- * What day it is, for a ledger that belongs to a th-TH household. Every other
- * date in the system is a date-only string handled with UTC arithmetic; only
- * "today" needs a timezone, and the household's is the one that decides which
- * calendar day a posting or a completed chore falls on.
- */
+// Only "today" needs a time zone: every other date is a date-only string in UTC arithmetic.
 const LEDGER_TIME_ZONE = "Asia/Bangkok";
 
 const ISO_PARTS = new Intl.DateTimeFormat("en-US", {

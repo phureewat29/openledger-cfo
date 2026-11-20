@@ -1,12 +1,14 @@
 import { z } from "zod/v4";
 
 import {
-  ACCOUNT_ID_PATTERN,
   accountCreateInputSchema,
-  FILE_ID_PATTERN,
   ingestRowInputSchema,
   transactionAddInputSchema,
 } from "@openledger-cfo/openledger";
+import {
+  ACCOUNT_ID_PATTERN,
+  FILE_ID_PATTERN,
+} from "@openledger-cfo/openledger/ids";
 
 import { listCliLog } from "../cli-log";
 import { unwrapOrTrpc } from "../result";

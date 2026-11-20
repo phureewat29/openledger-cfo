@@ -7,7 +7,7 @@ import { attemptAsync } from "es-toolkit";
 import { z } from "zod/v4";
 
 import type { OledError } from "./errors";
-import type { OledCommandListener, OledLane } from "./exec";
+import type { RunContext, RunOledOptions } from "./exec";
 import type { ListPage } from "./ndjson";
 import type { Result } from "./result";
 import type {
@@ -41,9 +41,11 @@ import type {
   TransactionUpdateInput,
   TransactionUpdateResult,
 } from "./schemas";
-import { parseAs } from "./errors";
-import { formatOledCommand, runOled, runOledConfig, toFlagArgs } from "./exec";
-import { parseNdjsonRows, parseSingle } from "./ndjson";
+import { formatOledCommand, toFlagArgs } from "./argv";
+import { emptyInput, FILE_ID_HINT, parseAs } from "./errors";
+import { runList, runOledConfig, runSingle } from "./exec";
+import { FILE_ID_PATTERN } from "./ids";
+import { parseSingle } from "./ndjson";
 import { andThen, err, map, messageOf, ok } from "./result";
 import {
   accountAdjustResultSchema,
@@ -58,7 +60,6 @@ import {
   accountUpdateResultSchema,
   configInitInputSchema,
   configInitResultSchema,
-  FILE_ID_PATTERN,
   fileDropResultSchema,
   ingestDoneResultSchema,
   ingestFailResultSchema,
@@ -88,13 +89,7 @@ const validate = <T>(
 const malformedFileId = (label: string, fileId: string): OledError => ({
   kind: "invalid",
   message: `${label}: malformed file id "${fileId}"`,
-  hint: "Pass the sf-<uuid> `ingest prepare` returned, not a path.",
-});
-
-// An empty positional would leave the CLI reading the next flag as the id.
-const emptyInput = (label: string, what: string): OledError => ({
-  kind: "invalid",
-  message: `${label}: ${what} cannot be empty`,
+  hint: FILE_ID_HINT,
 });
 
 const toNdjson = (rows: unknown[]): string =>
@@ -108,10 +103,7 @@ export interface BatchOutcome<TRow, TSummary> {
 /** What ran, ready to show: the full argv with any password already masked. */
 export type WithCommand<T> = T & { command: string };
 
-/**
- * Batch commands exit 7 and keep the successful rows when some fail, so a
- * partial batch surfaces as an error carrying the failed rows, not a silent success.
- */
+/** A batch that exits 7 keeps its good rows; the failed ones come back as a `partial` error. */
 const toBatchOutcome = <
   TRow extends { ok: boolean },
   TSummary extends { failed: number },
@@ -219,38 +211,22 @@ const DONE_FLAGS = {
   closingBalance: "--closing-balance",
 } as const satisfies Record<keyof IngestDoneOptions, string>;
 
-interface WritesOptions {
-  configPath: string;
-  onCommand?: OledCommandListener;
-}
+export const createWrites = (context: RunContext) => {
+  const stamp =
+    (args: string[]) =>
+    <T extends object>(value: T): WithCommand<T> => ({
+      ...value,
+      command: formatOledCommand(args, context.configPath),
+    });
 
-export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
-  const exec = (
-    args: string[],
-    opts: { stdin?: string; allowPartial?: boolean; lane?: OledLane } = {},
-  ): Promise<Result<string, OledError>> =>
-    runOled(args, { configPath, onCommand, ...opts });
-
-  const toCommand = (args: string[]): string =>
-    formatOledCommand(args, configPath);
-
-  /** The shared tail of every single-row command: run, parse, stamp the command. */
-  const runSingle = async <T extends object>(
+  const runStamped = async <T extends object>(
     args: string[],
     schema: z.ZodType<T>,
-    opts: Parameters<typeof exec>[1] = {},
-  ): Promise<Result<WithCommand<T>, OledError>> => {
-    const parsed = andThen(await exec(args, opts), (stdout) =>
-      parseSingle(schema, stdout),
-    );
-    return map(parsed, (value) => ({ ...value, command: toCommand(args) }));
-  };
+    extras: Omit<RunOledOptions, keyof RunContext> = {},
+  ): Promise<Result<WithCommand<T>, OledError>> =>
+    map(await runSingle(args, schema, { ...context, ...extras }), stamp(args));
 
-  /**
-   * Initializes a brand-new ledger. The target config path is a positional
-   * argument here, so this is the one method that ignores the instance's
-   * configPath, and --init refuses a config file that already exists.
-   */
+  /** The target config path is positional, so this ignores the instance's; --init refuses an existing file. */
   const configInit = async (
     input: ConfigInitInput,
   ): Promise<Result<ConfigInitResult, OledError>> => {
@@ -264,7 +240,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
         "--init",
         ...toFlagArgs(CONFIG_FLAGS, validated.value),
       ],
-      { onCommand },
+      { onCommand: context.onCommand },
     );
     return andThen(out, (stdout) =>
       parseSingle(configInitResultSchema, stdout),
@@ -296,16 +272,12 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     }
 
     // A virus scan on Windows can briefly lock the file; a temp file left behind is not the batch's failure.
-    const out = await exec(["accounts", "create", "--input", file], {
-      allowPartial: true,
-    }).finally(() => attemptAsync(() => rm(file, { force: true })));
-    const page = andThen(out, (stdout) =>
-      parseNdjsonRows(
-        accountCreateResultSchema,
-        stdout,
-        accountCreateSummarySchema,
-      ),
-    );
+    const page = await runList(
+      ["accounts", "create", "--input", file],
+      accountCreateResultSchema,
+      accountCreateSummarySchema,
+      { ...context, allowPartial: true },
+    ).finally(() => attemptAsync(() => rm(file, { force: true })));
     return andThen(page, (value) => toBatchOutcome(value, "accounts create"));
   };
 
@@ -319,13 +291,10 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     );
     if (!validated.ok) return validated;
 
-    const out = await exec([
-      "merchants",
-      "upsert",
-      ...toFlagArgs(MERCHANT_FLAGS, validated.value),
-    ]);
-    return andThen(out, (stdout) =>
-      parseSingle(merchantUpsertResultSchema, stdout),
+    return runSingle(
+      ["merchants", "upsert", ...toFlagArgs(MERCHANT_FLAGS, validated.value)],
+      merchantUpsertResultSchema,
+      context,
     );
   };
 
@@ -345,7 +314,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       ...toFlagArgs(PREPARE_FLAGS, opts),
     ];
 
-    return runSingle(args, prepareResultSchema, { lane: "slow" });
+    return runStamped(args, prepareResultSchema, { lane: "slow" });
   };
 
   const ingestCommit = async (
@@ -370,17 +339,15 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       ...toFlagArgs({ fileId: "--file" }, opts),
     ];
 
-    const out = await exec(args, {
+    const page = await runList(args, ingestResultSchema, ingestSummarySchema, {
+      ...context,
       stdin: toNdjson(validated.value),
       allowPartial: true,
     });
-    const page = andThen(out, (stdout) =>
-      parseNdjsonRows(ingestResultSchema, stdout, ingestSummarySchema),
-    );
     const outcome = andThen(page, (value) =>
       toBatchOutcome(value, "ingest commit"),
     );
-    return map(outcome, (value) => ({ ...value, command: toCommand(args) }));
+    return map(outcome, stamp(args));
   };
 
   const ingestDone = async (
@@ -400,7 +367,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
 
     const args = ["ingest", "done", fileId, ...toFlagArgs(DONE_FLAGS, opts)];
 
-    return runSingle(args, ingestDoneResultSchema);
+    return runStamped(args, ingestDoneResultSchema);
   };
 
   const ingestFail = async (
@@ -415,15 +382,10 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     }
 
     const args = ["ingest", "fail", fileId, "--error", note];
-    return runSingle(args, ingestFailResultSchema);
+    return runStamped(args, ingestFailResultSchema);
   };
 
-  /**
-   * Deregisters a file: the only command that undoes a registration. It
-   * cascades the file's transactions and questions, purges its cache, and
-   * reads nothing off disk, so a statement the operator already deleted can
-   * still be taken off the ledger's books.
-   */
+  /** Reads nothing off disk, so a statement already deleted can still leave the books. */
   const filesDrop = async (
     fileId: string,
   ): Promise<Result<WithCommand<FileDropResult>, OledError>> => {
@@ -432,7 +394,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     }
 
     const args = ["files", "drop", fileId, "--yes"];
-    return runSingle(args, fileDropResultSchema);
+    return runStamped(args, fileDropResultSchema);
   };
 
   /** `also` closes sibling questions in the same call; every id must exist or none close. */
@@ -468,10 +430,13 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       ...(also.length === 0 ? [] : ["--also", also.join(",")]),
     ];
 
-    const page = andThen(await exec(args), (stdout) =>
-      parseNdjsonRows(questionAnswerRowSchema, stdout, QuestionsAnswerSummary),
+    const page = await runList(
+      args,
+      questionAnswerRowSchema,
+      QuestionsAnswerSummary,
+      context,
     );
-    return map(page, (value) => ({ ...value, command: toCommand(args) }));
+    return map(page, stamp(args));
   };
 
   const questionDefer = async (
@@ -487,7 +452,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       ...toFlagArgs({ days: "--days" }, opts),
     ];
 
-    return runSingle(args, questionDeferRowSchema);
+    return runStamped(args, questionDeferRowSchema);
   };
 
   const transactionAdd = async (
@@ -505,7 +470,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "add",
       ...toFlagArgs(TRANSACTION_ADD_FLAGS, validated.value),
     ];
-    return runSingle(args, transactionAddResultSchema);
+    return runStamped(args, transactionAddResultSchema);
   };
 
   const transactionUpdate = async (
@@ -528,7 +493,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       id,
       ...toFlagArgs(TRANSACTION_UPDATE_FLAGS, validated.value),
     ];
-    return runSingle(args, transactionUpdateResultSchema);
+    return runStamped(args, transactionUpdateResultSchema);
   };
 
   const transactionDelete = async (
@@ -539,7 +504,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     }
 
     const args = ["transactions", "delete", id, "--yes"];
-    return runSingle(args, transactionDeleteResultSchema);
+    return runStamped(args, transactionDeleteResultSchema);
   };
 
   /** Re-points one account's ENTIRE history; there is no narrower filter. */
@@ -562,7 +527,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "--set-account",
       validated.value.to,
     ];
-    return runSingle(args, recategorizeResultSchema);
+    return runStamped(args, recategorizeResultSchema);
   };
 
   const transactionsMerge = async (input: {
@@ -588,7 +553,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       input.to,
       "--yes",
     ];
-    return runSingle(args, transactionMergeResultSchema);
+    return runStamped(args, transactionMergeResultSchema);
   };
 
   const accountsCreate = async (
@@ -606,7 +571,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       "create",
       ...toFlagArgs(ACCOUNT_CREATE_FLAGS, validated.value),
     ];
-    return runSingle(args, accountCreatedResultSchema);
+    return runStamped(args, accountCreatedResultSchema);
   };
 
   const accountsUpdate = async (
@@ -629,7 +594,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       id,
       ...toFlagArgs(ACCOUNT_UPDATE_FLAGS, validated.value),
     ];
-    return runSingle(args, accountUpdateResultSchema);
+    return runStamped(args, accountUpdateResultSchema);
   };
 
   const accountsMerge = async (input: {
@@ -648,7 +613,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       validated.value.to,
       "--yes",
     ];
-    return runSingle(args, accountMergeResultSchema);
+    return runStamped(args, accountMergeResultSchema);
   };
 
   const accountsAdjust = async (
@@ -679,7 +644,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
       opts.reason,
       ...toFlagArgs({ date: "--date" }, opts),
     ];
-    return runSingle(args, accountAdjustResultSchema);
+    return runStamped(args, accountAdjustResultSchema);
   };
 
   const accountsDelete = async (
@@ -690,7 +655,7 @@ export const createWrites = ({ configPath, onCommand }: WritesOptions) => {
     }
 
     const args = ["accounts", "delete", id, "--yes"];
-    return runSingle(args, accountDeleteResultSchema);
+    return runStamped(args, accountDeleteResultSchema);
   };
 
   return {

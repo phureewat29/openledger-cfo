@@ -10,22 +10,23 @@ export interface CreateOpenLedgerOptions {
   onCommand?: OledCommandListener;
 }
 
-/**
- * Typed, Result-returning front door to the `oled` CLI. Every method resolves
- * to a Result — nothing here throws for an expected failure.
- */
+/** Typed front door to the `oled` CLI: every method resolves to a Result, never throws for an expected failure. */
 export const createOpenLedger = (opts: CreateOpenLedgerOptions = {}) => {
-  const configPath = opts.configPath ?? resolveOledConfig();
-  const reads = createReads({ configPath, onCommand: opts.onCommand });
-  const writes = createWrites({ configPath, onCommand: opts.onCommand });
+  const context = {
+    configPath: opts.configPath ?? resolveOledConfig(),
+    onCommand: opts.onCommand,
+  };
+  const reads = createReads(context);
+  const writes = createWrites(context);
 
   return {
-    configPath,
+    configPath: context.configPath,
     status: reads.status,
     report: reads.report,
     transactions: {
       list: reads.listTransactions,
       listAll: reads.listAllTransactions,
+      listByFile: reads.listTransactionsByFile,
       add: writes.transactionAdd,
       update: writes.transactionUpdate,
       delete: writes.transactionDelete,
@@ -50,7 +51,6 @@ export const createOpenLedger = (opts: CreateOpenLedgerOptions = {}) => {
       answer: writes.questionAnswer,
       defer: writes.questionDefer,
     },
-    /** The statement pipeline: list, read, commit, then close as done or failed. */
     ingest: {
       list: reads.ingestList,
       prepare: writes.ingestPrepare,
@@ -59,19 +59,17 @@ export const createOpenLedger = (opts: CreateOpenLedgerOptions = {}) => {
       done: writes.ingestDone,
       fail: writes.ingestFail,
     },
-    /** Deregistration, the one move that takes a file back off the books. */
     files: {
       drop: writes.filesDrop,
     },
     config: {
       dataDir: reads.configDataDir,
     },
-    /** Standing up a ledger: provisioning and batch posting, not request-path mutations. */
+    /** Ledger provisioning and batch posting, kept off the request path. */
     bootstrap: {
       configInit: writes.configInit,
       accountsCreateBatch: writes.accountsCreateBatch,
       merchantsUpsert: writes.merchantsUpsert,
-      /** A bootstrap load posts rows that belong to no statement. */
       ingestCommitBatch: writes.ingestCommit,
     },
   };
@@ -79,24 +77,14 @@ export const createOpenLedger = (opts: CreateOpenLedgerOptions = {}) => {
 
 export type OpenLedger = ReturnType<typeof createOpenLedger>;
 
-export {
-  findWorkspaceRoot,
-  resolveOledConfig,
-  WORKSPACE_MARKER,
-} from "./config";
-/**
- * Re-exported for callers that already hold the client. Both modules are pure
- * and import nothing, so a caller that must stay off the server — a browser
- * bundle — imports `@openledger-cfo/openledger/ids` or `/calendar` directly
- * rather than this barrel, which reaches the CLI and `node:child_process`.
- */
+export { findWorkspaceRoot, WORKSPACE_MARKER } from "./config";
+// Pure; browser code imports these from the /ids and /calendar subpaths, since this barrel spawns the CLI.
 export { isoToday } from "./calendar";
 export { categoryOf, matchesPrefix } from "./ids";
-export { EXIT_KIND } from "./errors";
 export type { OledError, OledErrorKind } from "./errors";
-export { quoteShellArg, SECRET_MASK } from "./exec";
+export { quoteShellArg, SECRET_MASK } from "./argv";
 export type { OledCommandEvent, OledCommandListener } from "./exec";
-export { andThen, err, map, messageOf, ok, unwrapOr } from "./result";
+export { andThen, err, messageOf, ok, unwrapOr } from "./result";
 export type { Result } from "./result";
 export type { ListPage } from "./ndjson";
 export type {
@@ -112,22 +100,16 @@ export type {
   WithCommand,
 } from "./writes";
 export {
-  ACCOUNT_ID_PATTERN,
   accountCreateInputSchema,
   accountIdSchema,
-  FILE_ID_PATTERN,
+  fileIdSchema,
   ingestRowInputSchema,
   isoDateSchema,
   merchantUpsertInputSchema,
   transactionAddInputSchema,
 } from "./schemas";
-// Consumers' inferred answer payloads print this by name, and they depend on
-// this package, not on @aquartier — without the re-export that's TS2742.
+// Consumers' declaration emit prints these by name; dropping one is TS2742 in their build.
 export type { QuestionsAnswerSummary } from "@aquartier/openledger/contract";
-/**
- * Unused in this repo's own source, but load-bearing: consumers' inferred types print these by name,
- * and there's no subpath fallback for them — dropping one turns into TS2742 in a consumer's build.
- */
 export type {
   AccountAdjustResult,
   AccountCreatedResult,

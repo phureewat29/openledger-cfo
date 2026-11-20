@@ -1,10 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { z } from "zod/v4";
 import { CONTRACT_VERSION } from "@aquartier/openledger/contract";
 
 import type { OledError } from "./errors";
-import type { OledCommandListener } from "./exec";
+import type { RunContext } from "./exec";
 import type { ListPage } from "./ndjson";
 import type { Result } from "./result";
 import type {
@@ -24,9 +23,11 @@ import type {
   TransactionRow,
   TreeSummary,
 } from "./schemas";
+import { toFlagArgs } from "./argv";
 import { notConfigured, readOledConfigFile } from "./config";
-import { runOled, toFlagArgs } from "./exec";
-import { parseNdjsonRows, parseSingle } from "./ndjson";
+import { emptyInput, FILE_ID_HINT } from "./errors";
+import { runList, runSingle } from "./exec";
+import { FILE_ID_PATTERN } from "./ids";
 import { andThen, err, map, messageOf, ok } from "./result";
 import {
   accountMatchRowSchema,
@@ -34,7 +35,6 @@ import {
   accountRowSchema,
   accountTreeNodeSchema,
   countSummarySchema,
-  FILE_ID_PATTERN,
   ingestFileRowSchema,
   ingestFileSummarySchema,
   merchantRowSchema,
@@ -46,11 +46,7 @@ import {
   treeSummarySchema,
 } from "./schemas";
 
-/**
- * Reads mask PII unless told otherwise. `report` is the one read that rejects
- * --no-redact outright (E_USAGE) — its output is currency totals with nothing
- * to mask — so the flag is applied per command, never blanket.
- */
+// oled redacts PII by default; `report`, `accounts match` and `ingest list` reject this flag (E_USAGE).
 const NO_REDACT = "--no-redact";
 
 const PAGE_LIMIT = 500;
@@ -63,31 +59,6 @@ const MAX_DOCUMENT_CHARS = 1_000_000;
 
 const PAGE_MARKER = /^--- page \d+ ---$/gm;
 
-export interface TransactionFilters {
-  account?: string;
-  from?: string;
-  to?: string;
-  query?: string;
-  currency?: string;
-  limit?: number;
-  offset?: number;
-}
-
-const TRANSACTION_FLAGS = {
-  account: "--account",
-  from: "--from",
-  to: "--to",
-  query: "--query",
-  currency: "--currency",
-  limit: "--limit",
-  offset: "--offset",
-} as const satisfies Record<keyof TransactionFilters, string>;
-
-export interface ReportRange {
-  from: string;
-  to: string;
-}
-
 export interface PageOptions {
   limit?: number;
   offset?: number;
@@ -97,6 +68,28 @@ const PAGE_FLAGS = {
   limit: "--limit",
   offset: "--offset",
 } as const satisfies Record<keyof PageOptions, string>;
+
+export interface TransactionFilters extends PageOptions {
+  account?: string;
+  from?: string;
+  to?: string;
+  query?: string;
+  currency?: string;
+}
+
+const TRANSACTION_FLAGS = {
+  account: "--account",
+  from: "--from",
+  to: "--to",
+  query: "--query",
+  currency: "--currency",
+  ...PAGE_FLAGS,
+} as const satisfies Record<keyof TransactionFilters, string>;
+
+export interface ReportRange {
+  from: string;
+  to: string;
+}
 
 /** The extracted statement text, read from the cache `ingest prepare` wrote. */
 export interface IngestDocument {
@@ -153,38 +146,18 @@ const admitStatus = (
   return ok(status);
 };
 
-interface ReadsOptions {
-  configPath: string;
-  onCommand?: OledCommandListener;
-}
-
-export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
-  const exec = (args: string[]): Promise<Result<string, OledError>> =>
-    runOled(args, { configPath, onCommand });
-
-  /** Every list command ends the same way: rows, then one summary row. */
-  const runList = async <TRow, TSummary>(
-    args: string[],
-    rowSchema: z.ZodType<TRow>,
-    summarySchema: z.ZodType<TSummary>,
-  ): Promise<Result<ListPage<TRow, TSummary>, OledError>> =>
-    andThen(await exec(args), (stdout) =>
-      parseNdjsonRows(rowSchema, stdout, summarySchema),
-    );
-
-  const status = async (): Promise<Result<Status, OledError>> => {
-    const parsed = andThen(await exec(["status", NO_REDACT]), (stdout) =>
-      parseSingle(statusSchema, stdout),
-    );
-    return andThen(parsed, (value) => admitStatus(value, configPath));
-  };
-
-  const report = async (
-    range: ReportRange,
-  ): Promise<Result<Report, OledError>> =>
+export const createReads = (context: RunContext) => {
+  const status = async (): Promise<Result<Status, OledError>> =>
     andThen(
-      await exec(["report", "--from", range.from, "--to", range.to]),
-      (stdout) => parseSingle(reportSchema, stdout),
+      await runSingle(["status", NO_REDACT], statusSchema, context),
+      (value) => admitStatus(value, context.configPath),
+    );
+
+  const report = (range: ReportRange): Promise<Result<Report, OledError>> =>
+    runSingle(
+      ["report", "--from", range.from, "--to", range.to],
+      reportSchema,
+      context,
     );
 
   const listTransactions = (
@@ -199,6 +172,7 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
       ],
       transactionRowSchema,
       pageSummarySchema,
+      context,
     );
 
   const listAllTransactions = async (
@@ -226,6 +200,14 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
     return ok(rows.slice(0, MAX_ROWS));
   };
 
+  /** The rows one statement posted. The CLI has no file filter, so this scans. */
+  const listTransactionsByFile = async (
+    fileId: string,
+  ): Promise<Result<TransactionRow[], OledError>> =>
+    map(await listAllTransactions(), (rows) =>
+      rows.filter((row) => row.source_file_id === fileId),
+    );
+
   const listAccounts = (
     opts: { type?: AccountType } = {},
   ): Promise<Result<ListPage<AccountRow, CountSummary>, OledError>> =>
@@ -233,24 +215,20 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
       ["accounts", "list", ...toFlagArgs({ type: "--type" }, opts), NO_REDACT],
       accountRowSchema,
       countSummarySchema,
+      context,
     );
 
-  // `accounts match` declares no --no-redact; unknown flags exit 2 (E_USAGE).
   const matchAccounts = async (
     query: string,
   ): Promise<
     Result<ListPage<AccountMatchRow, AccountMatchSummary>, OledError>
   > => {
-    if (query.trim() === "") {
-      return err<OledError>({
-        kind: "invalid",
-        message: "accounts match: query cannot be empty",
-      });
-    }
+    if (query.trim() === "") return err(emptyInput("accounts match", "query"));
     return runList(
       ["accounts", "match", "--query", query],
       accountMatchRowSchema,
       accountMatchSummarySchema,
+      context,
     );
   };
 
@@ -261,6 +239,7 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
       ["accounts", "tree", ...toFlagArgs({ type: "--type" }, opts), NO_REDACT],
       accountTreeNodeSchema,
       treeSummarySchema,
+      context,
     );
 
   const listMerchants = (
@@ -270,6 +249,7 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
       ["merchants", "list", ...toFlagArgs(PAGE_FLAGS, opts), NO_REDACT],
       merchantRowSchema,
       pageSummarySchema,
+      context,
     );
 
   const listQuestions = (
@@ -287,18 +267,20 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
       ],
       questionRowSchema,
       pageSummarySchema,
+      context,
     );
 
-  // `ingest list` declares no --no-redact and rejects unknown flags with E_USAGE.
   const ingestList = (): Promise<
     Result<ListPage<IngestFileRow, IngestFileSummary>, OledError>
   > =>
-    runList(["ingest", "list"], ingestFileRowSchema, ingestFileSummarySchema);
+    runList(
+      ["ingest", "list"],
+      ingestFileRowSchema,
+      ingestFileSummarySchema,
+      context,
+    );
 
-  /**
-   * No command reads an extraction back, so this opens the artifact directly.
-   * `ingest done` and `ingest fail` delete it with the rest of the file's cache.
-   */
+  /** No command reads an extraction back, so this opens the cached artifact directly. */
   const ingestDocument = async (
     fileId: string,
   ): Promise<Result<IngestDocument, OledError>> => {
@@ -306,11 +288,11 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
       return err<OledError>({
         kind: "invalid",
         message: `Malformed file id: ${fileId}`,
-        hint: "Pass the sf-<uuid> `ingest prepare` returned, not a path.",
+        hint: FILE_ID_HINT,
       });
     }
 
-    const config = await readOledConfigFile(configPath);
+    const config = await readOledConfigFile(context.configPath);
     if (!config.ok) return config;
 
     const path = join(config.value.cacheDir, fileId, DOCUMENT_FILE);
@@ -325,13 +307,17 @@ export const createReads = ({ configPath, onCommand }: ReadsOptions) => {
   };
 
   const configDataDir = async (): Promise<Result<string, OledError>> =>
-    map(await readOledConfigFile(configPath), (config) => config.dataDir);
+    map(
+      await readOledConfigFile(context.configPath),
+      (config) => config.dataDir,
+    );
 
   return {
     status,
     report,
     listTransactions,
     listAllTransactions,
+    listTransactionsByFile,
     listAccounts,
     matchAccounts,
     accountsTree,
